@@ -3,8 +3,8 @@ from datetime import date
 from typing import List
 
 from core.storage import StorageProvider
-from core.domain.models import Transaction, LedgerSummary
-from .ledger_repository import LedgerRepository
+from .models import Transaction, LedgerSummary
+from .repository import LedgerRepository
 
 class MarkdownLedgerRepository(LedgerRepository):
     """

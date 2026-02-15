@@ -1,4 +1,11 @@
-from agents.finance_agent import FinanceAgent
+import sys
+import os
+from datetime import datetime
+
+# Add src to path
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
+
+from modules.finance.service import FinanceAgent
 
 def test_finance_mvp():
     print("🚀 Testing Finance Domain MVP (Repository Pattern)...")

@@ -6,19 +6,19 @@ from typing import Dict, Any
 
 from core.storage import get_storage_provider, StorageProvider
 from core.prompt_loader import PromptLoader
-from core.domain.models import Transaction, LedgerSummary
-from core.repositories.ledger_repository import LedgerRepository
-from core.repositories.markdown_ledger import MarkdownLedgerRepository
+from .models import Transaction, LedgerSummary
+from .repository import LedgerRepository
+from .markdown_ledger import MarkdownLedgerRepository
 from core.llm import LLMClient
 
 class FinanceAgent:
     def __init__(self, storage_mode: str = "local"):
         self.storage: StorageProvider = get_storage_provider(storage_mode)
         
-        # PromptLoader should always look at project root for code assets
+        # PromptLoader should look at module specific prompts
         # We assume local storage for prompts for now
         root_storage = get_storage_provider("local", root_path=".")
-        self.prompt_loader = PromptLoader(root_storage)
+        self.prompt_loader = PromptLoader(root_storage, base_dir="src/modules/finance/prompts")
         
         # Repository Dependency
         self.repository: LedgerRepository = MarkdownLedgerRepository(self.storage)
@@ -68,7 +68,7 @@ class FinanceAgent:
         """
         # Load Prompt Template
         metadata, prompt_str = self.prompt_loader.load(
-            "finance/parser", 
+            "parser", 
             variables={
                 "current_date": datetime.now().strftime("%Y-%m-%d"),
                 "user_input": text

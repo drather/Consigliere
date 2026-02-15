@@ -5,15 +5,15 @@ from typing import Dict, Any, List
 from core.storage import get_storage_provider, StorageProvider
 from core.prompt_loader import PromptLoader
 from core.llm import LLMClient
-from core.domain.real_estate import RealEstateReport, RealEstateMetadata
-from core.repositories.chroma_repository import ChromaRealEstateRepository
+from .models import RealEstateReport, RealEstateMetadata
+from .repository import ChromaRealEstateRepository
 
 class RealEstateAgent:
     def __init__(self, storage_mode: str = "local"):
         self.storage: StorageProvider = get_storage_provider(storage_mode)
         # Always use local project root for prompts
         root_storage = get_storage_provider("local", root_path=".")
-        self.prompt_loader = PromptLoader(root_storage)
+        self.prompt_loader = PromptLoader(root_storage, base_dir="src/modules/real_estate/prompts")
         
         # LLM Client
         self.llm = LLMClient()
@@ -30,7 +30,7 @@ class RealEstateAgent:
 
         # 1. Extract metadata using Gemini
         _, prompt_str = self.prompt_loader.load(
-            "real_estate/parser",
+            "parser",
             variables={"input_text": user_text}
         )
         
@@ -71,7 +71,7 @@ class RealEstateAgent:
 
         # 1. Generate search filter using Gemini
         _, prompt_str = self.prompt_loader.load(
-            "real_estate/searcher",
+            "searcher",
             variables={"input_text": user_query}
         )
         

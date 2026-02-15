@@ -7,9 +7,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), "."))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
 
-from agents.real_estate_agent import RealEstateAgent
+from modules.real_estate.service import RealEstateAgent
 
 def test_real_estate_flow():
     print("🚀 Starting Real Estate Integration Test...")

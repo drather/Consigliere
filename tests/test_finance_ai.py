@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), "."))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
 
-from agents.finance_agent import FinanceAgent
+from modules.finance.service import FinanceAgent
 
 def test_ai_parsing():
     print("🚀 Starting Consigliere AI Integration Test...")

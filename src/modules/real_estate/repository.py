@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import os
 
-from ..domain.real_estate import RealEstateReport, RealEstateMetadata
+from .models import RealEstateReport, RealEstateMetadata
 
 class ChromaRealEstateRepository:
     """

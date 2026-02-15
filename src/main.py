@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from agents.finance_agent import FinanceAgent
-from agents.real_estate_agent import RealEstateAgent
+from modules.finance.service import FinanceAgent
+from modules.real_estate.service import RealEstateAgent
 
 app = FastAPI(title="Consigliere API", description="Personal Knowledge Agent API")
 

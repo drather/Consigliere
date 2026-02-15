@@ -1,5 +1,10 @@
 import os
+import sys
 from datetime import datetime
+
+# Add src to path
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
+
 from core.storage import get_storage_provider
 from core.prompt_loader import PromptLoader
 
@@ -7,7 +12,7 @@ def test_consigliere_integration():
     print("🚀 Starting Consigliere Integration Test...")
 
     # 1. Setup Storage (Local Mode)
-    # For prompts, we point to the project root so it can find 'src/prompts'
+    # For prompts, we point to the project root so it can find 'src/common/prompts'
     storage_mode = "local"
     project_root = "." 
     
@@ -16,7 +21,7 @@ def test_consigliere_integration():
 
     # 2. Setup Prompt Loader
     # PromptLoader uses the storage provider to read files
-    prompt_loader = PromptLoader(storage, base_dir="src/prompts")
+    prompt_loader = PromptLoader(storage, base_dir="src/common/prompts")
     print("✅ Prompt Loader initialized.")
 
     # 3. Load and Render Prompt
@@ -28,7 +33,7 @@ def test_consigliere_integration():
     }
     
     try:
-        metadata, rendered_prompt = prompt_loader.load("system/consigliere", variables)
+        metadata, rendered_prompt = prompt_loader.load("consigliere", variables)
         
         print("\n--- [Test Results] ---")
         print(f"Metadata: {metadata}")
