@@ -1,0 +1,24 @@
+# Environments
+.env
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+.docker/
+
+# Data & Logs
+data/
+server.log
+*.log
+
+# Temp
+.DS_Store
+tmp/

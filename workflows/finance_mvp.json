@@ -1,0 +1,112 @@
+{
+  "name": "Finance MVP (Manual Test)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "1",
+      "name": "When clicking \"Execute Workflow\"",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "text",
+              "value": "Just paid 8,500 won for a Taxi"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2",
+      "name": "Set Test Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.API_BASE_URL }}/agent/finance/add_transaction",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={ \"text\": \"{{ $json.text }}\" }",
+        "options": {}
+      },
+      "id": "3",
+      "name": "Call Finance API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        650,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking \"Execute Workflow\"": {
+      "main": [
+        [
+          {
+            "node": "Set Test Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Test Data": {
+      "main": [
+        [
+          {
+            "node": "Call Finance API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "style": {
+    "comments": [
+      {
+        "id": "comment-1",
+        "position": [
+          420,
+          240
+        ],
+        "size": [
+          140,
+          40
+        ],
+        "content": "Test Input (SMS)"
+      },
+      {
+        "id": "comment-2",
+        "position": [
+          620,
+          240
+        ],
+        "size": [
+          160,
+          40
+        ],
+        "content": "Python API (FastMCP)"
+      }
+    ]
+  }
+}
