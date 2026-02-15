@@ -15,8 +15,8 @@ class LLMClient:
             print("⚠️ WARNING: GEMINI_API_KEY not found. LLM features will fail.")
         else:
             genai.configure(api_key=self.api_key)
-            # Using Gemini 3 Flash for efficiency and better quota availability
-            self.model = genai.GenerativeModel('gemini-3-flash-preview')
+            # Using the latest Gemini 2.5 Flash as requested
+            self.model = genai.GenerativeModel('gemini-2.5-flash')
 
     def generate(self, prompt: str) -> str:
         """Generates raw text response."""

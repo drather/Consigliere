@@ -38,7 +38,7 @@ def test_consigliere_integration():
         print("-" * 30)
         
         # 4. Verification
-        assert metadata["model"] == "gemini-1.5-pro"
+        assert metadata["model"] == "gemini-2.5-flash"
         assert "KKS" in rendered_prompt
         assert variables["today"] in rendered_prompt
         print("\n✨ Integration Test Passed Successfully!")

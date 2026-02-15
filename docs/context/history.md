@@ -7,5 +7,5 @@ For full history, see `docs/context/archive/`.
 - **Action:** Committed initial codebase (Finance MVP) to `master`.
 
 ## 2026-02-15: Gemini 3 AI Integration & MVP Success
-- **Action:** Successfully integrated `gemini-3-flash-preview` to parse transaction text.
+- **Action:** Successfully integrated `gemini-2.5-flash` to parse transaction text and real estate notes, significantly improving latency.
 - **Verification:** End-to-End test passed (Text -> AI -> Ledger Update).

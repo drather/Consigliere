@@ -1,7 +1,7 @@
 ---
-description: "Extract transaction details from natural language text"
-model: "gemini-1.5-pro"
-input_variables: ["current_date", "user_input"]
+description: "Parse unstructured finance text into structured transaction data"
+model: "gemini-2.5-flash"
+input_variables: ["input_text", "today"]
 ---
 # Context
 You are Consigliere, a finance assistant.

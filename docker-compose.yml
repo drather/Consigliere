@@ -23,6 +23,20 @@ services:
     networks:
       - consigliere_net
 
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: consigliere_chromadb
+    restart: unless-stopped
+    ports:
+      - "8001:8000"  # Map host 8001 to container 8000
+    volumes:
+      - ./data/chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ALLOW_RESET=TRUE
+    networks:
+      - consigliere_net
+
 networks:
   consigliere_net:
     driver: bridge

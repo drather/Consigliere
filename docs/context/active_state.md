@@ -1,19 +1,15 @@
-# 🧠 Project Consigliere: Active State
+# Project Consigliere: Active State
 **Last Updated:** 2026-02-15
-**Current Phase:** 1. Domain Implementation (Phase 1) - Project Management
+**Current Active Feature:** `real_estate_report` (docs/features/real_estate_report/)
 
 ## 📍 Current Focus
-- Established "Troubleshooting Log" and "Gitflow" strategy.
-- Ready to start Real Estate domain on a new branch.
+- Implementing the "Real Estate" domain MVP (Report Generator).
+- Following Gitflow protocol on `feature/real-estate` branch.
 
-## 📋 Active Tasks
-- [x] Create `docs/troubleshooting.md`
-- [x] Initialize Git repository (`git init`)
-- [x] Establish Gitflow protocol in `.gemini_instructions.md`
-- [ ] Create branch `feature/real-estate`
-- [ ] Implement Real Estate domain MVP (Report Generator).
-
-## 🚀 Next Steps
-1. Create a new branch: `git checkout -b feature/real-estate`
-2. Define Real Estate data models (`src/core/domain/real_estate.py`)
-3. Create `RealEstateAgent` and Repository.
+## 📋 Task List (from `docs/features/real_estate_report/progress.md`)
+- [x] Feature Design & Specification (`spec.md`)
+- [ ] Setup ChromaDB Infrastructure (`docker-compose.yml`)
+- [ ] Define Domain Models (`src/core/domain/real_estate.py`)
+- [ ] Implement Repository (`src/core/repositories/chroma_repository.py`)
+- [ ] Implement Agent Logic (`src/agents/real_estate_agent.py`)
+- [ ] Integration Test (End-to-End)
