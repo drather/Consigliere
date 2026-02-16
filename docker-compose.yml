@@ -1,6 +1,25 @@
 version: '3.8'
 
 services:
+  api:
+    build: .
+    container_name: consigliere_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - CHROMA_DB_HOST=consigliere_chromadb
+      - CHROMA_DB_PORT=8000
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+    depends_on:
+      - chromadb
+    networks:
+      - consigliere_net
+
   n8n:
     image: docker.n8n.io/n8nio/n8n:1.72.0
     container_name: consigliere_n8n
@@ -14,14 +33,17 @@ services:
       - NODE_ENV=production
       - WEBHOOK_URL=http://localhost:5678/
       - GENERIC_TIMEZONE=Asia/Seoul
-      # API Base URL for Consigliere Agents (Local Dev uses host.docker.internal)
-      - API_BASE_URL=http://host.docker.internal:8000
+      # API Base URL for Consigliere Agents (Internal Docker Network)
+      - API_BASE_URL=http://consigliere_api:8000
     volumes:
       - ./data/n8n_data:/home/node/.n8n
+    # extra_hosts no longer strictly needed if using internal network, but kept for safety
     extra_hosts:
-      - "host.docker.internal:host-gateway"  # Allows n8n to talk to Python on host
+      - "host.docker.internal:host-gateway"
     networks:
       - consigliere_net
+    depends_on:
+      - api
 
   chromadb:
     image: chromadb/chroma:latest

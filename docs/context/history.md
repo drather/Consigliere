@@ -26,3 +26,8 @@ For full history, see `docs/context/archive/`.
 - **Feature:** Exposed `RealEstateMonitor` via FastAPI endpoint (`/agent/real_estate/monitor/fetch`).
 - **Workflow:** Created n8n workflow for daily scheduling of real estate data collection.
 - **Verification:** Successfully triggered API via n8n-compatible request and saved transactions.
+
+## 2026-02-16: Infrastructure Upgrade (Dockerization)
+- **Containerization:** Dockerized Python FastAPI backend (`consigliere_api`).
+- **Orchestration:** Integrated API, n8n, and ChromaDB into a single `docker-compose` network.
+- **Connectivity:** Enabled internal communication between n8n and API (`http://consigliere_api:8000`).

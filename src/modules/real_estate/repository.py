@@ -12,10 +12,14 @@ class ChromaRealEstateRepository:
     Supports semantic search and metadata filtering.
     """
 
-    def __init__(self, host: str = "localhost", port: int = 8001):
+    def __init__(self, host: str = None, port: int = None):
+        # Allow override via args, otherwise env vars, otherwise default local
+        self.host = host or os.getenv("CHROMA_DB_HOST", "localhost")
+        self.port = port or int(os.getenv("CHROMA_DB_PORT", 8001))
+        
         # Initialize ChromaDB Client
-        print(f"🔌 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Connecting to {host}:{port}...")
-        self.client = chromadb.HttpClient(host=host, port=port)
+        print(f"🔌 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Connecting to {self.host}:{self.port}...")
+        self.client = chromadb.HttpClient(host=self.host, port=self.port)
         
         # Get or Create a collection
         print(f"📂 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Getting/Creating collection 'real_estate_reports'...")

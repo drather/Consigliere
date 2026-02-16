@@ -38,7 +38,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://host.docker.internal:8000/agent/real_estate/monitor/fetch",
+        "url": "http://consigliere_api:8000/agent/real_estate/monitor/fetch",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
