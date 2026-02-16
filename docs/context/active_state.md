@@ -1,15 +1,21 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-02-15
-**Current Active Feature:** `real_estate_report` (docs/features/real_estate_report/)
+**Last Updated:** 2026-02-16
+**Current Active Feature:** `real_estate_monitor` (docs/features/real_estate_monitor/)
 
 ## 📍 Current Focus
-- Implementing the "Real Estate" domain MVP (Report Generator).
-- Following Gitflow protocol on `feature/real-estate` branch.
+- Completed "Real Estate Report" MVP and Architectural Refactoring.
+- Starting "Real Estate Monitor" feature (Transaction Price API Integration).
+- Working on `feature/real-estate-monitor` branch (to be created).
 
-## 📋 Task List (from `docs/features/real_estate_report/progress.md`)
-- [x] Feature Design & Specification (`spec.md`)
-- [ ] Setup ChromaDB Infrastructure (`docker-compose.yml`)
-- [ ] Define Domain Models (`src/core/domain/real_estate.py`)
-- [ ] Implement Repository (`src/core/repositories/chroma_repository.py`)
-- [ ] Implement Agent Logic (`src/agents/real_estate_agent.py`)
-- [ ] Integration Test (End-to-End)
+## 📋 Task List (Real Estate Monitor)
+- [ ] Feature Design & Specification (`docs/features/real_estate_monitor/spec.md`)
+- [ ] Select & Test Public Data API (Government Data Portal)
+- [ ] Implement API Client (`src/modules/real_estate/monitor/api_client.py`)
+- [ ] Implement Scheduler/Trigger (`src/modules/real_estate/monitor/scheduler.py`)
+- [ ] Integration Test (API -> Data Processing)
+
+## ✅ Completed Tasks (Recent)
+- [x] **Refactoring:** Modular Architecture (`src/modules/`)
+- [x] **Feature:** Real Estate Report (ChromaDB Integration)
+- [x] **Infrastructure:** Docker Compose (n8n, ChromaDB)
+- [x] **AI:** Upgrade to `gemini-2.5-flash`
