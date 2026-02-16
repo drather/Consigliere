@@ -1,13 +1,20 @@
+from datetime import datetime
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Optional
+
 from modules.finance.service import FinanceAgent
 from modules.real_estate.service import RealEstateAgent
+from modules.real_estate.monitor.service import TransactionMonitorService
+from modules.real_estate.repository import ChromaRealEstateRepository
 
 app = FastAPI(title="Consigliere API", description="Personal Knowledge Agent API")
 
-# Initialize Agents
+# Initialize Agents & Services
 finance_agent = FinanceAgent(storage_mode="local")
 real_estate_agent = RealEstateAgent(storage_mode="local")
+monitor_service = TransactionMonitorService()
+chroma_repo = ChromaRealEstateRepository()
 
 class TransactionRequest(BaseModel):
     text: str
@@ -15,14 +22,18 @@ class TransactionRequest(BaseModel):
 class RealEstateRequest(BaseModel):
     text: str
 
+class RealEstateMonitorRequest(BaseModel):
+    district_code: Optional[str] = Field("41135", description="Legal Dong Code (Default: Bundang-gu)")
+    year_month: Optional[str] = Field(None, description="YYYYMM (Default: Current Month)")
+
 @app.get("/")
 def read_root():
     return {"status": "ok", "service": "Consigliere API"}
 
-@app.post("/agent/finance/add_transaction")
+@app.post("/agent/finance/transaction")
 def add_transaction(request: TransactionRequest):
     """
-    Receives unstructured text (e.g. SMS), extracts data, and updates the ledger.
+    Parses natural language transaction text and saves it to the ledger.
     """
     try:
         response = finance_agent.process_transaction(request.text)
@@ -50,6 +61,52 @@ def search_real_estate(request: RealEstateRequest):
         response = real_estate_agent.search_tours(request.text)
         return {"response": response}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/agent/real_estate/monitor/fetch")
+def fetch_real_estate_transactions(request: RealEstateMonitorRequest):
+    """
+    Triggers the Real Estate Monitor to fetch data from MOLIT API and save to ChromaDB.
+    """
+    try:
+        # Default to current month if not provided
+        target_ym = request.year_month
+        if not target_ym:
+            now = datetime.now()
+            target_ym = now.strftime("%Y%m")
+
+        print(f"🚀 [API] Triggering Monitor for {request.district_code}, {target_ym}")
+        
+        # 1. Fetch from API
+        transactions = monitor_service.get_daily_transactions(request.district_code, target_ym)
+        
+        if not transactions:
+            return {
+                "status": "success",
+                "message": "No transactions found or API error.",
+                "fetched_count": 0,
+                "saved_count": 0
+            }
+
+        # 2. Save to ChromaDB
+        saved_count = 0
+        for tx in transactions:
+            try:
+                chroma_repo.save_transaction(tx)
+                saved_count += 1
+            except Exception as save_err:
+                print(f"⚠️ Failed to save transaction {tx.apt_name}: {save_err}")
+
+        return {
+            "status": "success",
+            "district_code": request.district_code,
+            "year_month": target_ym,
+            "fetched_count": len(transactions),
+            "saved_count": saved_count
+        }
+
+    except Exception as e:
+        print(f"❌ Monitor API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

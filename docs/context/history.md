@@ -21,3 +21,8 @@ For full history, see `docs/context/archive/`.
 - **Data:** Successfully fetched and parsed 100+ live transaction records (XML -> Pydantic).
 - **Storage:** Integrated with ChromaDB for semantic search of transaction history.
 - **Issue Resolved:** Fixed `401 Unauthorized` by supporting Hex-formatted Service Keys.
+
+## 2026-02-16: n8n Integration & Automation
+- **Feature:** Exposed `RealEstateMonitor` via FastAPI endpoint (`/agent/real_estate/monitor/fetch`).
+- **Workflow:** Created n8n workflow for daily scheduling of real estate data collection.
+- **Verification:** Successfully triggered API via n8n-compatible request and saved transactions.

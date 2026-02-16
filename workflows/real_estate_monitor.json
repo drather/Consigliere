@@ -1,0 +1,91 @@
+{
+  "name": "Real Estate Transaction Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "schedule-trigger",
+      "name": "Daily Schedule (09:00)"
+    },
+    {
+      "parameters": {
+        "value": "={{ $now.format('yyyyMM') }}",
+        "dataPropertyName": "year_month"
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "id": "date-formatter",
+      "name": "Format YYYYMM"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/agent/real_estate/monitor/fetch",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "district_code",
+              "value": "41135"
+            },
+            {
+              "name": "year_month",
+              "value": "={{ $json.year_month }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "http-request",
+      "name": "Call Consigliere API"
+    }
+  ],
+  "connections": {
+    "Daily Schedule (09:00)": {
+      "main": [
+        [
+          {
+            "node": "Format YYYYMM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format YYYYMM": {
+      "main": [
+        [
+          {
+            "node": "Call Consigliere API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
