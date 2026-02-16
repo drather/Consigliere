@@ -15,3 +15,9 @@ For full history, see `docs/context/archive/`.
 - **Refactor:** Migrated codebase to a **Domain-Driven Modular Architecture** (`src/modules/finance`, `src/modules/real_estate`).
 - **Structure:** Centralized tests in `tests/` and common assets in `src/common/`.
 - **Infrastructure:** Validated Docker Compose setup for n8n and ChromaDB.
+
+## 2026-02-16: Real Estate Monitor (API Integration)
+- **Feature:** Implemented `RealEstateTransaction` monitor using MOLIT Open API.
+- **Data:** Successfully fetched and parsed 100+ live transaction records (XML -> Pydantic).
+- **Storage:** Integrated with ChromaDB for semantic search of transaction history.
+- **Issue Resolved:** Fixed `401 Unauthorized` by supporting Hex-formatted Service Keys.

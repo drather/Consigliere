@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import os
 
-from .models import RealEstateReport, RealEstateMetadata
+from .models import RealEstateReport, RealEstateMetadata, RealEstateTransaction
 
 class ChromaRealEstateRepository:
     """
@@ -66,6 +66,23 @@ class ChromaRealEstateRepository:
                 metadata=metadata
             ))
         return reports
+
+    def save_transaction(self, transaction: "RealEstateTransaction") -> None:
+        """
+        Saves a transaction record into ChromaDB.
+        Uses the model's logic to format data.
+        """
+        data = transaction.to_chroma_format()
+        
+        print(f"💾 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Upserting transaction: {data['id']}")
+        
+        # Upsert
+        self.collection.upsert(
+            ids=[data["id"]],
+            documents=[data["document"]],
+            metadatas=[data["metadata"]]
+        )
+        print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Saved txn: {transaction.apt_name}")
 
     def delete(self, report_id: str) -> None:
         """Deletes a report by ID."""
