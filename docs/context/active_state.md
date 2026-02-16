@@ -1,21 +1,19 @@
 # Project Consigliere: Active State
 **Last Updated:** 2026-02-16
-**Current Active Feature:** `real_estate_monitor` (docs/features/real_estate_monitor/)
+**Current Active Feature:** `n8n_integration` (docs/features/n8n_integration/)
 
 ## 📍 Current Focus
-- Completed "Real Estate Report" MVP and Architectural Refactoring.
-- Starting "Real Estate Monitor" feature (Transaction Price API Integration).
-- Working on `feature/real-estate-monitor` branch (to be created).
+- Completed "Real Estate Monitor" (API Client & Service).
+- **Starting:** Integrating Real Estate Monitor with **n8n Workflow**.
+- **Goal:** Expose Monitor as API endpoint and create n8n scheduler.
 
-## 📋 Task List (Real Estate Monitor)
-- [ ] Feature Design & Specification (`docs/features/real_estate_monitor/spec.md`)
-- [ ] Select & Test Public Data API (Government Data Portal)
-- [ ] Implement API Client (`src/modules/real_estate/monitor/api_client.py`)
-- [ ] Implement Scheduler/Trigger (`src/modules/real_estate/monitor/scheduler.py`)
-- [ ] Integration Test (API -> Data Processing)
+## 📋 Task List (n8n Integration)
+- [ ] Feature Specification (`docs/features/n8n_integration/spec.md`)
+- [ ] **Backend:** Expose `TransactionMonitorService` via FastAPI (`src/main.py`).
+- [ ] **Workflow:** Design n8n workflow (`workflows/real_estate_monitor.json`).
+- [ ] **Test:** Verify n8n -> FastAPI communication (using curl as proxy).
 
 ## ✅ Completed Tasks (Recent)
-- [x] **Refactoring:** Modular Architecture (`src/modules/`)
-- [x] **Feature:** Real Estate Report (ChromaDB Integration)
-- [x] **Infrastructure:** Docker Compose (n8n, ChromaDB)
-- [x] **AI:** Upgrade to `gemini-2.5-flash`
+- [x] **Feature:** Real Estate Monitor (MOLIT API Integration)
+- [x] **Refactoring:** Modular Architecture
+- [x] **Feature:** Real Estate Report (ChromaDB)
