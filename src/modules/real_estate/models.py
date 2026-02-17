@@ -46,6 +46,33 @@ class RealEstateTransaction(BaseModel):
 
     model_config = {"extra": "allow"}
 
+class NewsArticle(BaseModel):
+    """
+    Represents a single news article fetched from Naver.
+    """
+    title: str
+    origin_link: str = Field(..., alias="link")
+    description: str
+    pub_date: str  # Kept as string for simplicity, can be parsed if needed
+
+class NewsAnalysisReport(BaseModel):
+    """
+    Daily AI-generated report summarizing news and trends.
+    """
+    date: str = Field(..., description="Report Date (YYYY-MM-DD)")
+    keywords: List[str] = Field(..., description="Top 5 keywords of the day")
+    summary: str = Field(..., description="3-sentence summary of major news")
+    trend_analysis: str = Field(..., description="Comparison with previous trends (RAG result)")
+    
+    def to_markdown(self) -> str:
+        keywords_str = ", ".join([f"`{k}`" for k in self.keywords])
+        return (
+            f"# 📰 Real Estate News Report ({self.date})\n\n"
+            f"## 🔑 Key Topics\n{keywords_str}\n\n"
+            f"## 📝 Daily Summary\n{self.summary}\n\n"
+            f"## 📉 Trend Insight\n{self.trend_analysis}\n"
+        )
+
 class RealEstateMetadata(BaseModel):
     """
     Structured metadata for filtering and fast searching in Vector DB.

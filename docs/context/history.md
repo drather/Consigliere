@@ -31,3 +31,8 @@ For full history, see `docs/context/archive/`.
 - **Containerization:** Dockerized Python FastAPI backend (`consigliere_api`).
 - **Orchestration:** Integrated API, n8n, and ChromaDB into a single `docker-compose` network.
 - **Connectivity:** Enabled internal communication between n8n and API (`http://consigliere_api:8000`).
+
+## 2026-02-16: Real Estate News Insight (RAG Agent)
+- **Feature:** Added daily news scraping (Naver API) and AI analysis agent.
+- **Intelligence:** Implemented RAG-based trend comparison (Today vs. History).
+- **Output:** Generates automated markdown reports (`data/real_estate/news/`).
