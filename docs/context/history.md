@@ -36,3 +36,8 @@ For full history, see `docs/context/archive/`.
 - **Feature:** Added daily news scraping (Naver API) and AI analysis agent.
 - **Intelligence:** Implemented RAG-based trend comparison (Today vs. History).
 - **Output:** Generates automated markdown reports (`data/real_estate/news/`).
+
+## 2026-02-16: News Insight Automation (Korean Report)
+- **Automation:** Integrated News Insight with n8n workflow (Daily 08:00).
+- **Enhancement:** Upgraded report format to include Korean summary, trend analysis, and source links.
+- **Verification:** Validated full pipeline via TestClient.

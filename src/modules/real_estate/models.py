@@ -63,14 +63,22 @@ class NewsAnalysisReport(BaseModel):
     keywords: List[str] = Field(..., description="Top 5 keywords of the day")
     summary: str = Field(..., description="3-sentence summary of major news")
     trend_analysis: str = Field(..., description="Comparison with previous trends (RAG result)")
+    references: List[NewsArticle] = Field(default_factory=list, description="List of source articles")
     
     def to_markdown(self) -> str:
         keywords_str = ", ".join([f"`{k}`" for k in self.keywords])
+        
+        # Format references
+        ref_section = "## 🔗 References\n"
+        for i, article in enumerate(self.references[:10], 1): # Top 10 only to keep it clean
+            ref_section += f"{i}. [{article.title}]({article.origin_link})\n"
+
         return (
             f"# 📰 Real Estate News Report ({self.date})\n\n"
             f"## 🔑 Key Topics\n{keywords_str}\n\n"
             f"## 📝 Daily Summary\n{self.summary}\n\n"
-            f"## 📉 Trend Insight\n{self.trend_analysis}\n"
+            f"## 📉 Trend Insight\n{self.trend_analysis}\n\n"
+            f"{ref_section}"
         )
 
 class RealEstateMetadata(BaseModel):

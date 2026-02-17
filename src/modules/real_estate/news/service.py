@@ -30,12 +30,20 @@ class NewsService:
         if not items:
             return "❌ No news found or API error."
         
-        # Format news list for LLM
+        # Convert to Domain Models
+        articles = []
+        for item in items:
+            articles.append(NewsArticle(
+                title=item['title'].replace('<b>', '').replace('</b>', ''),
+                link=item['originallink'] or item['link'], # Use originallink if available
+                description=item['description'].replace('<b>', '').replace('</b>', ''),
+                pub_date=item['pubDate']
+            ))
+
+        # Format news list for LLM (Text only)
         news_text = ""
-        for i, item in enumerate(items, 1):
-            clean_title = item['title'].replace('<b>', '').replace('</b>', '')
-            clean_desc = item['description'].replace('<b>', '').replace('</b>', '')
-            news_text += f"{i}. {clean_title}\n   - {clean_desc}\n"
+        for i, article in enumerate(articles, 1):
+            news_text += f"{i}. {article.title}\n   - {article.description}\n"
 
         # 2. Load Historical Context (Last Report)
         history_context = self._get_last_report_summary()
@@ -58,6 +66,7 @@ class NewsService:
         # 4. Create & Save Report
         report = NewsAnalysisReport(
             date=datetime.now().strftime("%Y-%m-%d"),
+            references=articles,
             **analysis
         )
         

@@ -6,6 +6,7 @@ from typing import Optional
 from modules.finance.service import FinanceAgent
 from modules.real_estate.service import RealEstateAgent
 from modules.real_estate.monitor.service import TransactionMonitorService
+from modules.real_estate.news.service import NewsService
 from modules.real_estate.repository import ChromaRealEstateRepository
 
 app = FastAPI(title="Consigliere API", description="Personal Knowledge Agent API")
@@ -14,6 +15,7 @@ app = FastAPI(title="Consigliere API", description="Personal Knowledge Agent API
 finance_agent = FinanceAgent(storage_mode="local")
 real_estate_agent = RealEstateAgent(storage_mode="local")
 monitor_service = TransactionMonitorService()
+news_service = NewsService(storage_mode="local")
 chroma_repo = ChromaRealEstateRepository()
 
 class TransactionRequest(BaseModel):
@@ -25,6 +27,9 @@ class RealEstateRequest(BaseModel):
 class RealEstateMonitorRequest(BaseModel):
     district_code: Optional[str] = Field("41135", description="Legal Dong Code (Default: Bundang-gu)")
     year_month: Optional[str] = Field(None, description="YYYYMM (Default: Current Month)")
+
+class NewsAnalysisRequest(BaseModel):
+    keywords: Optional[str] = Field(None, description="Custom keywords to override default")
 
 @app.get("/")
 def read_root():
@@ -107,6 +112,29 @@ def fetch_real_estate_transactions(request: RealEstateMonitorRequest):
 
     except Exception as e:
         print(f"❌ Monitor API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/agent/real_estate/news/analyze")
+def analyze_real_estate_news(request: NewsAnalysisRequest):
+    """
+    Triggers the News Insight Agent to fetch news, analyze with LLM, and save report.
+    """
+    try:
+        print(f"🚀 [API] Triggering News Analysis...")
+        # Note: We currently don't support custom keywords in generate_daily_report, 
+        # but we can extend it later. For now, use default.
+        report_content = news_service.generate_daily_report()
+        
+        if "❌" in report_content:
+             raise HTTPException(status_code=500, detail=report_content)
+
+        return {
+            "status": "success",
+            "report_date": datetime.now().strftime("%Y-%m-%d"),
+            "report_content": report_content
+        }
+    except Exception as e:
+        print(f"❌ News API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

@@ -16,20 +16,20 @@ Your job is to read today's news headlines and descriptions, compare them with r
 {{ news_list }}
 
 # Instructions
-1. **Analyze:** Read the provided news articles. Identify the top 3-5 major topics (e.g., "Supply Increase", "Loan Regulation").
-2. **Summarize:** Write a 3-sentence summary of the most critical market movements today.
+1. **Analyze:** Read the provided news articles. Identify the top 3-5 major topics (e.g., "공급 확대", "대출 규제").
+2. **Summarize:** Write a 3-sentence summary of the most critical market movements today **in Korean**.
 3. **Compare (RAG):** Compare today's news with the `Historical Context`.
    - Is the policy stance maintaining or changing?
    - Are there new risks compared to last week?
-   - Use phrases like "Unlike last week's focus on..." or "Continuing the trend of...".
-4. **Extract Keywords:** Pick 5 representative keywords.
+   - Write the analysis **in Korean**.
+4. **Extract Keywords:** Pick 5 representative keywords **in Korean**.
 
 # Output Schema (JSON)
 Return a valid JSON object matching the `NewsAnalysisReport` structure:
 ```json
 {
-  "keywords": ["Keyword1", "Keyword2"],
-  "summary": "Concise summary...",
-  "trend_analysis": "Detailed comparison with historical context..."
+  "keywords": ["키워드1", "키워드2"],
+  "summary": "간결한 요약...",
+  "trend_analysis": "과거 데이터와 비교 분석..."
 }
 ```
