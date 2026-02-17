@@ -1,11 +1,10 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-02-16
-**Current Active Feature:** `Maintenance`
+**Last Updated:** 2026-02-17
+**Current Active Feature:** `System Dashboard`
 
 ## 📍 Current Focus
-- Completed "News Insight Automation".
-- System generates daily Korean reports with trend analysis.
-- Ready for next feature proposal.
+- Planning a centralized dashboard using Streamlit to visualize and manage Finance and Real Estate data.
+- Initializing Phase 0 (Preparation) and Phase 1 (Planning).
 
 ## ✅ Completed Tasks (Recent)
 - [x] **Feature:** n8n News Insight Automation

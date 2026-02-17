@@ -104,3 +104,27 @@ class NewsService:
         with open(filename, "w") as f:
             f.write(report.to_markdown())
         print(f"✅ [News] Report saved to {filename}")
+
+    def list_reports(self) -> List[str]:
+        """
+        Returns a sorted list of available news report filenames.
+        """
+        if not os.path.exists(self.report_dir):
+            return []
+            
+        files = sorted(glob(os.path.join(self.report_dir, "*.md")), reverse=True)
+        return [os.path.basename(f) for f in files]
+
+    def get_report_content(self, filename: str) -> str:
+        """
+        Reads and returns the content of a specific report file.
+        """
+        filepath = os.path.join(self.report_dir, filename)
+        if not os.path.exists(filepath):
+            return "❌ File not found."
+            
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as e:
+            return f"❌ Error reading file: {str(e)}"

@@ -1,6 +1,7 @@
 import re
 import json
 import os
+import pandas as pd
 from datetime import datetime, date
 from typing import Dict, Any
 
@@ -25,6 +26,14 @@ class FinanceAgent:
 
         # Initialize LLM Client
         self.llm = LLMClient()
+
+    def get_monthly_ledger_df(self, year: int, month: int) -> pd.DataFrame:
+        """
+        Returns the monthly ledger as a Pandas DataFrame for dashboard use.
+        """
+        if isinstance(self.repository, MarkdownLedgerRepository):
+            return self.repository.read_ledger_as_dataframe(year, month)
+        return pd.DataFrame()
 
     def process_transaction(self, user_text: str) -> str:
         """

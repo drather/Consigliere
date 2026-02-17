@@ -92,3 +92,23 @@ class ChromaRealEstateRepository:
         """Deletes a report by ID."""
         self.collection.delete(ids=[report_id])
         print(f"🗑️ [ChromaDB] Deleted report: {report_id}")
+
+    def get_transactions(self, limit: int = 100, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Fetches raw transaction data (metadata) from ChromaDB.
+        Useful for tabular display in dashboards.
+        """
+        try:
+            results = self.collection.get(
+                limit=limit,
+                where=where,
+                include=["metadatas"]
+            )
+            
+            if not results or not results["metadatas"]:
+                return []
+                
+            return results["metadatas"]
+        except Exception as e:
+            print(f"⚠️ [ChromaDB] Error fetching transactions: {e}")
+            return []

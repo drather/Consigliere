@@ -1,44 +1,23 @@
-# 📜 Project History (Recent)
-For full history, see `docs/context/archive/`.
+# Project Consigliere: History
+**Last Updated:** 2026-02-17
+**Status:** In Progress
 
-## 2026-02-15: Project Management & Quality Control
-- **Protocol:** Adopted Troubleshooting Log (`docs/troubleshooting.md`) to capture lessons learned.
-- **Workflow:** Initialized Git repository and established Gitflow (Feature Branch -> Merge).
-- **Action:** Committed initial codebase (Finance MVP) to `master`.
+## 2026-02-17: System Dashboard Implementation
+- **Feature:** Added Streamlit-based system dashboard (`src/dashboard/main.py`).
+- **Domain:** Finance, Real Estate.
+- **Architecture:** Shifted to **REST API Integration** pattern for decoupling.
+- **Components:**
+    - Finance Ledger: Data Grid with monthly summary.
+    - Real Estate: Market Monitor (Transaction Table) and News Insights (Markdown Viewer).
+- **Tech Stack:** Streamlit, Pandas, Requests, FastAPI.
 
-## 2026-02-15: Gemini 3 AI Integration & MVP Success
-- **Action:** Successfully integrated `gemini-2.5-flash` to parse transaction text and real estate notes, significantly improving latency.
-- **Verification:** End-to-End test passed (Text -> AI -> Ledger Update).
+## 2026-02-16: News Insight Automation
+- **Feature:** n8n Workflow Integration
+- **Feature:** Real Estate News Insight (Korean Report + RAG)
+- **Infrastructure:** Dockerized FastAPI Backend
+- **Feature:** n8n News Insight Automation
 
-## 2026-02-16: Real Estate MVP & Architectural Refactoring
-- **Feature:** Implemented Real Estate Reporting MVP using ChromaDB (Vector Search) and Gemini 2.5.
-- **Refactor:** Migrated codebase to a **Domain-Driven Modular Architecture** (`src/modules/finance`, `src/modules/real_estate`).
-- **Structure:** Centralized tests in `tests/` and common assets in `src/common/`.
-- **Infrastructure:** Validated Docker Compose setup for n8n and ChromaDB.
-
-## 2026-02-16: Real Estate Monitor (API Integration)
-- **Feature:** Implemented `RealEstateTransaction` monitor using MOLIT Open API.
-- **Data:** Successfully fetched and parsed 100+ live transaction records (XML -> Pydantic).
-- **Storage:** Integrated with ChromaDB for semantic search of transaction history.
-- **Issue Resolved:** Fixed `401 Unauthorized` by supporting Hex-formatted Service Keys.
-
-## 2026-02-16: n8n Integration & Automation
-- **Feature:** Exposed `RealEstateMonitor` via FastAPI endpoint (`/agent/real_estate/monitor/fetch`).
-- **Workflow:** Created n8n workflow for daily scheduling of real estate data collection.
-- **Verification:** Successfully triggered API via n8n-compatible request and saved transactions.
-
-## 2026-02-16: Infrastructure Upgrade (Dockerization)
-- **Containerization:** Dockerized Python FastAPI backend (`consigliere_api`).
-- **Orchestration:** Integrated API, n8n, and ChromaDB into a single `docker-compose` network.
-- **Connectivity:** Enabled internal communication between n8n and API (`http://consigliere_api:8000`).
-
-## 2026-02-16: Real Estate News Insight (RAG Agent)
-- **Feature:** Added daily news scraping (Naver API) and AI analysis agent.
-- **Intelligence:** Implemented RAG-based trend comparison (Today vs. History).
-- **Output:** Generates automated markdown reports (`data/real_estate/news/`).
-
-## 2026-02-16: News Insight Automation (Korean Report)
-- **Automation:** Integrated News Insight with n8n workflow (Daily 08:00).
-- **Enhancement:** Upgraded report format to include Korean summary, trend analysis, and source links.
-- **Verification:** Validated full pipeline via TestClient.
-- **Config:** Configured Docker container timezone to `Asia/Seoul` for accurate logging.
+## 2026-02-15: Initial Setup
+- **Infrastructure:** Project structure, Docker, and Git initialized.
+- **Core:** LLM Integration (Gemini 2.5 Flash).
+- **Module:** Finance Ledger (Markdown-based).

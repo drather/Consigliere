@@ -9,10 +9,11 @@ It serves as the central control room, allowing the user to view financial ledge
 
 ## 2. Architecture
 - **Framework:** [Streamlit](https://streamlit.io/) (Python-based UI).
-- **Integration Pattern:** Direct Service Integration.
-    - The dashboard will import and use existing Service classes (`FinanceAgent`, `RealEstateAgent`, `TransactionMonitorService`) directly.
-    - This avoids the overhead of HTTP requests for local operations and leverages existing business logic.
-- **State Management:** Streamlit Session State & `@st.cache_resource` for efficient service initialization.
+- **Integration Pattern:** **REST API Integration** (Decoupled).
+    - The dashboard acts as a pure API Client.
+    - All data operations are performed via HTTP requests to the FastAPI backend (`src/main.py`).
+    - This ensures clear separation of concerns, allowing the frontend to be replaced (e.g., with React) without changing backend logic.
+- **State Management:** Streamlit Session State & `@st.cache_data` for API response caching.
 
 ## 3. User Stories & Features
 
@@ -25,7 +26,7 @@ It serves as the central control room, allowing the user to view financial ledge
 
 ### 3.2 Finance Dashboard (`/finance`)
 - **Goal:** Visualize and edit monthly expenses.
-- **Features:**
+- **Features:
     - **Month Selector:** Dropdown to select `YYYY-MM`.
     - **Data Grid:** Display transactions from `data/Finance/Ledger_{YYYY}_{MM}.md` using `st.data_editor`.
         - **CRUD:** Allow users to **Edit** cells (Amount, Category, Item) and **Delete** rows directly in the grid.
@@ -54,20 +55,18 @@ This section is divided into two tabs:
     - **Search:** Keyword search within the currently loaded report.
 
 ## 4. Data Flow
-1.  **Read:** Dashboard calls `Service.get_data()` -> Service reads Markdown/ChromaDB -> Returns Dict/DataFrame -> Dashboard renders.
-2.  **Write (Finance):** User edits Grid -> Dashboard calls `Service.update_transaction()` -> Service rewrites Markdown file.
-3.  **Trigger (Real Estate):** User clicks "Refresh Data" -> Dashboard calls `MonitorService.fetch_daily()` -> Data saved to DB -> UI updates.
+1.  **Read:** Dashboard sends `GET /api/dashboard/{domain}/...` -> API calls Service -> Returns JSON -> Dashboard renders.
+2.  **Write (Finance):** User edits Grid -> Dashboard sends `POST /api/dashboard/finance/transaction` -> API updates Storage.
+3.  **Trigger:** User actions trigger specific API endpoints (e.g., `/agent/real_estate/monitor/fetch`).
 
 ## 5. Technical Requirements
 - **Dependencies:**
     - `streamlit`
     - `pandas`
-    - `plotly` (optional, for better charts)
-    - `watchdog` (optional, for auto-reload on file change)
+    - `requests` (New)
+    - `plotly`
 - **File Structure:**
-    - `src/dashboard/main.py`: Entry point.
-    - `src/dashboard/pages/`: Modular page logic.
-    - `src/dashboard/components/`: Reusable UI widgets.
+    - `src/dashboard/api_client.py`: Centralized API wrapper.
 
 ## 6. Future Scope
 - User Authentication (if deployed remotely).

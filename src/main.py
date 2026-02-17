@@ -137,6 +137,68 @@ def analyze_real_estate_news(request: NewsAnalysisRequest):
         print(f"❌ News API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# --- Dashboard API ---
+
+@app.get("/dashboard/finance/ledger")
+def get_finance_ledger(year: int, month: int):
+    """
+    Returns the monthly ledger data for dashboard visualization.
+    """
+    try:
+        df = finance_agent.get_monthly_ledger_df(year, month)
+        if df.empty:
+            return []
+        
+        # Convert DataFrame to JSON-compatible list of dicts
+        # Handle date serialization
+        records = df.to_dict(orient="records")
+        return records
+    except Exception as e:
+        print(f"❌ Dashboard API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/dashboard/real-estate/monitor")
+def get_real_estate_monitor(district_code: Optional[str] = None, limit: int = 50):
+    """
+    Returns monitored real estate transactions from ChromaDB.
+    """
+    try:
+        where_clause = {}
+        if district_code:
+            where_clause["district_code"] = district_code
+            
+        # If no filter, pass None to get all
+        transactions = chroma_repo.get_transactions(limit=limit, where=where_clause if where_clause else None)
+        return transactions
+    except Exception as e:
+        print(f"❌ Monitor API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/dashboard/real-estate/news")
+def list_real_estate_news():
+    """
+    Returns list of available news report filenames.
+    """
+    try:
+        return news_service.list_reports()
+    except Exception as e:
+        print(f"❌ News List API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/dashboard/real-estate/news/{filename}")
+def get_real_estate_news_content(filename: str):
+    """
+    Returns content of a specific news report.
+    """
+    try:
+        content = news_service.get_report_content(filename)
+        if content.startswith("❌"):
+             raise HTTPException(status_code=404, detail=content)
+        return {"filename": filename, "content": content}
+    except Exception as e:
+        print(f"❌ News Content API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
