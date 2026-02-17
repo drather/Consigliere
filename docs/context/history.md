@@ -41,3 +41,4 @@ For full history, see `docs/context/archive/`.
 - **Automation:** Integrated News Insight with n8n workflow (Daily 08:00).
 - **Enhancement:** Upgraded report format to include Korean summary, trend analysis, and source links.
 - **Verification:** Validated full pipeline via TestClient.
+- **Config:** Configured Docker container timezone to `Asia/Seoul` for accurate logging.

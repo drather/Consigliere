@@ -12,6 +12,7 @@ services:
     environment:
       - CHROMA_DB_HOST=consigliere_chromadb
       - CHROMA_DB_PORT=8000
+      - TZ=Asia/Seoul
     volumes:
       - ./src:/app/src
       - ./data:/app/data
