@@ -1,20 +1,19 @@
 # Project Consigliere: Active State
 **Last Updated:** 2026-02-16
-**Current Active Feature:** `real_estate_news` (docs/features/real_estate_news/)
+**Current Active Feature:** `n8n_news_insight` (docs/features/n8n_news_insight/)
 
 ## 📍 Current Focus
-- **Goal:** Implement "Real Estate News Insight Agent".
-- **Action:** Scraping Naver News, Summarizing via LLM, and Trend Analysis (RAG).
-- **Branch:** `feature/real-estate-news`
+- **Goal:** Automate "Real Estate News Insight" via n8n.
+- **Action:** Expose NewsService as API endpoint and create scheduler workflow.
+- **Branch:** `feature/n8n-news-insight`
 
-## 📋 Task List (News Insight)
-- [ ] **Config:** Setup Naver API credentials in `.env`.
-- [ ] **Spec:** Define data flow and analysis prompt (`spec.md`).
-- [ ] **Client:** Implement Naver News API Client (`src/modules/real_estate/news/client.py`).
-- [ ] **Service:** Implement LLM Analysis Logic (Summary & Trend Comparison).
-- [ ] **Storage:** Save Report (Markdown) + Embeddings (ChromaDB).
+## 📋 Task List (n8n Integration)
+- [ ] **Spec:** Define API and Workflow (`spec.md`).
+- [ ] **Backend:** Add `POST /agent/real_estate/news/analyze` to `src/main.py`.
+- [ ] **Workflow:** Create `workflows/real_estate_news.json`.
+- [ ] **Test:** Verify automated execution.
 
 ## ✅ Completed Tasks (Recent)
+- [x] **Feature:** Real Estate News Insight (Naver API + RAG)
 - [x] **Infrastructure:** Dockerized FastAPI Backend
 - [x] **Feature:** n8n Workflow Integration
-- [x] **Feature:** Real Estate Monitor (MOLIT API Integration)
