@@ -36,6 +36,10 @@ def render_finance_page():
         total_expense = df['Amount'].sum()
         st.metric("Total Expense", f"{total_expense:,} KRW")
 
+    # Ensure 'Date' column is datetime compatible for st.data_editor
+    if 'Date' in df.columns:
+        df['Date'] = pd.to_datetime(df['Date']).dt.date
+
     # 4. Data Editor (Grid)
     st.subheader("Transactions")
     

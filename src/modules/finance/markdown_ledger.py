@@ -97,3 +97,23 @@ class MarkdownLedgerRepository(LedgerRepository):
         if match:
             return int(match.group(1))
         return 0
+
+    def read_ledger_as_dataframe(self, year: int, month: int) -> "pd.DataFrame":
+        """
+        Parses the markdown table and returns it as a Pandas DataFrame.
+        """
+        import pandas as pd
+        transactions = self.get_monthly_transactions(year, month)
+        if not transactions:
+            return pd.DataFrame()
+            
+        data = [
+            {
+                "Date": t.date,
+                "Category": t.category,
+                "Item": t.item,
+                "Amount": t.amount
+            }
+            for t in transactions
+        ]
+        return pd.DataFrame(data)
