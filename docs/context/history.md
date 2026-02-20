@@ -1,6 +1,14 @@
 # Project Consigliere: History
-**Last Updated:** 2026-02-17
+**Last Updated:** 2026-02-20
 **Status:** In Progress
+
+## 2026-02-20: Architecture Review & Workflow Automation (Phase 1)
+- **Review:** Analyzed Local vs Production architecture, identifying bottlenecks in n8n workflow generation.
+- **Process Update:** Updated SOP (`.gemini_instructions.md`) to enforce n8n JSON templates and MCP integrations.
+- **Feature (workflow-automation):** 
+    - Created `docs/workflows_registry.md` to track active user automations.
+    - Initialized `src/n8n/templates/` with `http_fetch_schedule.json`.
+    - Created feature branch and spec.
 
 ## 2026-02-17: System Dashboard Implementation
 - **Feature:** Added Streamlit-based system dashboard (`src/dashboard/main.py`).
