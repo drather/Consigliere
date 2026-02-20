@@ -3,11 +3,10 @@
 **Current Active Feature:** `System Dashboard`
 
 ## 📍 Current Focus
-- **Status:** Completed
-- **Next:** **System Review & SOP Audit**
-    - Verify architectural compliance (Layered/Modular, Scalability).
-    - Review Git branching strategy and Docker infrastructure rules.
-    - Consolidate process documentation.
+- **Status:** In Progress
+- **Feature:** `workflow-automation` (Phase 1/3)
+- **Active Task:** Implementing MCP integration basics.
+- **Next:** Implement explicit MCP tools via FastAPI to hit n8n APIs.
 
 ## 📝 Lesson Learned (2026-02-18)
 - **Infrastructure:** The project runs on a **Docker Compose** architecture (`api`, `n8n`, `chromadb`).
