@@ -4,7 +4,10 @@
 
 ## 📍 Current Focus
 - **Status:** Completed
-- **Next:** Refine data persistence (Save Functionality) or optimize API performance.
+- **Next:** **System Review & SOP Audit**
+    - Verify architectural compliance (Layered/Modular, Scalability).
+    - Review Git branching strategy and Docker infrastructure rules.
+    - Consolidate process documentation.
 
 ## 📝 Lesson Learned (2026-02-18)
 - **Infrastructure:** The project runs on a **Docker Compose** architecture (`api`, `n8n`, `chromadb`).
