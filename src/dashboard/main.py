@@ -17,10 +17,12 @@ if project_root not in sys.path:
 try:
     from dashboard.views.finance import render_finance_page
     from dashboard.views.real_estate import show_real_estate as render_real_estate_page
+    from dashboard.views.automation import show_automation as render_automation_page
 except ImportError:
     try:
         from views.finance import render_finance_page
         from views.real_estate import show_real_estate as render_real_estate_page
+        from views.automation import show_automation as render_automation_page
     except ImportError as e:
         st.error(f"Critical Error: Failed to import views. {e}")
         st.stop()
@@ -53,7 +55,7 @@ def main():
         st.title("Consigliere 🤖")
         menu = st.radio(
             "Go to",
-            ["🏠 Home", "💰 Finance", "🏢 Real Estate"]
+            ["🏠 Home", "💰 Finance", "🏢 Real Estate", "⚙️ Automation"]
         )
         st.info(f"Current Module: {menu.split()[-1]}")
 
@@ -64,6 +66,8 @@ def main():
         render_finance_page()
     elif menu == "🏢 Real Estate":
         render_real_estate_page()
+    elif menu == "⚙️ Automation":
+        render_automation_page()
 
 if __name__ == "__main__":
     main()

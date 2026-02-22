@@ -190,6 +190,20 @@ def activate_workflow(request: WorkflowActivateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/agent/automation/workflow/{workflow_id}/run")
+def run_workflow(workflow_id: str, payload: Optional[Dict[str, Any]] = None):
+    """
+    Run an existing workflow manually (if it has a manual trigger).
+    """
+    try:
+        result = automation_service.run_workflow(workflow_id, payload)
+        if "error" in result:
+             raise HTTPException(status_code=500, detail=result["error"])
+        
+        return {"status": "success", "result": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # --- Dashboard API ---
 

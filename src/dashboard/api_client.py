@@ -70,3 +70,26 @@ class DashboardClient:
         except requests.exceptions.RequestException as e:
             print(f"Error fetching news content: {e}")
             return "❌ Error loading report."
+
+    @staticmethod
+    def get_workflows() -> List[Dict]:
+        """Fetches list of all n8n workflows."""
+        try:
+            response = requests.get(f"{API_BASE_URL}/agent/automation/workflows")
+            response.raise_for_status()
+            data = response.json()
+            return data.get("workflows", [])
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching workflows: {e}")
+            return []
+
+    @staticmethod
+    def run_workflow(workflow_id: str) -> Dict:
+        """Manually triggers an n8n workflow."""
+        try:
+            response = requests.post(f"{API_BASE_URL}/agent/automation/workflow/{workflow_id}/run")
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Error running workflow {workflow_id}: {e}")
+            return {"error": str(e)}
