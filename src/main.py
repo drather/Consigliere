@@ -1,13 +1,14 @@
 from datetime import datetime
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from modules.finance.service import FinanceAgent
 from modules.real_estate.service import RealEstateAgent
 from modules.real_estate.monitor.service import TransactionMonitorService
 from modules.real_estate.news.service import NewsService
 from modules.real_estate.repository import ChromaRealEstateRepository
+from modules.automation.service import AutomationService
 
 app = FastAPI(title="Consigliere API", description="Personal Knowledge Agent API")
 
@@ -17,6 +18,7 @@ real_estate_agent = RealEstateAgent(storage_mode="local")
 monitor_service = TransactionMonitorService()
 news_service = NewsService(storage_mode="local")
 chroma_repo = ChromaRealEstateRepository()
+automation_service = AutomationService()
 
 class TransactionRequest(BaseModel):
     text: str
@@ -30,6 +32,13 @@ class RealEstateMonitorRequest(BaseModel):
 
 class NewsAnalysisRequest(BaseModel):
     keywords: Optional[str] = Field(None, description="Custom keywords to override default")
+
+class WorkflowDeployRequest(BaseModel):
+    workflow_json: Dict[str, Any] = Field(..., description="The n8n workflow JSON definition")
+
+class WorkflowActivateRequest(BaseModel):
+    workflow_id: str
+    active: bool = True
 
 @app.get("/")
 def read_root():
@@ -136,6 +145,51 @@ def analyze_real_estate_news(request: NewsAnalysisRequest):
     except Exception as e:
         print(f"❌ News API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Automation & MCP API (n8n Integration) ---
+
+@app.get("/agent/automation/workflows")
+def list_workflows():
+    """
+    List all workflows currently active or stored in n8n.
+    Used by MCP to retrieve context of running automations.
+    """
+    try:
+        workflows = automation_service.list_workflows()
+        return {"status": "success", "workflows": workflows}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/agent/automation/workflow/deploy")
+def deploy_workflow(request: WorkflowDeployRequest):
+    """
+    Deploy a new workflow using a JSON template.
+    Called by Gemini via MCP tool after generating the workflow.
+    """
+    try:
+        result = automation_service.deploy_workflow(request.workflow_json)
+        if "error" in result:
+             raise HTTPException(status_code=500, detail=result["error"])
+        
+        return {"status": "success", "workflow": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/agent/automation/workflow/activate")
+def activate_workflow(request: WorkflowActivateRequest):
+    """
+    Activate or deactivate an existing workflow by its ID.
+    """
+    try:
+        result = automation_service.activate_workflow(request.workflow_id, request.active)
+        if "error" in result:
+             raise HTTPException(status_code=500, detail=result["error"])
+        
+        return {"status": "success", "result": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # --- Dashboard API ---
 

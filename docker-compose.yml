@@ -36,6 +36,10 @@ services:
       - GENERIC_TIMEZONE=Asia/Seoul
       # API Base URL for Consigliere Agents (Internal Docker Network)
       - API_BASE_URL=http://consigliere_api:8000
+      # Manage local API testing
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      - N8N_PUBLIC_API_DISABLED=false
+      - N8N_USER_MANAGEMENT_DISABLED=true
     volumes:
       - ./data/n8n_data:/home/node/.n8n
     # extra_hosts no longer strictly needed if using internal network, but kept for safety
@@ -51,7 +55,7 @@ services:
     container_name: consigliere_chromadb
     restart: unless-stopped
     ports:
-      - "8001:8000"  # Map host 8001 to container 8000
+      - "8001:8000" # Map host 8001 to container 8000
     volumes:
       - ./data/chroma_data:/chroma/chroma
     environment:
