@@ -87,3 +87,4 @@ graph TD
 3. **Service:** Specific `Agent` or `Service` processes business logic (e.g., calls LLM).
 4. **Repository:** Data is fetched/stored via `Repository` interfaces.
 5. **Storage:** Physical I/O happens via `StorageProvider` (Markdown) or Database Client (ChromaDB).
+ 
