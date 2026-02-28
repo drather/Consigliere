@@ -29,3 +29,4 @@ The codebase has been successfully migrated to a Modular Architecture.
 - **Higher Cohesion:** Related files are now collocated.
 - **Scalability:** Adding a new domain (e.g., `career`) only requires creating `src/modules/career/`.
 - **Clean Root:** `src/` is no longer cluttered with mixed concerns.
+- **Low Coupling: ** Unrelated files are taken parted. 
