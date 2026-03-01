@@ -21,3 +21,6 @@ This ensures a consistent environment and allows n8n to communicate with the API
 - **Build:** `docker-compose up -d --build` succeeded.
 - **Runtime:** All containers (`api`, `n8n`, `chromadb`) are Up.
 - **Workflow:** n8n workflow JSON updated to use internal DNS.
+
+## Comment
+- ** In Production environment, it will be served in GCP(Google Cloud Platform).
