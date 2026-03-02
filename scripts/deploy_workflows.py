@@ -1,24 +1,30 @@
 import sys
 import os
 import json
-import httpx
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Add src to python path to import modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
-from modules.automation.service import AutomationService
+try:
+    from modules.automation.service import AutomationService
+except ImportError as e:
+    print(f"❌ Failed to import AutomationService: {e}")
+    sys.exit(1)
 
 def main():
-    service = AutomationService(n8n_url="http://localhost:5678")
+    # Load environment variables from .env
+    base_dir = Path(__file__).parent.parent
+    load_dotenv(base_dir / ".env")
+    
+    service = AutomationService()
     
     workflows_to_deploy = [
         "workflows/finance/finance_mvp.json",
         "workflows/real_estate/real_estate_monitor.json",
         "workflows/real_estate/real_estate_news.json"
     ]
-    
-    base_dir = Path(__file__).parent.parent
     
     for relative_path in workflows_to_deploy:
         file_path = base_dir / relative_path
@@ -31,17 +37,18 @@ def main():
             with open(file_path, 'r', encoding='utf-8') as f:
                 workflow_json = json.load(f)
                 
-            with httpx.Client() as client:
-                response = client.post(
-                    f"{service.base_url}/workflows",
-                    headers=service.headers,
-                    json=workflow_json
-                )
-                if response.status_code >= 400:
-                    print(f"❌ Failed to deploy {file_path.name}: {response.text}")
-                else:
-                    workflow_id = response.json().get("id")
-                    print(f"✅ Successfully deployed {file_path.name} with ID: {workflow_id}")
+            # Remove 'id' if present, as n8n API expects new workflows to not have an ID
+            if 'id' in workflow_json:
+                del workflow_json['id']
+            
+            # Use AutomationService for deployment
+            result = service.deploy_workflow(workflow_json)
+            
+            if "error" in result:
+                print(f"❌ Failed to deploy {file_path.name}: {result['error']}")
+            else:
+                workflow_id = result.get("id")
+                print(f"✅ Successfully deployed {file_path.name} with ID: {workflow_id}")
                 
         except Exception as e:
             print(f"❌ Error processing {file_path.name}: {e}")

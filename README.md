@@ -76,9 +76,9 @@ graph TD
 
 ## 3. Dashboard Menu Guide (메뉴 설명)
 
-The **Streamlit Dashboard** is the primary UI for interacting with the system. You can start it locally via `streamlit run src/dashboard/main.py`.
+The **Streamlit Dashboard** is the primary UI for interacting with the system. It now runs as a managed Docker container. You can access it at [http://localhost:8501](http://localhost:8501).
 
-사용자의 메인 진입점인 **Streamlit 대시보드**의 메뉴 구성은 다음과 같습니다.
+사용자의 메인 진입점인 **Streamlit 대시보드**는 이제 Docker 컨테이너로 관리됩니다. 별도의 터미널 실행 없이 `docker-compose up`만으로 [http://localhost:8501](http://localhost:8501)에서 바로 확인하실 수 있습니다.
 
 ### 🏠 Home
 - **EN:** The main landing page providing a highly summarized status of your active modules (e.g., Finance, Real Estate).

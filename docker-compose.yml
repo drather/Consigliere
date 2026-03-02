@@ -12,6 +12,7 @@ services:
     environment:
       - CHROMA_DB_HOST=consigliere_chromadb
       - CHROMA_DB_PORT=8000
+      - N8N_WEBHOOK_URL=http://consigliere_n8n:5678
       - TZ=Asia/Seoul
     volumes:
       - ./src:/app/src
@@ -61,6 +62,26 @@ services:
     environment:
       - IS_PERSISTENT=TRUE
       - ALLOW_RESET=TRUE
+    networks:
+      - consigliere_net
+
+  dashboard:
+    build: .
+    container_name: consigliere_dashboard
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      - API_BASE_URL=http://consigliere_api:8000
+      - TZ=Asia/Seoul
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+    command: [ "streamlit", "run", "src/dashboard/main.py", "--server.port=8501", "--server.address=0.0.0.0" ]
+    depends_on:
+      - api
     networks:
       - consigliere_net
 

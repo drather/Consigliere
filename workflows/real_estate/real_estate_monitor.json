@@ -87,5 +87,8 @@
         ]
       ]
     }
+  },
+  "settings": {
+    "executionOrder": "v1"
   }
 }

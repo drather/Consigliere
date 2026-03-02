@@ -7,7 +7,11 @@ class AutomationService:
     Service to interact with the n8n REST API.
     Handles deploying, listing, and activating workflows.
     """
-    def __init__(self, n8n_url: str = "http://consigliere_n8n:5678", api_key: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzZThlMGEwMC1kOTdhLTQ5MGYtOGE2Ni0wMTA4ZGViMWRkNWMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzcxNzY0NTk0fQ.Ou0CRuP8RrH_cwEk_7vJBrr_dlXYdefjJmKF6rcqclk"):
+    def __init__(self, n8n_url: Optional[str] = None, api_key: Optional[str] = None):
+        import os
+        n8n_url = n8n_url or os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678").rstrip('/')
+        api_key = api_key or os.getenv("N8N_API_KEY")
+        
         self.base_url = f"{n8n_url}/api/v1"
         self.headers = {
              "accept": "application/json", 
@@ -38,6 +42,10 @@ class AutomationService:
                     headers=self.headers,
                     json=workflow_json
                 )
+                if response.status_code >= 400:
+                    print(f"❌ n8n API Error ({response.status_code}): {response.text}")
+                    return {"error": response.text, "status_code": response.status_code}
+                
                 response.raise_for_status()
                 return response.json()
         except Exception as e:

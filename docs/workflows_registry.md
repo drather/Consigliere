@@ -7,12 +7,12 @@ This registry tracks all automated routines, background tasks, and n8n workflows
 
 ## Active Routines
 
-| Routine ID | Area        | Workflow Name                   | Trigger / Schedule | Description                                        | Status |
-| :--------- | :---------- | :------------------------------ | :----------------- | :------------------------------------------------- | :----- |
-| `WR-001`   | System      | (Example) Daily Sync            | 08:00 KST          | Test entry for registry initialization.            | Active |
-| `WR-002`   | Finance     | Finance MVP                     | Manual             | Parses text/SMS into finance backend API           | Active |
-| `WR-003`   | Real Estate | Real Estate Transaction Monitor | 09:00 KST          | Fetches and saves real estate transactions via API | Active |
-| `WR-004`   | Real Estate | Real Estate News Insight        | 08:00 KST          | Analyzes and sends real estate news insights       | Active |
+| Routine ID | Area        | Workflow Name                   | Trigger / Schedule | Description                                        | Status | N8N ID             |
+| :--------- | :---------- | :------------------------------ | :----------------- | :------------------------------------------------- | :----- | :----------------- |
+| `WR-001`   | System      | (Example) Daily Sync            | 08:00 KST          | Test entry for registry initialization.            | Active | -                  |
+| `WR-002`   | Finance     | Finance MVP                     | Manual             | Parses text/SMS into finance backend API           | Active | `vki9zjZffGuXajT8` |
+| `WR-003`   | Real Estate | Real Estate Transaction Monitor | 09:00 KST          | Fetches and saves real estate transactions via API | Active | `fRuluv52mhU17CR4` |
+| `WR-004`   | Real Estate | Real Estate News Insight        | 08:00 KST          | Analyzes and sends real estate news insights       | Active | `oagl2yFTOKtfV8mH` |
 
 ## Suspended / Hidden Routines
 

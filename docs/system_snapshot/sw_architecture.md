@@ -22,10 +22,12 @@ graph TD
         RealEstateAgent["Real Estate Service"]
         MonitorService["Transaction Monitor Service"]
         NewsService["News Analysis Service"]
+        AutomationService["Automation Service"]
         
         FinanceAgent --> LLM["Core: LLM Client"]
         RealEstateAgent --> LLM
         NewsService --> LLM
+        AutomationService -- "n8n API" --> N8N["n8n Engine"]
     end
     
     subgraph DataAccess["Data Access Layer (Repositories)"]
@@ -51,6 +53,7 @@ graph TD
     FastAPI --> RealEstateAgent
     FastAPI --> MonitorService
     FastAPI --> NewsService
+    FastAPI --> AutomationService
 ```
 
 ## 2. Core Modules (`src/`)
@@ -80,6 +83,8 @@ graph TD
     - `service.py`: `RealEstateAgent`.
     - `monitor/`: Sub-module for transaction monitoring (ChromaDB integration).
     - `news/`: Sub-module for news analysis (Naver API + LLM).
+- **Automation (`src/modules/automation/`):**
+    - `service.py`: `AutomationService` (n8n API Integration).
 
 ## 3. Data Flow
 1. **User Action:** User interacts with Dashboard or API.

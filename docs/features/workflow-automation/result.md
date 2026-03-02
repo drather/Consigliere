@@ -10,24 +10,17 @@ The **Workflow Automation** feature (Phase 1-3) has been successfully implemente
 - **Integration Test Script**: `tests/test_automation_api.py`
 
 ## 3. Fixes Applied during Pipeline Testing
-- Addressed `401 Unauthorized` issues from `n8n` instances running >= 1.0 by configuring API Key Authentication.
-- Injected `X-N8N-API-KEY` into the HTTP request headers sent by `AutomationService`.
-- Replaced the deprecated Google Generative AI Python package with `google-genai` (log warning noted for future tech debt).
+- **API Key & Auth**: Configured `N8N_API_KEY` in `.env` and updated `AutomationService` to use it for `X-N8N-API-KEY` headers.
+- **JSON Schema Alignment**: Updated templates to match n8n v1 API requirements (adding `settings`, removing `style`/`pinData`).
+- **Container Networking**: Fixed internal service communication by using Docker service names (`consigliere_n8n`) instead of `localhost`.
+- **Architecture Stability**: Transitioned the Streamlit dashboard to a Docker container to resolve macOS Apple Silicon library conflicts.
 
 ## 4. Successful Workflows
-All verification tasks defined in `spec.md` and `task.md` passed:
-
-1. **`POST /agent/automation/workflow/deploy`**:
-   - Deployed the template JSON `http_fetch_schedule.json`.
-   - Confirmed `200 OK` response with the successfully generated `workflow_id`.
-
-2. **`POST /agent/automation/workflow/activate`**:
-   - Sent the `workflow_id` retrieved above.
-   - Verified that the `active` flag was flipped to `True` on the n8n application.
-
-3. **`GET /agent/automation/workflows`**:
-   - Retrieved the full active checklist and confirmed the target workflow was registered and turned on.
+The following workflows were successfully deployed and verified:
+1. **Finance MVP** (ID: `vki9zjZffGuXajT8`)
+2. **Real Estate Transaction Monitor** (ID: `fRuluv52mhU17CR4`)
+3. **Real Estate News Insight** (ID: `oagl2yFTOKtfV8mH`)
 
 ## 5. Next Steps
-- Merge `feature/workflow-automation` branch to `master`.
-- This concludes all foundational setups for MCP-n8n orchestration capabilities. Future AI tools can inject arbitrary workflow schemas based on user constraints.
+- This concludes the foundational setup for MCP-n8n orchestration. The system can now dynamically deploy and manage background automations.
+- Future work: Implement "Activate" and "Run" tools directly within the Dashboard UI.

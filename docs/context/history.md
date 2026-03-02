@@ -1,6 +1,15 @@
 # Project Consigliere: History
-**Last Updated:** 2026-02-20
+**Last Updated:** 2026-03-02
 **Status:** In Progress
+
+## 2026-03-02: Workflow Deployment Fix & Containerization
+- **Feature (workflow-automation):** 
+    - Resolved `400 Bad Request` in n8n deployment by aligning JSON schemas with n8n v1 API requirements (adding `settings`, stripping `style`/`pinData`).
+    - Configured `.env` with `N8N_API_KEY` for secure and authorized access to n8n Public API.
+    - Updated `AutomationService` and `deploy_workflows.py` to use environment variables and improved error logging.
+- **Infrastructure:** 
+    - Containerized the Streamlit dashboard as `consigliere_dashboard` to resolve architecture mismatch issues (ARM64 vs x86_64) on Apple Silicon.
+    - Fixed internal container networking by using Docker service names (`consigliere_n8n`) for API-n8n communication.
 
 ## 2026-02-22: Automation Dashboard & Workflow E2E
 - **Feature (workflow-automation):** Completed the E2E integration test for the FastAPI -> n8n pipeline using an API Key.

@@ -58,5 +58,8 @@
         ]
       ]
     }
+  },
+  "settings": {
+    "executionOrder": "v1"
   }
 }

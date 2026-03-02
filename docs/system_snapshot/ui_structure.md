@@ -17,6 +17,7 @@ graph LR
         Nav -->|Select| Home["🏠 Home"]
         Nav -->|Select| Finance["💰 Finance"]
         Nav -->|Select| RealEstate["🏢 Real Estate"]
+        Nav -->|Select| Automation["⚙️ Automation"]
     end
     
     subgraph MainContent["Main View"]
@@ -27,6 +28,8 @@ graph LR
         
         RE_Tabs --> RE_Tab1["Monitor Tab"]
         RE_Tabs --> RE_Tab2["News Tab"]
+        Automation --> AutoList["Workflow List"]
+        Automation --> AutoEditor["Open in n8n Editor"]
     end
 ```
 
@@ -59,3 +62,9 @@ graph LR
     - **Tab 2: 📰 News Insights**
         - Input: `Select Report Date` (Selectbox from API list)
         - Output: Markdown Report Viewer (`st.markdown`)
+### 2.4 ⚙️ Automation (`src/dashboard/views/automation.py`)
+- **Purpose:** Manage and jump into n8n workflows.
+- **Layout:**
+    - **Header:** Title "⚙️ Operations: Automation Workflows"
+    - **Workflow Cards:** List of deployed workflows with ID and Status.
+    - **Action:** "🛠️ Open in n8n Editor" button for direct navigation to n8n.
