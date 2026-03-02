@@ -23,7 +23,7 @@ services:
       - consigliere_net
 
   n8n:
-    image: docker.n8n.io/n8nio/n8n:1.72.0
+    image: docker.n8n.io/n8nio/n8n:2.9.4
     container_name: consigliere_n8n
     restart: unless-stopped
     ports:
