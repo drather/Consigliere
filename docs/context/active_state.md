@@ -4,8 +4,8 @@
 
 ## 📍 Current Focus
 - **Status:** Completed
-- **Feature:** `workflow-automation`
-- **Next:** Implementing "Manual Trigger/Activate" UI in the dashboard or extending RAG capabilities for real estate.
+- **Feature:** `n8n-upgrade-v2`
+- **Next:** Extending RAG capabilities for real estate or implementing "Manual Trigger/Activate" UI in the dashboard.
 
 ## 📝 Lesson Learned (2026-02-25)
 - **n8n Workflow Deployment:** We attempted to deploy existing workflows programmatically via the n8n API (`POST /workflows`). The API returned a `400 Bad Request`. Further investigation is needed to correctly format the workflow JSON payload for programmatic deployment (e.g., checking if `nodes` and `connections` are wrapped correctly, or if `name` is sufficient).

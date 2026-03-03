@@ -1,0 +1,10 @@
+.git
+.venv
+data
+__pycache__
+*.pyc
+tests
+docs
+.gemini
+.gemini_instructions.md
+README.md
