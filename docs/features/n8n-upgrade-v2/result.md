@@ -20,11 +20,11 @@ The n8n automation engine has been successfully upgraded to v2.9.4. This upgrade
 
 #### n8n v2.x Dashboard
 The n8n UI is fully operational, showing all existing workflows migrated successfully.
-![n8n Dashboard](file:///Users/kks/Desktop/Laboratory/Consigliere/docs/features/n8n-upgrade-v2/n8n_dashboard_1772546928525.png)
+![n8n Dashboard](n8n_dashboard_1772546928525.png)
 
 #### Consigliere Automation Dashboard
 The Streamlit dashboard correctly communicates with the new n8n API, listing all active and inactive workflows.
-![Streamlit Automation Tab](file:///Users/kks/Desktop/Laboratory/Consigliere/docs/features/n8n-upgrade-v2/streamlit_automation_tab_1772546966076.png)
+![Streamlit Automation Tab](streamlit_automation_tab_1772546966076.png)
 
 
 ### System Status
