@@ -1,6 +1,16 @@
 # Project Consigliere: History
-**Last Updated:** 2026-03-02
-**Status:** In Progress
+**Last Updated:** 2026-03-04
+**Status:** Completed
+
+## 2026-03-04: Workflow Verification & Notification Layer
+- **Verification**: Confirmed `Real Estate Transaction Monitor` and `Real Estate News Insight` workflows execute successfully in n8n v2.9.4.
+- **Implementation**: Appended Gmail (SMTP) and SMS (HTTP Request) notification nodes to core workflows.
+- **Documentation**: Created `result.md` and moved verification screenshots to permanent feature directory.
+
+## 2026-03-03: n8n Version Upgrade (v1.72.0 -> v2.9.4)
+- **Upgrade**: Successfully finalized database migration and UI upgrade.
+- **Optimization**: Reclaimed 3.8GB Docker space and implemented `.dockerignore` to prevent disk exhaustion.
+- **Verification**: Passed E2E automation API tests on the upgraded engine.
 
 ## 2026-03-02: Workflow Deployment Fix & Containerization
 - **Feature (workflow-automation):** 
