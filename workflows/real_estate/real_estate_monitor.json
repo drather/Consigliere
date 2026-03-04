@@ -23,16 +23,23 @@
     },
     {
       "parameters": {
-        "value": "={{ $now.format('yyyyMM') }}",
-        "dataPropertyName": "year_month"
+        "values": {
+          "string": [
+            {
+              "name": "current_month",
+              "value": "={{ $now.format('YYYYMM') }}"
+            }
+          ]
+        },
+        "options": {}
       },
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "typeVersion": 3.2,
       "position": [
         220,
         0
       ],
-      "id": "date-formatter",
+      "id": "format-yyyymm",
       "name": "Format YYYYMM"
     },
     {
@@ -43,12 +50,8 @@
         "bodyParameters": {
           "parameters": [
             {
-              "name": "district_code",
-              "value": "41135"
-            },
-            {
-              "name": "year_month",
-              "value": "={{ $json.year_month }}"
+              "name": "month",
+              "value": "={{ $node[\"Format YYYYMM\"].json[\"current_month\"] }}"
             }
           ]
         },
@@ -62,6 +65,48 @@
       ],
       "id": "http-request",
       "name": "Call Consigliere API"
+    },
+    {
+      "parameters": {
+        "sendTo": "kks@example.com",
+        "subject": "🏠 Real Estate Transaction Alert",
+        "message": "={{ $node[\"Call Consigliere API\"].json[\"summary\"] || 'New real estate transactions monitored.' }}",
+        "options": {
+          "appendAttributions": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        660,
+        -100
+      ],
+      "id": "gmail-notification",
+      "name": "Send Gmail Alert"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://consigliere_api:8000/notify/sms",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "=Consigliere: Real Estate monitor completed for {{ $node[\"Format YYYYMM\"].json[\"current_month\"] }}."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        100
+      ],
+      "id": "sms-notification",
+      "name": "Send SMS Alert"
     }
   ],
   "connections": {
@@ -81,6 +126,22 @@
         [
           {
             "node": "Call Consigliere API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Consigliere API": {
+      "main": [
+        [
+          {
+            "node": "Send Gmail Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send SMS Alert",
             "type": "main",
             "index": 0
           }

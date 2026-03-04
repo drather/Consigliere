@@ -44,6 +44,48 @@
       ],
       "id": "http-request",
       "name": "Trigger News Analysis"
+    },
+    {
+      "parameters": {
+        "sendTo": "kks@example.com",
+        "subject": "🏠 Real Estate News Insight Summary",
+        "message": "={{ $node[\"Trigger News Analysis\"].json[\"summary\"] }}",
+        "options": {
+          "appendAttributions": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        500,
+        -100
+      ],
+      "id": "gmail-notification",
+      "name": "Send Gmail Summary"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://consigliere_api:8000/notify/sms",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "=Real Estate News Update: {{ $node[\"Trigger News Analysis\"].json[\"summary\"].substring(0, 100) }}..."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        100
+      ],
+      "id": "sms-notification",
+      "name": "Send SMS Alert"
     }
   ],
   "connections": {
@@ -52,6 +94,22 @@
         [
           {
             "node": "Trigger News Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger News Analysis": {
+      "main": [
+        [
+          {
+            "node": "Send Gmail Summary",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send SMS Alert",
             "type": "main",
             "index": 0
           }
