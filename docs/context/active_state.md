@@ -3,15 +3,13 @@
 **Current Active Feature:** `n8n Workflow Automation`
 
 ## 📍 Current Focus
-- **Status:** Completed
-- **Feature:** `workflow-verification-notifications`
-- **Next:** Extending notification layer to Finance or implementing the next core business workflow.
-
-## 📝 Lesson Learned (2026-02-25)
-- **n8n Workflow Deployment:** We attempted to deploy existing workflows programmatically via the n8n API (`POST /workflows`). The API returned a `400 Bad Request`. Further investigation is needed to correctly format the workflow JSON payload for programmatic deployment (e.g., checking if `nodes` and `connections` are wrapped correctly, or if `name` is sufficient).
-- **Organization:** Moved loose `.json` files into `workflows/finance/` and `workflows/real_estate/` to keep the project clean. Updated `workflows_registry.md`.
+- **Status:** Backend Verified / Bidirectional In-Progress
+- **Feature:** `slack-interface`
+- **Objective:** Finalize Slack verification challenge for bidirectional communication and integrate into a news workflow.
 
 ## ✅ Completed Tasks (Recent)
+- [x] **Feature: Workflow Verification & Notifications (Real Estate)** <!-- id: 24 -->
+- [x] **Feature: n8n Version Upgrade (v1.72.0 -> v2.9.4)** <!-- id: 23 -->
 - [x] **Feature: n8n Workflow Organization**
     - Created `workflows/finance/` and `workflows/real_estate/`
     - Moved existing workflows to their domain folders

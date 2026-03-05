@@ -9,6 +9,7 @@ from modules.real_estate.monitor.service import TransactionMonitorService
 from modules.real_estate.news.service import NewsService
 from modules.real_estate.repository import ChromaRealEstateRepository
 from modules.automation.service import AutomationService
+from core.notify.slack import SlackSender
 
 app = FastAPI(title="Consigliere API", description="Personal Knowledge Agent API")
 
@@ -19,6 +20,7 @@ monitor_service = TransactionMonitorService()
 news_service = NewsService(storage_mode="local")
 chroma_repo = ChromaRealEstateRepository()
 automation_service = AutomationService()
+slack_sender = SlackSender()
 
 class TransactionRequest(BaseModel):
     text: str
@@ -39,6 +41,10 @@ class WorkflowDeployRequest(BaseModel):
 class WorkflowActivateRequest(BaseModel):
     workflow_id: str
     active: bool = True
+
+class NotificationRequest(BaseModel):
+    message: str
+    blocks: Optional[Any] = None
 
 @app.get("/")
 def read_root():
@@ -204,6 +210,26 @@ def run_workflow(workflow_id: str, payload: Optional[Dict[str, Any]] = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# --- Notification API ---
+
+@app.post("/notify/slack")
+def send_slack_notification(request: NotificationRequest):
+    """
+    Sends a message to Slack using the configured SlackSender.
+    """
+    try:
+        kwargs = {}
+        if request.blocks:
+            kwargs["blocks"] = request.blocks
+            
+        result = slack_sender.send(request.message, **kwargs)
+        if result.get("status") == "error":
+            raise HTTPException(status_code=500, detail=result.get("error"))
+            
+        return result
+    except Exception as e:
+        print(f"❌ Slack Notification Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- Dashboard API ---
 
