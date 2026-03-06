@@ -13,6 +13,8 @@ services:
       - CHROMA_DB_HOST=consigliere_chromadb
       - CHROMA_DB_PORT=8000
       - N8N_WEBHOOK_URL=http://consigliere_n8n:5678
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
       - TZ=Asia/Seoul
     volumes:
       - ./src:/app/src
