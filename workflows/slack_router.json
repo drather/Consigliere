@@ -1,13 +1,14 @@
 {
-    "name": "Slack Challenge Handler",
+    "name": "Slack Challenge Handler v3",
     "nodes": [
         {
             "parameters": {
                 "httpMethod": "POST",
-                "path": "slack-events",
-                "responseMode": "lastNode",
+                "path": "3LNclN4YavPCLRlj/slack/events",
+                "responseMode": "responseNode",
                 "options": {}
             },
+            "id": "e9e9e9e9-e9e9-4e9e-9e9e-e9e9e9e9e9e9",
             "name": "Webhook",
             "type": "n8n-nodes-base.webhook",
             "typeVersion": 1,
@@ -18,22 +19,16 @@
         },
         {
             "parameters": {
-                "keepOnlySet": true,
-                "values": {
-                    "string": [
-                        {
-                            "name": "challenge",
-                            "value": "={{ $json.body.challenge }}"
-                        }
-                    ]
-                },
+                "respondWith": "text",
+                "responseBody": "={{ $json.body.challenge }}",
                 "options": {}
             },
-            "name": "Set Challenge",
-            "type": "n8n-nodes-base.set",
+            "id": "f9f9f9f9-f9f9-4f9f-9f9f-f9f9f9f9f9f9",
+            "name": "Respond to Webhook",
+            "type": "n8n-nodes-base.respondToWebhook",
             "typeVersion": 1,
             "position": [
-                450,
+                500,
                 300
             ]
         }
@@ -43,7 +38,7 @@
             "main": [
                 [
                     {
-                        "node": "Set Challenge",
+                        "node": "Respond to Webhook",
                         "type": "main",
                         "index": 0
                     }
