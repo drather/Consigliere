@@ -23,11 +23,13 @@ graph TD
         MonitorService["Transaction Monitor Service"]
         NewsService["News Analysis Service"]
         AutomationService["Automation Service"]
+        NotificationService["Notification Service (Slack)"]
         
         FinanceAgent --> LLM["Core: LLM Client"]
         RealEstateAgent --> LLM
         NewsService --> LLM
         AutomationService -- "n8n API" --> N8N["n8n Engine"]
+        NotificationService -- "Slack Webhook" --> Slack((Slack))
     end
     
     subgraph DataAccess["Data Access Layer (Repositories)"]
@@ -64,6 +66,7 @@ graph TD
     - `llm.py`: Wrapper for Gemini AI API.
     - `storage/`: Abstract `StorageProvider` interface for file I/O (Local implementation).
     - `prompt_loader.py`: Loads prompt templates from Markdown files.
+    - `notify/`: **Slack Integration** (`slack.py`) for sending outgoing alerts.
 
 ### 2.2 Dashboard (`src/dashboard/`)
 - **Purpose:** Provide UI for system interaction.

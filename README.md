@@ -14,9 +14,9 @@
 ## 1. System Overview (시스템 개요)
 
 ### ❓ WHAT: What is Consigliere?
-Consigliere is your personal AI operations center. It combines a user-friendly **Streamlit Dashboard**, a **FastAPI backend** powered by Gemini LLMs, an **n8n Automation Engine** for scheduling integrations, and a **ChromaDB Vector Store** to act as its long-term memory. 
+Consigliere is your personal AI operations center. It combines a user-friendly **Streamlit Dashboard**, a **FastAPI backend** powered by Gemini LLMs, an **n8n Automation Engine** for scheduling integrations, and a **ChromaDB Vector Store** to act as its long-term memory. It also features a **Slack Integration** for proactive notifications.
 
-Consigliere는 개인의 AI 오퍼레이션 센터입니다. 사용하기 쉬운 **Streamlit 대시보드**, Gemini LLM으로 구동되는 **FastAPI 백엔드**, 자동화 및 스케줄링을 위한 **n8n 엔진**, 그리고 장기 기억 장치로 쓰이는 **ChromaDB**를 하나의 유기체처럼 통합한 시스템입니다.
+Consigliere는 개인의 AI 오퍼레이션 센터입니다. 사용하기 쉬운 **Streamlit 대시보드**, Gemini LLM으로 구동되는 **FastAPI 백엔드**, 자동화 및 스케줄링을 위한 **n8n 엔진**, 그리고 장기 기억 장치로 쓰이는 **ChromaDB**를 하나의 유기체처럼 통합한 시스템입니다. 또한 실시간 알림을 위해 **Slack 연동** 기능을 갖추고 있습니다.
 
 ### 🎯 WHY: Why was this built?
 To allow users to build and run complex, repeating background tasks (like scraping real-estate transactions every morning, or classifying credit card spending) using simple natural language, without writing ad-hoc scripts every time.
@@ -56,6 +56,7 @@ graph TD
         User -- "Interacts With" --> StreamlitApp
         User -- "Manage Workflows" --> N8N
         StreamlitApp -- "Consumes API" --> API
+        API -- "Outgoing Notifications" --> Slack((Workspace: Slack))
     end
 ```
 

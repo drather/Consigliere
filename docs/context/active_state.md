@@ -4,10 +4,12 @@
 
 ## 📍 Current Focus
 - **Status:** Active
-- **Feature:** `scheduled-real-estate-news-slack`
-- **Objective:** Successfully scheduled Daily Real Estate News to Slack at 06:00 KST.
+- **Feature:** `master-documentation`
+- **Objective:** Finalize system snapshots and README to reflect Slack & n8n v2 state.
 
 ## ✅ Completed Tasks (Recent)
+- [x] **Feature: Scheduled Real Estate News (Slack)** <!-- id: 25 -->
+    - Integrated `/notify/slack` with n8n at 06:00 KST schedule.
 - [x] **Feature: Workflow Verification & Notifications (Real Estate)** <!-- id: 24 -->
 - [x] **Feature: n8n Version Upgrade (v1.72.0 -> v2.9.4)** <!-- id: 23 -->
 - [x] **Feature: n8n Workflow Organization**

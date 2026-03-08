@@ -26,6 +26,7 @@ graph TD
             API -- "Store/Read Data" --> DataVol[("/app/data")]
             N8N -- "Workflow State" --> N8NVol[("/home/node/.n8n")]
             API -- "Deploy workflows" --> N8N
+            API -- "HTTPS POST" --> Slack((Slack API))
         end
         
         Browser -- "HTTP" --> Dashboard

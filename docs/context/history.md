@@ -1,8 +1,12 @@
 # Project Consigliere: History
-**Last Updated:** 2026-03-05
-**Status:** In Progress
+**Last Updated:** 2026-03-08
+**Status:** Active
 
-## 2026-03-05: Slack Notification Layer & Tunneling Setup
+## 2026-03-08: Scheduled Slack Reports & Docs Update
+- **Feature (real-estate-news):** Automated Daily Real Estate News at 06:00 KST via Slack.
+- **Refinement:** Fixed n8n expression syntax (added `=` prefix) and resolved variable field mismatch (`summary` -> `report_content`).
+- **Verification:** Successfully triggered E2E workflow; confirmed rich markdown summary delivery to Slack.
+- **Documentation:** Updated `README.md`, `sw_architecture.md`, and `infrastructure.md` to reflect the new notification infrastructure.
 - **Implementation**: Created `Sender` abstract interface and `SlackSender` implementation.
 - **Verification**: Successfully sent trial notifications from local FastAPI to mobile Slack.
 - **Infrastructure**: Established Cloudflare Tunnel for local dev; initiated Slack "challenge" verify troubleshooting.
