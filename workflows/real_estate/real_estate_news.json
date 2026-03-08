@@ -7,7 +7,7 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 8 * * *"
+              "expression": "0 6 * * *"
             }
           ]
         }
@@ -19,7 +19,7 @@
         0
       ],
       "id": "schedule-trigger",
-      "name": "Daily Schedule (08:00)"
+      "name": "Daily Schedule (06:00)"
     },
     {
       "parameters": {
@@ -54,6 +54,7 @@
           "appendAttributions": false
         }
       },
+      "disabled": true,
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
@@ -78,6 +79,7 @@
         },
         "options": {}
       },
+      "disabled": true,
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -86,10 +88,34 @@
       ],
       "id": "sms-notification",
       "name": "Send SMS Alert"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://consigliere_api:8000/notify/slack",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "📢 *데일리 부동산 뉴스 리포트*\n\n{{ $node[\"Trigger News Analysis\"].json[\"summary\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        300
+      ],
+      "id": "slack-notification",
+      "name": "Send Slack Notification"
     }
   ],
   "connections": {
-    "Daily Schedule (08:00)": {
+    "Daily Schedule (06:00)": {
       "main": [
         [
           {
@@ -110,6 +136,11 @@
           },
           {
             "node": "Send SMS Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Slack Notification",
             "type": "main",
             "index": 0
           }
