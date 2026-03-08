@@ -49,7 +49,7 @@
       "parameters": {
         "sendTo": "kks@example.com",
         "subject": "🏠 Real Estate News Insight Summary",
-        "message": "={{ $node[\"Trigger News Analysis\"].json[\"summary\"] }}",
+        "message": "={{ $node[\"Trigger News Analysis\"].json[\"report_content\"] }}",
         "options": {
           "appendAttributions": false
         }
@@ -73,7 +73,7 @@
           "parameters": [
             {
               "name": "message",
-              "value": "=Real Estate News Update: {{ $node[\"Trigger News Analysis\"].json[\"summary\"].substring(0, 100) }}..."
+              "value": "=Real Estate News Update: {{ $node[\"Trigger News Analysis\"].json[\"report_content\"].substring(0, 100) }}..."
             }
           ]
         },
@@ -98,7 +98,7 @@
           "parameters": [
             {
               "name": "message",
-              "value": "📢 *데일리 부동산 뉴스 리포트*\n\n{{ $node[\"Trigger News Analysis\"].json[\"summary\"] }}"
+              "value": "=📢 *데일리 부동산 뉴스 리포트*\n\n{{ $node[\"Trigger News Analysis\"].json[\"report_content\"] }}"
             }
           ]
         },
