@@ -4,8 +4,8 @@
 
 ## 📍 Current Focus
 - **Status:** Active
-- **Feature:** `master-documentation`
-- **Objective:** Finalize system snapshots and README to reflect Slack & n8n v2 state.
+- **Feature:** `real-estate-monitor-enhancement`
+- **Objective:** 국토부 API 데이터 수신 및 실거래가 모니터링 워크플로우 고도화.
 
 ## ✅ Completed Tasks (Recent)
 - [x] **Feature: Scheduled Real Estate News (Slack)** <!-- id: 25 -->
