@@ -100,3 +100,4 @@ The **Streamlit Dashboard** is the primary UI for interacting with the system. I
 ### ⚙️ Automation
 - **EN:** The command center for n8n integrations. Lists all deployed automation workflows (Status, ID). Includes direct links to jump into the native n8n visual editor to test and tweak logic.
 - **KR:** n8n 자동화 워크플로우 관리 메뉴. 현재 백그라운드에서 동작 중이거나 연결된 전체 워크플로우 리스트, 상태 등을 보여줍니다. 워크플로우를 수동 테스트하거나 수정하려면 제공된 `Open in n8n Editor` 버튼을 통해 비주얼 기반의 에디터로 즉시 진입할 수 있습니다.
+- 이후 slack 을 이용한 양방향 통신 기능이 개발 예정입니다.
