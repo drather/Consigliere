@@ -131,6 +131,32 @@ def fetch_real_estate_transactions(request: RealEstateMonitorRequest):
         print(f"❌ Monitor API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/agent/real_estate/monitor/daily_summary")
+def get_real_estate_daily_summary(district_code: str = "41135", target_date: Optional[str] = None):
+    """
+    Returns a deduplicated Slack Block Kit summary of transactions for a specific date.
+    Default is yesterday for typical daily morning reports.
+    """
+    try:
+        from datetime import timedelta
+        # Default to yesterday if not provided
+        if not target_date:
+            target_dt = (datetime.now() - timedelta(days=1)).date()
+        else:
+            target_dt = datetime.strptime(target_date, "%Y-%m-%d").date()
+            
+        print(f"🚀 [API] Generating Daily Summary for {district_code}, {target_dt}")
+        
+        blocks = real_estate_agent.get_daily_summary(district_code, target_dt)
+        return {
+            "status": "success",
+            "blocks": blocks,
+            "text": f"{target_dt.strftime('%Y-%m-%d')} 부동산 실거래가 요약" # Fallback text
+        }
+    except Exception as e:
+        print(f"❌ Daily Summary API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/agent/real_estate/news/analyze")
 def analyze_real_estate_news(request: NewsAnalysisRequest):
     """

@@ -14,7 +14,7 @@ class ChromaRealEstateRepository:
 
     def __init__(self, host: str = None, port: int = None):
         # Allow override via args, otherwise env vars, otherwise default local
-        self.host = host or os.getenv("CHROMA_DB_HOST", "localhost")
+        self.host = host or os.getenv("CHROMA_DB_HOST", "127.0.0.1")
         self.port = port or int(os.getenv("CHROMA_DB_PORT", 8001))
         
         # Initialize ChromaDB Client

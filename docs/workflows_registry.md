@@ -13,6 +13,7 @@ This registry tracks all automated routines, background tasks, and n8n workflows
 | `WR-002`   | Finance     | Finance MVP                     | Manual             | Parses text/SMS into finance backend API                       | Active | `vki9zjZffGuXajT8` |
 | `WR-003`   | Real Estate | Real Estate Transaction Monitor | 09:00 KST          | Fetches and saves real estate transactions via API             | Active | `fRuluv52mhU17CR4` |
 | `WR-004`   | Real Estate | Real Estate News Insight        | 06:00 KST          | Analyzes news and sends insights to Slack (Email/SMS disabled) | Active | `KI3Arb7F8lZiqtlK` |
+| `WR-005`   | Real Estate | Real Estate Monitor (Slack)     | 08:00 KST          | Fetches daily summary API and sends Slack Block Kit      | Active | -                  |
 
 ## Suspended / Hidden Routines
 

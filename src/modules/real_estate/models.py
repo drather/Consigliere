@@ -16,6 +16,14 @@ class RealEstateTransaction(BaseModel):
     road_name: Optional[str] = Field(None, description="Road name address")
     cancel_deal_date: Optional[date] = Field(None, description="Date the deal was cancelled (if applicable)")
 
+    @property
+    def naver_map_url(self) -> str:
+        """Generates a Naver Map search URL for the apartment."""
+        # URL encode the search query (e.g., "분당구 시범단지삼성한신")
+        import urllib.parse
+        query = urllib.parse.quote(f"{self.apt_name}")
+        return f"https://map.naver.com/v5/search/{query}"
+
     def to_chroma_format(self) -> Dict[str, Any]:
         """
         Converts transaction to ChromaDB compatible format.

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict, Any, List
 
 from core.storage import get_storage_provider, StorageProvider
@@ -106,3 +106,94 @@ class RealEstateAgent:
             )
         
         return response
+
+    def get_daily_summary(self, district_code: str, target_date: date) -> List[Dict[str, Any]]:
+        """
+        Fetches transactions for the target date, deduplicates them, and creates a Slack Block Kit message.
+        """
+        from .monitor.service import TransactionMonitorService
+        monitor_service = TransactionMonitorService()
+        
+        # 1. Fetch transactions for the given month (API requirement)
+        target_ym = target_date.strftime("%Y%m")
+        transactions = monitor_service.get_daily_transactions(district_code, target_ym)
+        
+        # 2. Filter for the exact target date
+        daily_txs = [tx for tx in transactions if tx.deal_date == target_date]
+        
+        if not daily_txs:
+             return [
+                 {
+                     "type": "section",
+                     "text": {
+                         "type": "mrkdwn",
+                         "text": f"*{target_date.strftime('%Y-%m-%d')}* 부동산 실거래가 내역이 없습니다."
+                     }
+                 }
+             ]
+
+        # 3. Deduplicate (same apartment, similar area/price)
+        # Simplified dedup: group by apt_name and exclusive_area (rounded to 1 decimal)
+        grouped_txs = {}
+        for tx in daily_txs:
+            key = f"{tx.apt_name}_{round(tx.exclusive_area, 1)}"
+            if key not in grouped_txs:
+                grouped_txs[key] = []
+            grouped_txs[key].append(tx)
+            
+        dedup_txs = []
+        for key, tx_list in grouped_txs.items():
+            # If multiple records, we just take the first one but note the count
+            primary_tx = tx_list[0]
+            count = len(tx_list)
+            dedup_txs.append((primary_tx, count))
+
+        # 4. Sort by price descending
+        dedup_txs.sort(key=lambda x: x[0].price, reverse=True)
+
+        # 5. Build Slack Block Kit
+        blocks = [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": f"🏢 {target_date.strftime('%Y-%m-%d')} 실거래가 요약",
+                    "emoji": True
+                }
+            },
+            {
+                "type": "divider"
+            }
+        ]
+        
+        for tx, count in dedup_txs:
+             # Convert price to Eok and Manwon (e.g. 15억 5000)
+             eok = tx.price // 100000000
+             man = (tx.price % 100000000) // 10000
+             price_str = f"{eok}억"
+             if man > 0:
+                 price_str += f" {man}만"
+             
+             count_str = f"외 {count-1}건" if count > 1 else ""
+             
+             # Block structure
+             blocks.append({
+                 "type": "section",
+                 "text": {
+                     "type": "mrkdwn",
+                     "text": f"*{tx.apt_name}* ({tx.exclusive_area:g}m² / {tx.floor}층) {count_str}\n💰 *{price_str}*원  |  🏗️ {tx.build_year}년식"
+                 },
+                 "accessory": {
+                     "type": "button",
+                     "text": {
+                         "type": "plain_text",
+                         "text": "지도 보기",
+                         "emoji": True
+                     },
+                     "value": "view_map",
+                     "url": tx.naver_map_url,
+                     "action_id": f"map_btn_{tx.apt_name}"
+                 }
+             })
+
+        return blocks

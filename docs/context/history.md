@@ -1,6 +1,14 @@
 # Project Consigliere: History
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-10
 **Status:** Active
+
+## 2026-03-10: Real Estate Monitor Enhancement (Slack)
+- **Feature (real-estate-monitor):** 고도화된 부동산 실거래가 데일리 요약 기능 구현.
+- **Implementation:** 
+    - `RealEstateAgent.get_daily_summary` API를 통한 데이터 중복 제거 및 요약 로직 구축.
+    - Naver Map 연동 및 Slack Block Kit을 활용한 풍부한 알림 포맷 적용.
+    - n8n 스케줄링 워크플로우(`WR-005`) 생성 및 등록.
+- **Documentation:** `spec.md`, `result.md` 작성 및 `workflows_registry.md` 업데이트.
 
 ## 2026-03-08: Scheduled Slack Reports & Docs Update
 - **Feature (real-estate-news):** Automated Daily Real Estate News at 06:00 KST via Slack.
