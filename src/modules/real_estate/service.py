@@ -197,3 +197,42 @@ class RealEstateAgent:
              })
 
         return blocks
+    def generate_insight_report(self, district_code: str = "11680", target_date: date = None) -> List[Dict[str, Any]]:
+        """
+        Generates a comprehensive insight report combining transactions and news.
+        """
+        if target_date is None:
+            target_date = date.today()
+            
+        print(f"📊 [RealEstate] Generating Insight Report for {target_date.strftime('%Y-%m-%d')}...")
+        
+        # 1. Fetch Transactions
+        from .monitor.service import TransactionMonitorService
+        monitor_service = TransactionMonitorService()
+        target_ym = target_date.strftime("%Y%m")
+        transactions = monitor_service.get_daily_transactions(district_code, target_ym)
+        daily_txs = [tx.__dict__ for tx in transactions if tx.deal_date == target_date]
+        
+        # 2. Fetch News
+        from .news.service import NewsService
+        news_service = NewsService()
+        news_list = news_service.get_categorized_news()
+        
+        # 3. Call LLM for Insights & Formatting
+        _, prompt_str = self.prompt_loader.load(
+            "insight_parser",
+            variables={
+                "tx_data": json.dumps(daily_txs, ensure_ascii=False, default=str),
+                "news_data": json.dumps(news_list, ensure_ascii=False)
+            }
+        )
+        
+        print(f"🧠 [RealEstate] Analyzing insights and formatting (calling LLM)...")
+        report_blocks = self.llm.generate_json(prompt_str)
+        
+        if "error" in report_blocks:
+             print(f"❌ [RealEstate] Insight report generation failed: {report_blocks['error']}")
+             return [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 인사이트 리포트 생성 중 오류가 발생했습니다."}}]
+
+        print(f"✅ [RealEstate] Insight report generation complete.")
+        return report_blocks

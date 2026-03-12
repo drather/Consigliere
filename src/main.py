@@ -156,6 +156,26 @@ def get_real_estate_daily_summary(district_code: str = "41135", target_date: Opt
     except Exception as e:
         print(f"❌ Daily Summary API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+@app.get("/agent/real_estate/insight_report")
+def get_real_estate_insight_report(district_code: str = "11680", target_date: Optional[str] = None):
+    """
+    Returns a comprehensive real estate insight report.
+    """
+    try:
+        if target_date:
+            target_dt = datetime.strptime(target_date, "%Y-%m-%d").date()
+        else:
+            target_dt = datetime.now().date()
+            
+        blocks = real_estate_agent.generate_insight_report(district_code, target_dt)
+        return {
+            "status": "success",
+            "blocks": blocks,
+            "text": f"{target_dt.strftime('%Y-%m-%d')} 부동산 종합 인사이트 리포트"
+        }
+    except Exception as e:
+        print(f"❌ Insight Report API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/agent/real_estate/news/analyze")
 def analyze_real_estate_news(request: NewsAnalysisRequest):

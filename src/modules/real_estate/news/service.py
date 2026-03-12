@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 from glob import glob
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from core.storage import get_storage_provider, StorageProvider
 from core.prompt_loader import PromptLoader
@@ -128,3 +128,21 @@ class NewsService:
                 return f.read()
         except Exception as e:
             return f"❌ Error reading file: {str(e)}"
+    def get_categorized_news(self, query: str = "부동산 정책 아파트 개발 GTX", display: int = 10) -> List[Dict[str, Any]]:
+        """
+        Fetches news and returns them as a list of dictionaries for internal use.
+        """
+        print(f"📰 [News] Fetching news for query: {query}")
+        items = self.client.search_news(query, display=display)
+        if not items:
+            return []
+        
+        articles = []
+        for item in items:
+            articles.append({
+                "title": item['title'].replace('<b>', '').replace('</b>', ''),
+                "link": item['originallink'] or item['link'],
+                "description": item['description'].replace('<b>', '').replace('</b>', ''),
+                "pub_date": item['pubDate']
+            })
+        return articles
