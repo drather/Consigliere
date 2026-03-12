@@ -3,7 +3,7 @@
 **Current Active Feature:** `Real Estate Monitor Enhancement (Done)`
 
 ## 📍 Current Focus
-- **Status:** Planning
+- **Status:** Done
 - **Current Objective:** **사용자 페르소나 기반 액션 플랜** 제공 <!-- id: 28 -->
     - 종합 리포트에 기반하여 개별 상황(자산, 소득, 결혼 계획)에 맞는 맞춤형 대응 전략 제안.
 

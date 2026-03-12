@@ -2,6 +2,15 @@
 **Last Updated:** 2026-03-10
 **Status:** Active
 
+## 2026-03-12: Comprehensive Real Estate Insight Report & Persona Action Plan
+- **Feature (insight-report):** 실거래가, 뉴스, 정책을 통합한 종합 리포트 및 사용자 페르소나 기반 액션 플랜 기능 구현.
+- **Implementation:**
+    - `RealEstateAgent.generate_insight_report()`: 실거래 데이터 그룹화, 뉴스 분류, LLM 인사이트 추출.
+    - **Persona Integration:** `persona.yaml`을 통한 사용자 맞춤형 재무/거주 전략(Action Plan) 및 금융 용어 해설 제공.
+    - **News Categorization:** `NewsService` 확장으로 정책 및 지역 개발 소스 정형화.
+- **Automation:** n8n 워크플로우(`WR-006`)를 통한 08:30 KST 자동 발송.
+- **Documentation:** `doc/features/real-estate-insight-report/` 내 Spec, Progress, Result, Walkthrough 완비.
+
 ## 2026-03-10: Real Estate Monitor Enhancement (Slack)
 - **Feature (real-estate-monitor):** 고도화된 부동산 실거래가 데일리 요약 기능 구현.
 - **Implementation:** 
