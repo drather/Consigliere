@@ -3,9 +3,9 @@
 **Current Active Feature:** `Real Estate Monitor Enhancement (Done)`
 
 ## 📍 Current Focus
-- **Status:** Done
-- **Current Objective:** **부동산 종합 인사이트 리포트** 구축 <!-- id: 27 -->
-    - 실거래가, 부동산 정책, 지역 개발 소식을 카테고리별로 통합 및 요약하여 제공.
+- **Status:** Planning
+- **Current Objective:** **사용자 페르소나 기반 액션 플랜** 제공 <!-- id: 28 -->
+    - 종합 리포트에 기반하여 개별 상황(자산, 소득, 결혼 계획)에 맞는 맞춤형 대응 전략 제안.
 
 ## ✅ Completed Tasks (Recent)
 - [x] **Feature: Real Estate Daily Summary (Slack)** <!-- id: 26 -->

@@ -1,0 +1,21 @@
+# 사용자 페르소나 설정 (Default Persona)
+
+user:
+  name: "kks"
+  income:
+    self: 100000000 # 세전 연봉 1억
+    partner: 60000000 # 세전 연봉 6천
+    total: 160000000
+  assets:
+    self: 200000000 # 2억
+    partner: 100000000 # 1억
+    total: 300000000
+  locations:
+    current:
+      self: "성남시 분당구 이매동"
+      partner: "서울시 송파구 삼전역 인근 (전세 자취)"
+    hometown_partner: "화성시 향남읍"
+    workplace: "서울시 강남구 삼성역 ~ 선릉역 인근"
+  plans:
+    wedding: "2027년 이내"
+    primary_goal: "실거주 및 투자 가치 동시 고려"

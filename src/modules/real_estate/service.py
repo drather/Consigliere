@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, date
 from typing import Dict, Any, List
 
@@ -218,12 +219,24 @@ class RealEstateAgent:
         news_service = NewsService()
         news_list = news_service.get_categorized_news()
         
-        # 3. Call LLM for Insights & Formatting
+        # 3. Load Persona Data
+        persona_data = {}
+        try:
+            import yaml
+            persona_path = os.path.join(os.path.dirname(__file__), "persona.yaml")
+            if os.path.exists(persona_path):
+                with open(persona_path, "r", encoding="utf-8") as f:
+                    persona_data = yaml.safe_load(f)
+        except Exception as e:
+            print(f"⚠️ [RealEstate] Failed to load persona.yaml: {e}")
+
+        # 4. Call LLM for Insights & Formatting
         _, prompt_str = self.prompt_loader.load(
             "insight_parser",
             variables={
                 "tx_data": json.dumps(daily_txs, ensure_ascii=False, default=str),
-                "news_data": json.dumps(news_list, ensure_ascii=False)
+                "news_data": json.dumps(news_list, ensure_ascii=False),
+                "persona_data": json.dumps(persona_data, ensure_ascii=False)
             }
         )
         
