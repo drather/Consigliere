@@ -3,9 +3,9 @@
 **Current Active Feature:** `Real Estate Monitor Enhancement (Done)`
 
 ## 📍 Current Focus
-- **Status:** Done
-- **Current Objective:** **사용자 페르소나 기반 액션 플랜** 제공 <!-- id: 28 -->
-    - 종합 리포트에 기반하여 개별 상황(자산, 소득, 결혼 계획)에 맞는 맞춤형 대응 전략 제안.
+- **Status:** Debugging
+- **Current Objective:** **인사이트 리포트 미발송 원인 파악 및 해결** <!-- id: 29 -->
+    - 신규 통합 리포트(08:30)가 오지 않고 기존 리포트들이 발송되는 현상 점검.
 
 ## ✅ Completed Tasks (Recent)
 - [x] **Feature: Real Estate Daily Summary (Slack)** <!-- id: 26 -->

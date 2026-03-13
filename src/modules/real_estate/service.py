@@ -212,7 +212,16 @@ class RealEstateAgent:
         monitor_service = TransactionMonitorService()
         target_ym = target_date.strftime("%Y%m")
         transactions = monitor_service.get_daily_transactions(district_code, target_ym)
+        
+        # Filter for the exact target date
         daily_txs = [tx.__dict__ for tx in transactions if tx.deal_date == target_date]
+        
+        # [NEW] If no transactions for the exact date, take the latest 20 from the month to avoid "empty" report
+        if not daily_txs and transactions:
+            print(f"⚠️ [RealEstate] No transactions for {target_date}, fallback to latest available in {target_ym}")
+            # Sort by date descending
+            sorted_txs = sorted(transactions, key=lambda x: x.deal_date, reverse=True)
+            daily_txs = [tx.__dict__ for tx in sorted_txs[:20]]
         
         # 2. Fetch News
         from .news.service import NewsService
