@@ -167,7 +167,14 @@ def get_real_estate_insight_report(district_code: str = "11680", target_date: Op
         else:
             target_dt = datetime.now().date()
             
-        blocks = real_estate_agent.generate_insight_report(district_code, target_dt)
+        blocks_data = real_estate_agent.generate_insight_report(district_code, target_dt)
+        
+        # Ensure blocks is a list for the final response
+        if isinstance(blocks_data, dict) and "blocks" in blocks_data:
+            blocks = blocks_data["blocks"]
+        else:
+            blocks = blocks_data
+            
         return {
             "status": "success",
             "blocks": blocks,

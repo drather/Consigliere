@@ -1,13 +1,20 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-03-10
-**Current Active Feature:** `Real Estate Monitor Enhancement (Done)`
+**Last Updated:** 2026-03-13
+**Current Active Feature:** `Real Estate Insight Report Enhancement (Completed)`
 
 ## 📍 Current Focus
-- **Status:** Debugging
-- **Current Objective:** **인사이트 리포트 미발송 원인 파악 및 해결** <!-- id: 29 -->
-    - 신규 통합 리포트(08:30)가 오지 않고 기존 리포트들이 발송되는 현상 점검.
+- **Status:** Maintenance & Stability
+- **Current Objective:** **준비된 시스템 모니터링** <!-- id: 29 -->
 
 ## ✅ Completed Tasks (Recent)
+- [x] **Feature: Real Estate Insight Report (Advanced)** <!-- id: 27 -->
+    - Corrected date logic for 2026 context.
+    - Expanded data collection to 9+ metropolitan districts (10+ txs).
+    - Integrated 2026 Financial Policy (Stress DSR Phase 3) check.
+    - Resolved Slack Block Kit formatting issues (`invalid_blocks_format`).
+- [x] **Feature: Insight Report Delivery Fix** <!-- id: 28 -->
+    - Integrated `insight_report_workflow.json` into deployment script.
+    - Added data fallback notes for empty transactions.
 - [x] **Feature: Real Estate Daily Summary (Slack)** <!-- id: 26 -->
     - Created daily summary API with data deduplication.
     - Integrated Naver Map links and Slack Block Kit.

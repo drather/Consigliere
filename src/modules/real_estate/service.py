@@ -207,21 +207,38 @@ class RealEstateAgent:
             
         print(f"📊 [RealEstate] Generating Insight Report for {target_date.strftime('%Y-%m-%d')}...")
         
-        # 1. Fetch Transactions
+        # 1. Fetch Transactions from Multiple Districts (Metropolitan Area)
+        # Major areas: Gangnam(11680), Songpa(11710), Seocho(11650), Seongdong(11200), Yongsan(11170), 
+        # Bundang(41135), Gwacheon(41290), Gwangmyeong(41210), Hanam(41450)
+        districts = {
+            "11680": "강남구", "11710": "송파구", "11650": "서초구", 
+            "11200": "성동구", "11170": "용산구", "41135": "분당구",
+            "41290": "과천시", "41210": "광명시", "41450": "하남시"
+        }
+        
         from .monitor.service import TransactionMonitorService
         monitor_service = TransactionMonitorService()
         target_ym = target_date.strftime("%Y%m")
-        transactions = monitor_service.get_daily_transactions(district_code, target_ym)
         
+        all_transactions = []
+        for d_code in districts.keys():
+            try:
+                txs = monitor_service.get_daily_transactions(d_code, target_ym)
+                all_transactions.extend(txs)
+            except Exception as e:
+                print(f"⚠️ [RealEstate] Failed to fetch data for {d_code}: {e}")
+
         # Filter for the exact target date
-        daily_txs = [tx.__dict__ for tx in transactions if tx.deal_date == target_date]
+        daily_txs = [tx.__dict__ for tx in all_transactions if tx.deal_date == target_date]
         
-        # [NEW] If no transactions for the exact date, take the latest 20 from the month to avoid "empty" report
-        if not daily_txs and transactions:
+        # Fallback: If no transactions for the exact date, take latest 20 from gathered month
+        if not daily_txs and all_transactions:
             print(f"⚠️ [RealEstate] No transactions for {target_date}, fallback to latest available in {target_ym}")
-            # Sort by date descending
-            sorted_txs = sorted(transactions, key=lambda x: x.deal_date, reverse=True)
+            sorted_txs = sorted(all_transactions, key=lambda x: x.deal_date, reverse=True)
             daily_txs = [tx.__dict__ for tx in sorted_txs[:20]]
+            fallback_note = f"(안내) {target_date.strftime('%Y-%m-%d')} 당일 실거래 내역이 없어, 해당 월({target_ym})의 최신 데이터로 대체되었습니다."
+        else:
+            fallback_note = ""
         
         # 2. Fetch News
         from .news.service import NewsService
@@ -239,22 +256,60 @@ class RealEstateAgent:
         except Exception as e:
             print(f"⚠️ [RealEstate] Failed to load persona.yaml: {e}")
 
-        # 4. Call LLM for Insights & Formatting
+        # 4. Define 2026 Financial Policy Context
+        policy_context = {
+            "standard_year": 2026,
+            "ltv": {
+                "first_time_buyer": "80% (최대 6억)",
+                "non_regulated_area": "70%",
+                "regulated_area": "50%"
+            },
+            "dsr": {
+                "limit": "40%",
+                "stress_dsr": "3단계 본격 시행 (수도권 스트레스 금리 100% 적용, 약 1.5%p 가산)"
+            },
+            "news": "지방권은 2026년 상반기까지 스트레스 DSR 2단계 한시 유지, 수도권은 3단계 강화 적용"
+        }
+
+        # 5. Call LLM for Insights & Formatting
         _, prompt_str = self.prompt_loader.load(
             "insight_parser",
             variables={
+                "target_date": target_date.strftime("%Y-%m-%d"),
                 "tx_data": json.dumps(daily_txs, ensure_ascii=False, default=str),
                 "news_data": json.dumps(news_list, ensure_ascii=False),
-                "persona_data": json.dumps(persona_data, ensure_ascii=False)
+                "persona_data": json.dumps(persona_data, ensure_ascii=False),
+                "policy_context": json.dumps(policy_context, ensure_ascii=False),
+                "fallback_note": fallback_note
             }
         )
         
         print(f"🧠 [RealEstate] Analyzing insights and formatting (calling LLM)...")
-        report_blocks = self.llm.generate_json(prompt_str)
+        report_json = self.llm.generate_json(prompt_str)
         
-        if "error" in report_blocks:
-             print(f"❌ [RealEstate] Insight report generation failed: {report_blocks['error']}")
+        if "error" in report_json:
+             print(f"❌ [RealEstate] Insight report generation failed: {report_json['error']}")
              return [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 인사이트 리포트 생성 중 오류가 발생했습니다."}}]
 
-        print(f"✅ [RealEstate] Insight report generation complete.")
+        # Extract blocks list if wrapped in a dictionary (Aggressive check)
+        report_blocks = []
+        if isinstance(report_json, dict):
+            # Case 1: {"blocks": [...]}
+            if "blocks" in report_json and isinstance(report_json["blocks"], list):
+                report_blocks = report_json["blocks"]
+            # Case 2: {"blocks": {"blocks": [...]}}
+            elif "blocks" in report_json and isinstance(report_json["blocks"], dict) and "blocks" in report_json["blocks"]:
+                report_blocks = report_json["blocks"]["blocks"]
+            else:
+                # If it's a dict but no blocks key, but maybe it IS the block list? No, probably error.
+                print(f"❌ [RealEstate] Unexpected dictionary format: {report_json.keys()}")
+                return [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 인사이트 리포트 형식이 올바르지 않습니다."}}]
+        elif isinstance(report_json, list):
+            report_blocks = report_json
+        
+        if not report_blocks:
+             print(f"❌ [RealEstate] Failed to extract blocks from: {report_json}")
+             return [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 인사이트 리포트 생성 중 오류가 발생했습니다."}}]
+
+        print(f"✅ [RealEstate] Insight report generation complete (extracted {len(report_blocks)} blocks).")
         return report_blocks

@@ -23,7 +23,8 @@ def main():
     workflows_to_deploy = [
         "workflows/finance/finance_mvp.json",
         "workflows/real_estate/real_estate_monitor.json",
-        "workflows/real_estate/real_estate_news.json"
+        "workflows/real_estate/real_estate_news.json",
+        "workflows/real_estate/insight_report_workflow.json"
     ]
     
     for relative_path in workflows_to_deploy:
