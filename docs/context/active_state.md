@@ -1,10 +1,11 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-03-13
-**Current Active Feature:** `Real Estate Insight Report Enhancement (Completed)`
+**Last Updated:** 2026-03-14
+**Current Active Feature:** `Architecture Refactoring (Planning)`
 
 ## 📍 Current Focus
-- **Status:** Maintenance & Stability
-- **Current Objective:** **준비된 시스템 모니터링** <!-- id: 29 -->
+- **Status:** Planning
+- **Current Objective:** **시스템 구조 및 로깅 체계 리팩토링 기획**
+  - 라우터 분리, 의존성 주입(DI) 적용, 로깅 중앙화 및 테스트 전략 수립.
 
 ## ✅ Completed Tasks (Recent)
 - [x] **Feature: Real Estate Insight Report (Advanced)** <!-- id: 27 -->
