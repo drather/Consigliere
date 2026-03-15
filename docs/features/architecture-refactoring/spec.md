@@ -28,13 +28,20 @@
     -   `main.py` 혹은 `dependencies.py` (FastAPI `Depends()`) 에서 컨테이너 역할을 하며 의존성 인스턴스를 주입합니다.
     -   이를 통해 테스트 수행 시 Mock Object를 주입하여 쉽게 검증할 수 있도록 변경합니다.
 
-### 3.3. 로깅 체계 (Centralized Logging)
+### 3.3. 멀티 LLM 지원 아키텍처 (LLM Backend Abstraction)
+-   **현재 이슈**: `src/core/llm.py` 내의 `LLMClient` 가 `google.generativeai` (Gemini)에 강하게 결합되어 있어, Claude 등 다른 모델로의 전환이 어렵습니다.
+-   **구현 방향**:
+    -   `BaseLLMClient` 인터페이스(추상 클래스)를 정의하고, 필수 메서드(`generate`, `generate_json`)를 선언합니다.
+    -   `GeminiClient` 와 `ClaudeClient` 가 각각 위 인터페이스를 상속받아 구현하도록 분리합니다.
+    -   환경 설정(예: `.env`의 `LLM_PROVIDER=claude`)에 따라 팩토리(Factory) 패턴을 사용하여 동적으로 생성된 객체를 Agent에 주입(DI)합니다.
+
+### 3.4. 로깅 체계 (Centralized Logging)
 -   **로그 수집 경로**: `logs/` 디렉토리 신설 (Git-ignored)
 -   **로거 설정**: `src/core/logger.py` 에 기본 애플리케이션 싱글톤 로거 객체를 세팅합니다.
     -   레벨, 포매팅(Time, Module, Level, Message) 적용 가이드 수립.
     -   모든 `print()` 함수를 로거의 `info()`, `warning()`, `error()` 콘솔/파일 양립형 출력으로 교체.
 
-### 3.4. 디렉토리 구조 최적화 및 문서 관리
+### 3.5. 디렉토리 구조 최적화 및 문서 관리
 -   루트의 `run_server.py`, `deploy_slack_router.py`, `test_slack.py` 등 관리되지 않는 실행 스크립트들을 `scripts/` 밑으로 재정렬합니다.
 -   `Dockerfile`은 추후 필요시 서비스별 Multi-stage 빌드 구조로 전환하기 좋게 `build/` 디렉토리에 레퍼런스 작성을 고려하거나 주소화합니다. (우선 현 로컬 상태에서는 로깅/코드 개선 주력)
 -   `.gemini_instructions.md`의 내용을 `docs/guidelines/sw_development.md`, `infrastructure_env.md`, `workflow_sop.md` 로 기능 분할합니다.
