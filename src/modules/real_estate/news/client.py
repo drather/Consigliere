@@ -2,6 +2,10 @@ import os
 import requests
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
+from core.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 load_dotenv()
 
@@ -17,7 +21,7 @@ class NaverNewsClient:
         self.client_secret = client_secret or os.getenv("NAVER_CLIENT_SECRET")
         
         if not self.client_id or not self.client_secret:
-            print("⚠️ WARNING: Naver API credentials not found.")
+            logger.warning("⚠️ WARNING: Naver API credentials not found.")
 
     def search_news(self, query: str, display: int = 20, sort: str = "date") -> List[Dict[str, Any]]:
         """
@@ -49,5 +53,5 @@ class NaverNewsClient:
             data = response.json()
             return data.get("items", [])
         except Exception as e:
-            print(f"❌ [Naver] API Error: {e}")
+            logger.error(f"❌ [Naver] API Error: {e}")
             return []

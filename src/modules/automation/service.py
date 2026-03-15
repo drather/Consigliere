@@ -1,6 +1,10 @@
 import httpx
 import json
 from typing import Dict, Any, List, Optional
+from core.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class AutomationService:
     """
@@ -28,7 +32,7 @@ class AutomationService:
                 data = response.json()
                 return data.get("data", [])
         except Exception as e:
-            print(f"❌ Error fetching workflows: {e}")
+            logger.error(f"❌ Error fetching workflows: {e}")
             return []
 
     def deploy_workflow(self, workflow_json: Dict[str, Any]) -> Dict[str, Any]:
@@ -43,13 +47,13 @@ class AutomationService:
                     json=workflow_json
                 )
                 if response.status_code >= 400:
-                    print(f"❌ n8n API Error ({response.status_code}): {response.text}")
+                    logger.error(f"❌ n8n API Error ({response.status_code}): {response.text}")
                     return {"error": response.text, "status_code": response.status_code}
                 
                 response.raise_for_status()
                 return response.json()
         except Exception as e:
-            print(f"❌ Error deploying workflow: {e}")
+            logger.error(f"❌ Error deploying workflow: {e}")
             return {"error": str(e)}
 
     def activate_workflow(self, workflow_id: str, active: bool = True) -> Dict[str, Any]:
@@ -63,7 +67,7 @@ class AutomationService:
                 response.raise_for_status()
                 return {"status": "success", "id": workflow_id, "active": active}
         except Exception as e:
-            print(f"❌ Error activating workflow {workflow_id}: {e}")
+            logger.error(f"❌ Error activating workflow {workflow_id}: {e}")
             return {"error": str(e)}
 
     def run_workflow(self, workflow_id: str, payload: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -75,5 +79,5 @@ class AutomationService:
                  response.raise_for_status()
                  return response.json()
          except Exception as e:
-             print(f"❌ Error running workflow {workflow_id}: {e}")
+             logger.error(f"❌ Error running workflow {workflow_id}: {e}")
              return {"error": str(e)}

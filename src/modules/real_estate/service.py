@@ -8,6 +8,10 @@ from core.prompt_loader import PromptLoader
 from core.llm import LLMClient
 from .models import RealEstateReport, RealEstateMetadata
 from .repository import ChromaRealEstateRepository
+from core.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class RealEstateAgent:
     def __init__(self, storage_mode: str = "local"):
@@ -27,7 +31,7 @@ class RealEstateAgent:
         Parses tour notes and saves them into the vector database.
         """
         start_time = datetime.now()
-        print(f"⏱️ [{start_time.strftime('%H:%M:%S')}] [RealEstate] Starting log_tour process...")
+        logger.info(f"⏱️ [{start_time.strftime('%H:%M:%S')}] [RealEstate] Starting log_tour process...")
 
         # 1. Extract metadata using Gemini
         _, prompt_str = self.prompt_loader.load(
@@ -35,9 +39,9 @@ class RealEstateAgent:
             variables={"input_text": user_text}
         )
         
-        print(f"🧠 [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Extracting metadata (calling LLM)...")
+        logger.info(f"🧠 [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Extracting metadata (calling LLM)...")
         extraction = self.llm.generate_json(prompt_str)
-        print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Metadata extraction complete.")
+        logger.info(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Metadata extraction complete.")
         
         if "error" in extraction:
             return f"❌ Failed to parse tour note: {extraction['error']}"
@@ -51,9 +55,9 @@ class RealEstateAgent:
         )
 
         # 3. Save to Repository
-        print(f"💾 [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Saving to repository...")
+        logger.info(f"💾 [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Saving to repository...")
         self.repository.save(report)
-        print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Save complete.")
+        logger.info(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Save complete.")
 
         elapsed = (datetime.now() - start_time).total_seconds()
         return (
@@ -68,7 +72,7 @@ class RealEstateAgent:
         Translates question into query and retrieves matching reports.
         """
         start_time = datetime.now()
-        print(f"⏱️ [{start_time.strftime('%H:%M:%S')}] [RealEstate] Starting search_tours process...")
+        logger.info(f"⏱️ [{start_time.strftime('%H:%M:%S')}] [RealEstate] Starting search_tours process...")
 
         # 1. Generate search filter using Gemini
         _, prompt_str = self.prompt_loader.load(
@@ -76,21 +80,21 @@ class RealEstateAgent:
             variables={"input_text": user_query}
         )
         
-        print(f"🧠 [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Building search query (calling LLM)...")
+        logger.info(f"🧠 [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Building search query (calling LLM)...")
         query_config = self.llm.generate_json(prompt_str)
-        print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Search query built.")
+        logger.info(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Search query built.")
         
         if "error" in query_config:
             return f"❌ Failed to build search query: {query_config['error']}"
 
         # 2. Search in ChromaDB
-        print(f"🔍 [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Searching repository with filter: {query_config.get('where')}")
+        logger.info(f"🔍 [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Searching repository with filter: {query_config.get('where')}")
         results = self.repository.search(
             query_text=query_config.get("query_text", ""),
             where=query_config.get("where"),
             n_results=3
         )
-        print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Search complete. Found {len(results)} results.")
+        logger.info(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [RealEstate] Search complete. Found {len(results)} results.")
 
         if not results:
             return "🔍 No matching complexes found for your criteria."
@@ -205,7 +209,7 @@ class RealEstateAgent:
         if target_date is None:
             target_date = date.today()
             
-        print(f"📊 [RealEstate] Generating Insight Report for {target_date.strftime('%Y-%m-%d')}...")
+        logger.info(f"📊 [RealEstate] Generating Insight Report for {target_date.strftime('%Y-%m-%d')}...")
         
         # 1. Fetch Transactions from Multiple Districts (Metropolitan Area)
         # Major areas: Gangnam(11680), Songpa(11710), Seocho(11650), Seongdong(11200), Yongsan(11170), 
@@ -226,14 +230,14 @@ class RealEstateAgent:
                 txs = monitor_service.get_daily_transactions(d_code, target_ym)
                 all_transactions.extend(txs)
             except Exception as e:
-                print(f"⚠️ [RealEstate] Failed to fetch data for {d_code}: {e}")
+                logger.error(f"⚠️ [RealEstate] Failed to fetch data for {d_code}: {e}")
 
         # Filter for the exact target date
         daily_txs = [tx.__dict__ for tx in all_transactions if tx.deal_date == target_date]
         
         # Fallback: If no transactions for the exact date, take latest 20 from gathered month
         if not daily_txs and all_transactions:
-            print(f"⚠️ [RealEstate] No transactions for {target_date}, fallback to latest available in {target_ym}")
+            logger.warning(f"⚠️ [RealEstate] No transactions for {target_date}, fallback to latest available in {target_ym}")
             sorted_txs = sorted(all_transactions, key=lambda x: x.deal_date, reverse=True)
             daily_txs = [tx.__dict__ for tx in sorted_txs[:20]]
             fallback_note = f"(안내) {target_date.strftime('%Y-%m-%d')} 당일 실거래 내역이 없어, 해당 월({target_ym})의 최신 데이터로 대체되었습니다."
@@ -254,7 +258,7 @@ class RealEstateAgent:
                 with open(persona_path, "r", encoding="utf-8") as f:
                     persona_data = yaml.safe_load(f)
         except Exception as e:
-            print(f"⚠️ [RealEstate] Failed to load persona.yaml: {e}")
+            logger.error(f"⚠️ [RealEstate] Failed to load persona.yaml: {e}")
 
         # 4. Define 2026 Financial Policy Context
         policy_context = {
@@ -284,11 +288,11 @@ class RealEstateAgent:
             }
         )
         
-        print(f"🧠 [RealEstate] Analyzing insights and formatting (calling LLM)...")
+        logger.info(f"🧠 [RealEstate] Analyzing insights and formatting (calling LLM)...")
         report_json = self.llm.generate_json(prompt_str)
         
         if "error" in report_json:
-             print(f"❌ [RealEstate] Insight report generation failed: {report_json['error']}")
+             logger.error(f"❌ [RealEstate] Insight report generation failed: {report_json['error']}")
              return [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 인사이트 리포트 생성 중 오류가 발생했습니다."}}]
 
         # Extract blocks list if wrapped in a dictionary (Aggressive check)
@@ -302,14 +306,14 @@ class RealEstateAgent:
                 report_blocks = report_json["blocks"]["blocks"]
             else:
                 # If it's a dict but no blocks key, but maybe it IS the block list? No, probably error.
-                print(f"❌ [RealEstate] Unexpected dictionary format: {report_json.keys()}")
+                logger.error(f"❌ [RealEstate] Unexpected dictionary format: {report_json.keys()}")
                 return [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 인사이트 리포트 형식이 올바르지 않습니다."}}]
         elif isinstance(report_json, list):
             report_blocks = report_json
         
         if not report_blocks:
-             print(f"❌ [RealEstate] Failed to extract blocks from: {report_json}")
+             logger.error(f"❌ [RealEstate] Failed to extract blocks from: {report_json}")
              return [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 인사이트 리포트 생성 중 오류가 발생했습니다."}}]
 
-        print(f"✅ [RealEstate] Insight report generation complete (extracted {len(report_blocks)} blocks).")
+        logger.info(f"✅ [RealEstate] Insight report generation complete (extracted {len(report_blocks)} blocks).")
         return report_blocks

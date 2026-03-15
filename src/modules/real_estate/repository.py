@@ -5,6 +5,10 @@ from datetime import datetime
 import os
 
 from .models import RealEstateReport, RealEstateMetadata, RealEstateTransaction
+from core.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class ChromaRealEstateRepository:
     """
@@ -18,22 +22,22 @@ class ChromaRealEstateRepository:
         self.port = port or int(os.getenv("CHROMA_DB_PORT", 8001))
         
         # Initialize ChromaDB Client
-        print(f"🔌 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Connecting to {self.host}:{self.port}...")
+        logger.info(f"🔌 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Connecting to {self.host}:{self.port}...")
         self.client = chromadb.HttpClient(host=self.host, port=self.port)
         
         # Get or Create a collection
-        print(f"📂 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Getting/Creating collection 'real_estate_reports'...")
+        logger.info(f"📂 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Getting/Creating collection 'real_estate_reports'...")
         self.collection = self.client.get_or_create_collection(
             name="real_estate_reports",
             metadata={"hnsw:space": "cosine"} # Use cosine similarity
         )
-        print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Connected and collection ready.")
+        logger.info(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Connected and collection ready.")
 
     def save(self, report: RealEstateReport) -> None:
         """
         Upserts a report into ChromaDB.
         """
-        print(f"💾 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Upserting report: {report.report_id}")
+        logger.info(f"💾 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Upserting report: {report.report_id}")
         data = report.to_chroma_format()
         
         self.collection.upsert(
@@ -41,7 +45,7 @@ class ChromaRealEstateRepository:
             documents=[data["document"]],
             metadatas=[data["metadata"]]
         )
-        print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Saved report for: {report.report_id}")
+        logger.info(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Saved report for: {report.report_id}")
 
     def search(self, query_text: str, n_results: int = 5, where: Optional[Dict[str, Any]] = None) -> List[RealEstateReport]:
         """
@@ -52,13 +56,13 @@ class ChromaRealEstateRepository:
             n_results: Max results to return
             where: Metadata filter (e.g., {"price": {"$lte": 1000000000}})
         """
-        print(f"🔎 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Querying collection. Text: '{query_text}', Where: {where}")
+        logger.info(f"🔎 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Querying collection. Text: '{query_text}', Where: {where}")
         results = self.collection.query(
             query_texts=[query_text],
             n_results=n_results,
             where=where
         )
-        print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Query complete. Found {len(results['ids'][0])} matches.")
+        logger.info(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Query complete. Found {len(results['ids'][0])} matches.")
 
         reports = []
         for i in range(len(results["ids"][0])):
@@ -78,7 +82,7 @@ class ChromaRealEstateRepository:
         """
         data = transaction.to_chroma_format()
         
-        print(f"💾 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Upserting transaction: {data['id']}")
+        logger.info(f"💾 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Upserting transaction: {data['id']}")
         
         # Upsert
         self.collection.upsert(
@@ -86,12 +90,12 @@ class ChromaRealEstateRepository:
             documents=[data["document"]],
             metadatas=[data["metadata"]]
         )
-        print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Saved txn: {transaction.apt_name}")
+        logger.info(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Saved txn: {transaction.apt_name}")
 
     def delete(self, report_id: str) -> None:
         """Deletes a report by ID."""
         self.collection.delete(ids=[report_id])
-        print(f"🗑️ [ChromaDB] Deleted report: {report_id}")
+        logger.info(f"🗑️ [ChromaDB] Deleted report: {report_id}")
 
     def get_transactions(self, limit: int = 100, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
@@ -110,5 +114,5 @@ class ChromaRealEstateRepository:
                 
             return results["metadatas"]
         except Exception as e:
-            print(f"⚠️ [ChromaDB] Error fetching transactions: {e}")
+            logger.error(f"⚠️ [ChromaDB] Error fetching transactions: {e}")
             return []

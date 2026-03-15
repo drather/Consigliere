@@ -2,7 +2,7 @@ import os
 import sys
 
 # Ensure src is in PYTHONPATH to import Consigliere modules
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
 from dotenv import load_dotenv
 load_dotenv()

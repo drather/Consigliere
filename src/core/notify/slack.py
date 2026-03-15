@@ -2,6 +2,9 @@ import os
 import requests
 from typing import Dict, Any
 from .sender import Sender
+from core.logger import get_logger
+
+logger = get_logger(__name__)
 
 class SlackSender(Sender):
     """
@@ -16,7 +19,7 @@ class SlackSender(Sender):
         self.webhook_url = os.getenv("SLACK_WEBHOOK_URL")
         
         if not (self.bot_token and self.channel_id) and not self.webhook_url:
-            print("⚠️ WARNING: Slack credentials missing in environment variables.")
+            logger.warning("Slack credentials missing in environment variables.")
 
     def send(self, message: str, **kwargs) -> Dict[str, Any]:
         """
@@ -55,13 +58,13 @@ class SlackSender(Sender):
             data = response.json()
             
             if not data.get("ok"):
-                print(f"❌ Slack API Error: {data.get('error')}")
+                logger.error(f"Slack API Error: {data.get('error')}")
                 return {"status": "error", "error": data.get("error")}
                 
             return {"status": "success", "data": data}
             
         except requests.exceptions.RequestException as e:
-            print(f"❌ Slack Network Error: {e}")
+            logger.error(f"Slack Network Error: {e}")
             return {"status": "error", "error": str(e)}
 
     def _send_via_webhook(self, message: str, **kwargs) -> Dict[str, Any]:
@@ -74,5 +77,5 @@ class SlackSender(Sender):
             response.raise_for_status()
             return {"status": "success", "data": response.text}
         except requests.exceptions.RequestException as e:
-            print(f"❌ Slack Webhook Error: {e}")
+            logger.error(f"Slack Webhook Error: {e}")
             return {"status": "error", "error": str(e)}

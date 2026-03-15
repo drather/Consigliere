@@ -2,6 +2,10 @@ from datetime import date
 from typing import List, Optional
 from .api_client import MOLITClient
 from ..models import RealEstateTransaction
+from core.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class TransactionMonitorService:
     """
@@ -65,11 +69,11 @@ class TransactionMonitorService:
                         )
                         transactions.append(transaction)
                     except:
-                        print(f"⚠️ [Monitor] Skipping item due to parsing error: {e}")
+                        logger.warning(f"⚠️ [Monitor] Skipping item due to parsing error: {e}")
                         continue
                 else:
-                    print(f"⚠️ [Monitor] Skipping item due to parsing error: {e}")
+                    logger.warning(f"⚠️ [Monitor] Skipping item due to parsing error: {e}")
                     continue
 
-        print(f"✅ [Monitor] Successfully parsed {len(transactions)} transactions.")
+        logger.info(f"✅ [Monitor] Successfully parsed {len(transactions)} transactions.")
         return transactions

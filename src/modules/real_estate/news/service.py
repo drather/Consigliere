@@ -9,6 +9,10 @@ from core.prompt_loader import PromptLoader
 from core.llm import LLMClient
 from ..models import NewsArticle, NewsAnalysisReport
 from .client import NaverNewsClient
+from core.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class NewsService:
     def __init__(self, storage_mode: str = "local"):
@@ -25,7 +29,7 @@ class NewsService:
         Main workflow: Fetch News -> Load Context -> Analyze -> Save Report.
         """
         # 1. Fetch News
-        print("📰 [News] Fetching latest real estate news...")
+        logger.info("📰 [News] Fetching latest real estate news...")
         items = self.client.search_news("부동산 정책 아파트 분양", display=30)
         if not items:
             return "❌ No news found or API error."
@@ -49,7 +53,7 @@ class NewsService:
         history_context = self._get_last_report_summary()
         
         # 3. Analyze via LLM
-        print("🧠 [News] Analyzing trends with Gemini...")
+        logger.info("🧠 [News] Analyzing trends with Gemini...")
         metadata, prompt_str = self.prompt_loader.load(
             "news_analyst",
             variables={
@@ -103,7 +107,7 @@ class NewsService:
         filename = f"{self.report_dir}/{report.date}_News.md"
         with open(filename, "w") as f:
             f.write(report.to_markdown())
-        print(f"✅ [News] Report saved to {filename}")
+        logger.info(f"✅ [News] Report saved to {filename}")
 
     def list_reports(self) -> List[str]:
         """
@@ -132,7 +136,7 @@ class NewsService:
         """
         Fetches news and returns them as a list of dictionaries for internal use.
         """
-        print(f"📰 [News] Fetching news for query: {query}")
+        logger.info(f"📰 [News] Fetching news for query: {query}")
         items = self.client.search_news(query, display=display)
         if not items:
             return []

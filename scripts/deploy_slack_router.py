@@ -3,7 +3,7 @@ import sys
 from dotenv import load_dotenv
 
 # Ensure src is in PYTHONPATH
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
 from modules.automation.service import AutomationService
 

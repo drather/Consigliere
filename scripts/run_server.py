@@ -4,8 +4,8 @@ import uvicorn
 
 def main():
     # 1. Setup Path
-    # Get the project root directory (where this script is located)
-    project_root = os.path.dirname(os.path.abspath(__file__))
+    # Get the project root directory (one level up from where this script is located)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     # Define 'src' directory path
     src_dir = os.path.join(project_root, "src")
