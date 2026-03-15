@@ -7,12 +7,12 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "30 8 * * *"
+              "expression": "0 7 * * *"
             }
           ]
         }
       },
-      "name": "Schedule (08:30)",
+      "name": "Schedule (07:00)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -65,7 +65,7 @@
     }
   ],
   "connections": {
-    "Schedule (08:30)": {
+    "Schedule (07:00)": {
       "main": [
         [
           {

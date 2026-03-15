@@ -11,6 +11,9 @@
 - **completed:** 웹 검색 기반 실시간 금융 정책(LTV/DSR) 추출 모듈(`policy_fetcher.py`) 구축
 - **completed:** 자가 검증(Self-Reflection) 100회 루프 및 `gemini-3.1-pro-preview` 고성능 모델 연동
 - **completed:** 부부 합산 소득 반영 및 생애최초 주택구입 혜택 로직 고도화
+- [x] **Maintenance: Update Real Estate Insight Report Schedule** <!-- id: 31 -->
+    - Changed cron expression from `30 8 * * *` to `0 7 * * *` (07:00 KST).
+    - Redeployed workflow and restarted Docker containers.
 ## ✅ Completed Tasks (Recent)
 - [x] **Feature: Funding Plan Logic Correction & Logic Guard** <!-- id: 29 -->
     - Implemented LTV-back-calculation constraint to prevent simple budget summation.
