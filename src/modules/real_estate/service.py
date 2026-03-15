@@ -260,60 +260,104 @@ class RealEstateAgent:
         except Exception as e:
             logger.error(f"⚠️ [RealEstate] Failed to load persona.yaml: {e}")
 
-        # 4. Define 2026 Financial Policy Context
-        policy_context = {
-            "standard_year": 2026,
-            "ltv": {
-                "first_time_buyer": "80% (최대 6억)",
-                "non_regulated_area": "70%",
-                "regulated_area": "50%"
-            },
-            "dsr": {
-                "limit": "40%",
-                "stress_dsr": "3단계 본격 시행 (수도권 스트레스 금리 100% 적용, 약 1.5%p 가산)"
-            },
-            "news": "지방권은 2026년 상반기까지 스트레스 DSR 2단계 한시 유지, 수도권은 3단계 강화 적용"
+        # 4. Fetch 2026 Financial Policy Context Dynamically
+        from core.policy_fetcher import fetch_latest_financial_policies
+        policy_context = fetch_latest_financial_policies()
+
+        # 5. Build Initial Variables for LLM
+        variables = {
+            "target_date": target_date.strftime("%Y-%m-%d"),
+            "tx_data": json.dumps(daily_txs, ensure_ascii=False, default=str),
+            "news_data": json.dumps(news_list, ensure_ascii=False),
+            "persona_data": json.dumps(persona_data, ensure_ascii=False),
+            "policy_context": json.dumps(policy_context, ensure_ascii=False),
+            "fallback_note": fallback_note,
+            "validator_feedback": "" # Initial run has no feedback
         }
 
-        # 5. Call LLM for Insights & Formatting
-        _, prompt_str = self.prompt_loader.load(
-            "insight_parser",
-            variables={
-                "target_date": target_date.strftime("%Y-%m-%d"),
-                "tx_data": json.dumps(daily_txs, ensure_ascii=False, default=str),
-                "news_data": json.dumps(news_list, ensure_ascii=False),
-                "persona_data": json.dumps(persona_data, ensure_ascii=False),
-                "policy_context": json.dumps(policy_context, ensure_ascii=False),
-                "fallback_note": fallback_note
-            }
-        )
-        
-        logger.info(f"🧠 [RealEstate] Analyzing insights and formatting (calling LLM)...")
-        report_json = self.llm.generate_json(prompt_str)
-        
-        if "error" in report_json:
-             logger.error(f"❌ [RealEstate] Insight report generation failed: {report_json['error']}")
-             return [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 인사이트 리포트 생성 중 오류가 발생했습니다."}}]
+        # 6. Self-Reflection Loop (Max 100 iterations)
+        MAX_ITERATIONS = 100
+        current_iter = 0
+        best_report_json = None
+        best_score = -1
 
-        # Extract blocks list if wrapped in a dictionary (Aggressive check)
-        report_blocks = []
-        if isinstance(report_json, dict):
-            # Case 1: {"blocks": [...]}
-            if "blocks" in report_json and isinstance(report_json["blocks"], list):
-                report_blocks = report_json["blocks"]
-            # Case 2: {"blocks": {"blocks": [...]}}
-            elif "blocks" in report_json and isinstance(report_json["blocks"], dict) and "blocks" in report_json["blocks"]:
-                report_blocks = report_json["blocks"]["blocks"]
+        while current_iter < MAX_ITERATIONS:
+            current_iter += 1
+            logger.info(f"🧠 [RealEstate] Generating Report (Iteration {current_iter}/{MAX_ITERATIONS})...")
+            
+            _, prompt_str = self.prompt_loader.load("insight_parser", variables=variables)
+            report_json = self.llm.generate_json(prompt_str)
+            
+            if "error" in report_json:
+                 logger.error(f"❌ [RealEstate] Insight report generation failed on iter {current_iter}: {report_json['error']}")
+                 if best_report_json is None:
+                     return [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 인사이트 리포트 생성 중 오류가 발생했습니다."}}]
+                 break
+            
+            # Extract blocks logic to strings to pass into validator
+            extracted_blocks = []
+            if isinstance(report_json, dict) and "blocks" in report_json:
+                if isinstance(report_json["blocks"], list):
+                    extracted_blocks = report_json["blocks"]
+                elif isinstance(report_json["blocks"], dict) and "blocks" in report_json["blocks"]:
+                    extracted_blocks = report_json["blocks"]["blocks"]
+            elif isinstance(report_json, list):
+                extracted_blocks = report_json
+
+            if not extracted_blocks:
+                logger.warning(f"⚠️ [RealEstate] Could not extract blocks on iter {current_iter}. Trying again...")
+                variables["validator_feedback"] = "JSON 구조 오류: 최상위에 'blocks' 리스트 객체 형태로 반환하십시오."
+                continue
+            
+            # --- VALIDATION STEP ---
+            logger.info(f"⚖️ [RealEstate] Validating Report {current_iter} Logical Soundness...")
+            _, validator_prompt_str = self.prompt_loader.load(
+                "insight_validator",
+                variables={
+                    "report_json": json.dumps(extracted_blocks, ensure_ascii=False),
+                    "persona_data": json.dumps(persona_data, ensure_ascii=False),
+                    "policy_context": json.dumps(policy_context, ensure_ascii=False)
+                }
+            )
+            
+            val_result = self.llm.generate_json(validator_prompt_str)
+            score = val_result.get("score", 0)
+            reasoning = val_result.get("reasoning", "No reasoning provided.")
+            feedback = val_result.get("feedbackForImprovement", "")
+            
+            logger.info(f"📊 [RealEstate] Iteration {current_iter} Score: {score}/10 | Reason: {reasoning}")
+            
+            if score > best_score:
+                best_score = score
+                best_report_json = extracted_blocks
+                
+            if score >= 8:
+                logger.info(f"✅ [RealEstate] Acceptable score ({score}>=8) achieved. Breaking loop.")
+                break
             else:
-                # If it's a dict but no blocks key, but maybe it IS the block list? No, probably error.
-                logger.error(f"❌ [RealEstate] Unexpected dictionary format: {report_json.keys()}")
-                return [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 인사이트 리포트 형식이 올바르지 않습니다."}}]
-        elif isinstance(report_json, list):
-            report_blocks = report_json
+                logger.warning(f"⚠️ [RealEstate] Score {score} is too low. Providing feedback and retrying.")
+                # Inject feedback for next iteration so LLM can fix its mistakes
+                variables["validator_feedback"] = f"이전 생성물 비인가 사유: {reasoning}\n수정 요구사항: {feedback}"
+
+        
+        # 7. Final Output Extraction & Warning Inject
+        report_blocks = best_report_json if best_report_json else []
         
         if not report_blocks:
-             logger.error(f"❌ [RealEstate] Failed to extract blocks from: {report_json}")
-             return [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 인사이트 리포트 생성 중 오류가 발생했습니다."}}]
+             logger.error("❌ [RealEstate] Failed to generate a valid report after all iterations.")
+             return [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 인사이트 리포트 생성 중 치명적 오류가 발생했습니다."}}]
 
-        logger.info(f"✅ [RealEstate] Insight report generation complete (extracted {len(report_blocks)} blocks).")
+        # If we exhausted 10 iterations and still didn't reach score 8, append a warning
+        if best_score < 8:
+             logger.warning(f"🚨 [RealEstate] Final report only achieved score {best_score}/10.")
+             report_blocks.append({"type": "divider"})
+             report_blocks.append({
+                 "type": "section",
+                 "text": {
+                     "type": "mrkdwn",
+                     "text": "⚠️ *[AI 검증 모듈 경고]*\n본 액션플랜은 내부 논리적 타당성 채점에서 8점 미만을 기록하였습니다. 산술적 예산 산정(LTV/DSR 중첩 계산)에 구조적 비약이 있을 수 있으니 참고 목적으로만 열람하시고, 실제 진행 시 주거래 은행과의 상세한 상담을 필히 권장합니다."
+                 }
+             })
+
+        logger.info(f"✅ [RealEstate] Insight report generation complete (Score {best_score}, {len(report_blocks)} blocks).")
         return report_blocks

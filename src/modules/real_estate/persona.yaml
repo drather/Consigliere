@@ -3,8 +3,8 @@
 user:
   name: "kks"
   income:
-    self: 100000000 # 세전 연봉 1억
-    partner: 60000000 # 세전 연봉 6천
+    self: 80000000 # 세전 연봉 8천
+    partner: 80000000 # 세전 연봉 8천
     total: 160000000
   assets:
     self: 200000000 # 2억
@@ -18,4 +18,5 @@ user:
     workplace: "서울시 강남구 삼성역 ~ 선릉역 인근"
   plans:
     wedding: "2027년 이내"
+    is_first_time_buyer: true # 생애최초 주택구입 여부
     primary_goal: "실거주 및 투자 가치 동시 고려"

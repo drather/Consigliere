@@ -4,13 +4,21 @@
 
 ## 📍 Current Focus
 - **Status:** Maintenance & Stability
-- **Current Objective:** **준비된 시스템 리팩토링 및 기능 고도화 작업 완료**
+- **Current Objective:** **부동산 리포트 자금조달계획 정교화 및 고성능 모델 안정화 완료**
 
 ## 💡 Recent Context
-- **completed:** 시스템 아키텍처 대대적 리팩토링 (APIRouter 분리, 멀티 LLM 팩토리 연동, 중앙 집중식 로깅 구축 완료)
-- **completed:** 부동산 리포트 고도화 (데이터 확장, 로직 파싱 에러 픽스, 2026년 날짜 정정 완료)
+- **completed:** 부동산 리포트 자금조달계획 산출 오류(Hallucination) 완벽 교정 및 LTV 역산 제약 조건 강제
+- **completed:** 웹 검색 기반 실시간 금융 정책(LTV/DSR) 추출 모듈(`policy_fetcher.py`) 구축
+- **completed:** 자가 검증(Self-Reflection) 100회 루프 및 `gemini-3.1-pro-preview` 고성능 모델 연동
+- **completed:** 부부 합산 소득 반영 및 생애최초 주택구입 혜택 로직 고도화
 ## ✅ Completed Tasks (Recent)
-- [x] **Feature: Real Estate Insight Report (Advanced)** <!-- id: 27 -->
+- [x] **Feature: Funding Plan Logic Correction & Logic Guard** <!-- id: 29 -->
+    - Implemented LTV-back-calculation constraint to prevent simple budget summation.
+    - Added 100-iteration self-reflection loop with scoring and feedback.
+    - Integrated `duckduckgo-search` for real-time LTV/DSR policy context.
+- [x] **Feature: Spousal Income & First-time Buyer Logic** <!-- id: 30 -->
+    - Added `is_first_time_buyer` and `spouse_income` handling in `persona.yaml`.
+    - Enforced conservative budget selection between LTV and DSR limits.
     - Corrected date logic for 2026 context.
     - Expanded data collection to 9+ metropolitan districts (10+ txs).
     - Integrated 2026 Financial Policy (Stress DSR Phase 3) check.
