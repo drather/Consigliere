@@ -15,8 +15,14 @@ class BudgetPlan(BaseModel):
 
 class FinancialCalculator:
     def __init__(self):
-        # Base assumptions
-        self.tax_rate_multiplier = 0.03 # Roughly 3% for acquisition tax + broker fee + legal
+        from .config import RealEstateConfig
+        self.config = RealEstateConfig()
+        defaults = self.config.get_financial_defaults()
+        
+        # Base assumptions from dynamic config
+        self.tax_rate_multiplier = defaults.get("tax_rate_multiplier", 0.03)
+        self.default_interest_rate = defaults.get("interest_rate", 0.045)
+        self.default_loan_term = defaults.get("loan_term_years", 30)
 
     def _parse_numeric(self, value: Any) -> float:
         """Extracts float from strings like '최대 80%', '40%'"""
@@ -31,10 +37,13 @@ class FinancialCalculator:
 
     def calculate_budget(self, persona: Dict[str, Any], policy: Dict[str, Any]) -> BudgetPlan:
         try:
+            # Handle nested 'user' key if present
+            data = persona.get("user", persona)
+            
             # 1. Extract Persona Data
-            capital = persona.get("assets", {}).get("total", 0)
-            income = persona.get("income", {}).get("total", 0)
-            is_first_time = persona.get("plans", {}).get("is_first_time_buyer", False)
+            capital = data.get("assets", {}).get("total", 0)
+            income = data.get("income", {}).get("total", 0)
+            is_first_time = data.get("plans", {}).get("is_first_time_buyer", False)
             
             # 2. Extract Policy Data
             ltv_dict = policy.get("ltv", {})
@@ -60,9 +69,9 @@ class FinancialCalculator:
                 loan_ltv = first_time_loan_cap
                 max_p_ltv = int((capital + loan_ltv) / (1 + self.tax_rate_multiplier))
             
-            # 4. Calculate DSR constraint (Simplified: assuming 4.5% interest, 30 years)
-            interest_rate = 0.045
-            years = 30
+            # 4. Calculate DSR constraint using dynamic defaults
+            interest_rate = self.default_interest_rate
+            years = self.default_loan_term
             annual_payment = income * dsr_rate
             monthly_payment = annual_payment / 12
             monthly_rate = interest_rate / 12

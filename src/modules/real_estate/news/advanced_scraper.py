@@ -75,6 +75,8 @@ class AdvancedScraper:
             policy_id = f"fact_{datetime.now().strftime('%Y%m%d')}_{hash(fact['content'])}"
             metadata = {
                 "source": fact.get("source", "NaverNews"),
+                "url": fact.get("url", ""),
+                "short_title": fact.get("short_title", "부동산 정책"),
                 "date": datetime.now().strftime("%Y-%m-%d"),
                 "category": fact.get("category", "General"),
                 "relevance": "high"
@@ -107,7 +109,13 @@ class AdvancedScraper:
         
         결과 형식 (JSON List):
         [
-          {{"content": "내용 요약 (구체적 수치/날짜 포함)", "category": "공급/개발/정책/기타", "source": "뉴스원천"}}
+          {{
+            "content": "내용 요약 (구체적 수치/날짜 포함)", 
+            "category": "공급/개발/정책/기타", 
+            "source": "뉴스원천",
+            "url": "해당 기사의 Link",
+            "short_title": "기사를 대표하는 5~10자 내외의 짧은 제목 (예: SH공사 재건축 검증)"
+          }}
         ]
         """
         

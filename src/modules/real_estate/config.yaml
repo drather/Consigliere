@@ -1,0 +1,31 @@
+# Real Estate Module Configuration
+
+bok_codes:
+  base_rate: "722Y001"
+  m2: "101Y001"
+  loan_rate: "121Y002"
+
+financial_defaults:
+  tax_rate_multiplier: 0.03
+  interest_rate: 0.045
+  loan_term_years: 30
+
+districts:
+  - code: "11680"
+    name: "강남구"
+  - code: "11710"
+    name: "송파구"
+  - code: "11650"
+    name: "서초구"
+  - code: "11200"
+    name: "성동구"
+  - code: "11170"
+    name: "용산구"
+  - code: "41135"
+    name: "분당구"
+  - code: "41290"
+    name: "과천시"
+  - code: "41210"
+    name: "광명시"
+  - code: "41450"
+    name: "하남시"

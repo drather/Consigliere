@@ -57,12 +57,15 @@ class BOKClient:
 class MacroService:
     def __init__(self, api_key: Optional[str] = None):
         self.client = BOKClient(api_key)
+        from ..config import RealEstateConfig
+        self.config = RealEstateConfig()
 
     def fetch_latest_macro_data(self) -> MacroData:
         logger.info("📈 [MacroService] Fetching latest macro-economic data...")
+        codes = self.config.get_bok_codes()
         
-        # 1. Base Rate (722Y001 / 0101000)
-        base_rate_row = self.client.get_statistic("722Y001", period="M", item_code1="0101000")
+        # 1. Base Rate
+        base_rate_row = self.client.get_statistic(codes["base_rate"], period="M", item_code1="0101000")
         base_rate = None
         if base_rate_row:
             base_rate = MacroIndicator(
@@ -73,8 +76,8 @@ class MacroService:
                 date=base_rate_row["TIME"]
             )
 
-        # 2. M2 (101Y001 / BBGS00 / Seasonal Adjusted End of Period)
-        m2_row = self.client.get_statistic("101Y001", period="M", item_code1="BBGS00")
+        # 2. M2
+        m2_row = self.client.get_statistic(codes["m2"], period="M", item_code1="BBGS00")
         m2_growth = None
         if m2_row:
             m2_growth = MacroIndicator(
@@ -85,8 +88,8 @@ class MacroService:
                 date=m2_row["TIME"]
             )
 
-        # 3. Household Loan Rate (121Y002 / BEABAA2)
-        loan_rate_row = self.client.get_statistic("121Y002", period="M", item_code1="BEABAA2")
+        # 3. Household Loan Rate
+        loan_rate_row = self.client.get_statistic(codes["loan_rate"], period="M", item_code1="BEABAA2")
         loan_rate = None
         if loan_rate_row:
             loan_rate = MacroIndicator(
