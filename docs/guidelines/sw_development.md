@@ -13,4 +13,5 @@ When the user requests a new automated background task:
 1. **Never write raw n8n JSON from scratch.** It leads to broken schemas.
 2. **Use Templates:** Look for base configurations in `src/workflows/` or `src/n8n/templates/`. Modify ONLY specific fields (Endpoint URLs, Cron Schedules, Credentials).
 3. **Use MCP Tools:** Use programmatic tools (like `deploy_workflows.py`) to push JSON into the live container.
-4. **Update Registry:** Append the new routine to `docs/workflows_registry.md`.
+4. **Idempotency & Activation:** Deployments must target existing workflows by name/ID to avoid duplicates and ensure they are set to `Active` after deployment. Always use `deploy_workflows.py` which now handles this logic.
+5. **Update Registry:** Append the new routine to `docs/workflows_registry.md`.

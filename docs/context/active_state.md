@@ -14,6 +14,11 @@
 - [x] **Maintenance: Update Real Estate Insight Report Schedule** <!-- id: 31 -->
     - Changed cron expression from `30 8 * * *` to `0 7 * * *` (07:00 KST).
     - Redeployed workflow and restarted Docker containers.
+- [x] **BugFix: Resolved n8n Workflow Deployment Duplication & Inactivation** <!-- id: 32 -->
+    - Fixed `AutomationService` to support workflow updates (PUT) instead of always creating new ones.
+    - Added automatic activation logic to the deployment pipeline.
+    - Cleaned up duplicate/inactive workflows from n8n environment.
+    - Fixed `Header NoneType` bug in `AutomationService`.
 ## ✅ Completed Tasks (Recent)
 - [x] **Feature: Funding Plan Logic Correction & Logic Guard** <!-- id: 29 -->
     - Implemented LTV-back-calculation constraint to prevent simple budget summation.

@@ -33,23 +33,31 @@ def main():
             print(f"❌ File not found: {file_path}")
             continue
             
-        print(f"Deploying {file_path.name}...")
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 workflow_json = json.load(f)
-                
-            # Remove 'id' if present, as n8n API expects new workflows to not have an ID
-            if 'id' in workflow_json:
-                del workflow_json['id']
             
-            # Use AutomationService for deployment
-            result = service.deploy_workflow(workflow_json)
+            workflow_name = workflow_json.get("name")
+            print(f"Processing {workflow_name} ({file_path.name})...")
+            
+            # Check if workflow already exists
+            existing_wf = service.get_workflow_by_name(workflow_name)
+            if existing_wf:
+                print(f"  Found existing workflow with ID: {existing_wf['id']}. Updating...")
+                workflow_json['id'] = existing_wf['id']
+            else:
+                # Remove 'id' if present in template, as n8n API expects new workflows to not have an ID
+                if 'id' in workflow_json:
+                    del workflow_json['id']
+            
+            # Use AutomationService for deployment (automatically activates)
+            result = service.deploy_workflow(workflow_json, activate=True)
             
             if "error" in result:
-                print(f"❌ Failed to deploy {file_path.name}: {result['error']}")
+                print(f"  ❌ Failed to deploy {file_path.name}: {result['error']}")
             else:
                 workflow_id = result.get("id")
-                print(f"✅ Successfully deployed {file_path.name} with ID: {workflow_id}")
+                print(f"  ✅ Successfully deployed and activated {file_path.name} with ID: {workflow_id}")
                 
         except Exception as e:
             print(f"❌ Error processing {file_path.name}: {e}")
