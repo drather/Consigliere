@@ -23,6 +23,14 @@ class NewsService:
         self.client = NaverNewsClient()
         self.llm = LLMClient()
         self.report_dir = "data/real_estate/news"
+        
+        # Phase 2: Advanced Scraper
+        from .advanced_scraper import AdvancedScraper
+        self.advanced_scraper = AdvancedScraper()
+
+    def update_policy_knowledge(self) -> int:
+        """Triggers the high-fidelity policy scraping and indexing."""
+        return self.advanced_scraper.run_daily_scraping()
 
     def generate_daily_report(self) -> str:
         """

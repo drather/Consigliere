@@ -25,13 +25,20 @@ class ChromaRealEstateRepository:
         logger.info(f"🔌 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Connecting to {self.host}:{self.port}...")
         self.client = chromadb.HttpClient(host=self.host, port=self.port)
         
-        # Get or Create a collection
+        # Got or Create a collection for Reports/Transactions
         logger.info(f"📂 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Getting/Creating collection 'real_estate_reports'...")
         self.collection = self.client.get_or_create_collection(
             name="real_estate_reports",
-            metadata={"hnsw:space": "cosine"} # Use cosine similarity
+            metadata={"hnsw:space": "cosine"}
         )
-        logger.info(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Connected and collection ready.")
+        
+        # [Phase 2] Collection for Policy & Development Knowledge
+        logger.info(f"📂 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Getting/Creating collection 'policy_knowledge'...")
+        self.policy_collection = self.client.get_or_create_collection(
+            name="policy_knowledge",
+            metadata={"hnsw:space": "cosine"}
+        )
+        logger.info(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Connected and collections ready.")
 
     def save(self, report: RealEstateReport) -> None:
         """
@@ -116,3 +123,29 @@ class ChromaRealEstateRepository:
         except Exception as e:
             logger.error(f"⚠️ [ChromaDB] Error fetching transactions: {e}")
             return []
+    def save_policy(self, policy_id: str, content: str, metadata: Dict[str, Any]) -> None:
+        """Saves a policy or development fact to ChromaDB."""
+        logger.info(f"💾 [ChromaDB] Saving policy: {policy_id}")
+        self.policy_collection.upsert(
+            ids=[policy_id],
+            documents=[content],
+            metadatas=[metadata]
+        )
+
+    def search_policy(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
+        """Searches for relevant policy/development facts."""
+        logger.info(f"🔎 [ChromaDB] Searching policy for: '{query}'")
+        results = self.policy_collection.query(
+            query_texts=[query],
+            n_results=n_results
+        )
+        
+        items = []
+        if results["ids"]:
+            for i in range(len(results["ids"][0])):
+                items.append({
+                    "id": results["ids"][0][i],
+                    "content": results["documents"][0][i],
+                    "metadata": results["metadatas"][0][i]
+                })
+        return items

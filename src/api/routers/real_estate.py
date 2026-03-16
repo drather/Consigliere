@@ -112,6 +112,17 @@ def analyze_real_estate_news(request: NewsAnalysisRequest, news_service: NewsSer
         logger.error(f"News API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/agent/real_estate/news/update_policy")
+def update_policy_knowledge(news_service: NewsService = Depends(get_news_service)):
+    """Triggers the Phase 2 Advanced Scraper to update ChromaDB policy facts."""
+    try:
+        logger.info("[API] Triggering Advanced Policy Scaping...")
+        fact_count = news_service.update_policy_knowledge()
+        return {"status": "success", "indexed_facts": fact_count}
+    except Exception as e:
+        logger.error(f"Update Policy API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/dashboard/real-estate/monitor")
 def get_real_estate_monitor(district_code: Optional[str] = None, limit: int = 50, chroma_repo: ChromaRealEstateRepository = Depends(get_chroma_repo)):
     try:

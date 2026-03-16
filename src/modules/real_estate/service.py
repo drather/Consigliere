@@ -274,6 +274,26 @@ class RealEstateAgent:
             logger.error(f"⚠️ [RealEstate] Failed to calculate budget, using fallback dict: {e}")
             budget_dict = {"reasoning": "재무 산출 모듈 오류: LLM이 직접 예산을 가늠해야 합니다."}
 
+        # 4-2. Fetch Macro Economic Data (Phase 2)
+        from .macro.bok_service import MacroService
+        macro_service = MacroService()
+        try:
+            macro_data = macro_service.fetch_latest_macro_data()
+            macro_dict = macro_data.model_dump()
+        except Exception as e:
+            logger.error(f"⚠️ [RealEstate] Failed to fetch macro data: {e}")
+            macro_dict = {"reasoning": "거시경제 데이터 수집 실패"}
+
+        # 4-3. Search for Relevant Policy/Development Facts (Phase 2 RAG)
+        try:
+            # Query based on district name or keywords
+            district_name = persona_data.get("interest_areas", ["수도권"])[0]
+            policy_facts = self.repo.search_policy(query=f"{district_name} 아파트 공급 개발 정책", n_results=5)
+            policy_facts_str = json.dumps(policy_facts, ensure_ascii=False)
+        except Exception as e:
+            logger.warning(f"⚠️ [RealEstate] Policy RAG search failed: {e}")
+            policy_facts_str = "[]"
+
         # 5. Build Initial Variables for LLM
         variables = {
             "target_date": target_date.strftime("%Y-%m-%d"),
@@ -282,6 +302,8 @@ class RealEstateAgent:
             "persona_data": json.dumps(persona_data, ensure_ascii=False),
             "policy_context": json.dumps(policy_context, ensure_ascii=False),
             "budget_plan": json.dumps(budget_dict, ensure_ascii=False),
+            "macro_data": json.dumps(macro_dict, ensure_ascii=False),
+            "policy_facts": policy_facts_str,
             "fallback_note": fallback_note,
             "validator_feedback": "" # Initial run has no feedback
         }
