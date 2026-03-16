@@ -260,9 +260,19 @@ class RealEstateAgent:
         except Exception as e:
             logger.error(f"⚠️ [RealEstate] Failed to load persona.yaml: {e}")
 
-        # 4. Fetch 2026 Financial Policy Context Dynamically
+        # 4. Fetch Financial Policy Context Dynamically
         from core.policy_fetcher import fetch_latest_financial_policies
         policy_context = fetch_latest_financial_policies()
+
+        # 4-1. Calculate Hybrid Budget using Python
+        from .calculator import FinancialCalculator
+        calculator = FinancialCalculator()
+        try:
+            budget_plan = calculator.calculate_budget(persona_data, policy_context)
+            budget_dict = budget_plan.model_dump()
+        except Exception as e:
+            logger.error(f"⚠️ [RealEstate] Failed to calculate budget, using fallback dict: {e}")
+            budget_dict = {"reasoning": "재무 산출 모듈 오류: LLM이 직접 예산을 가늠해야 합니다."}
 
         # 5. Build Initial Variables for LLM
         variables = {
@@ -271,6 +281,7 @@ class RealEstateAgent:
             "news_data": json.dumps(news_list, ensure_ascii=False),
             "persona_data": json.dumps(persona_data, ensure_ascii=False),
             "policy_context": json.dumps(policy_context, ensure_ascii=False),
+            "budget_plan": json.dumps(budget_dict, ensure_ascii=False),
             "fallback_note": fallback_note,
             "validator_feedback": "" # Initial run has no feedback
         }

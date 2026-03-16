@@ -19,6 +19,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./data:/app/data
+      - ./tests:/app/tests
     depends_on:
       - chromadb
     networks:
@@ -81,6 +82,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./data:/app/data
+      - ./tests:/app/tests
     command: [ "streamlit", "run", "src/dashboard/main.py", "--server.port=8501", "--server.address=0.0.0.0" ]
     depends_on:
       - api
