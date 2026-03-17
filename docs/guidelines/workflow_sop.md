@@ -20,6 +20,25 @@ Follow this exact cycle for every new feature or major refactor:
 3. **Verify:** Ensure tests pass (e.g., `pytest`).
 4. **Log:** Update `progress.md` as tasks are completed.
 
+## Phase 2.5: SOLID Review & Refactoring (MANDATORY)
+구현이 완료되면 **반드시 아래 체크리스트를 검토**하고, 미충족 항목은 즉시 리팩토링합니다.
+
+### ✅ SOLID 원칙 준수 체크리스트
+- [ ] **SRP (단일 책임):** 각 클래스/함수가 하나의 책임만 갖는가? God Class가 없는가?
+- [ ] **OCP (개방-폐쇄):** 새 기능을 추가할 때 기존 코드를 수정하지 않아도 되는가? (예: 새 에이전트 = 새 클래스)
+- [ ] **DIP (의존성 역전):** 구체 클래스가 아닌 추상 인터페이스(`BaseAgent` 등)에 의존하는가?
+
+### ✅ 코드 품질 체크리스트
+- [ ] **Zero Hardcoding:** 모든 변경 가능한 값(API 코드, 금리, 임계값 등)이 `config.yaml` 또는 `.env`에 있는가?
+- [ ] **재사용성:** 구현된 서비스/함수가 다른 도메인 모듈에서도 재사용 가능한 구조인가?
+- [ ] **테스트 가능성:** 의존성이 주입 가능하여 각 컴포넌트를 독립적으로 테스트할 수 있는가?
+- [ ] **에러 처리:** 외부 API 호출 및 LLM 응답에 모두 예외 처리가 되어 있는가?
+
+### ✅ 리팩토링 후 회귀 테스트
+1. 기존 테스트 전체 재실행: `pytest`
+2. Docker 재기동 후 E2E 확인: `docker compose restart api`
+3. API 엔드포인트 직접 호출로 기능 무결성 확인
+
 ## Phase 3: Documentation & Review
 1. **Record Issues:** Log any bugs/fixes in `docs/features/{feature_name}/issues.md`. Use findings from debugging sessions.
 2. **Update Snapshot:** CRITICAL. Update `docs/system_snapshot/` if any structural changes were made.
@@ -30,4 +49,5 @@ Follow this exact cycle for every new feature or major refactor:
 ## Phase 4: Release
 1. **Merge:** Switch to `master` and merge the feature branch natively via `git merge`.
 2. **Verify:** Run all tests on `master`.
-3. **Push:** `git push origin master`.
+3. **Push:** `git push origin master`
+.

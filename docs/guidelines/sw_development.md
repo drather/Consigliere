@@ -6,7 +6,8 @@
 - **Environment Agnostic:** Code must run in Local/Docker/Prod environments.
 
 ## 2. LLM Model Usage
-- Use `gemini-2.5-flash` in `src/core/llm.py` and all prompt frontmatter by default, unless otherwise specified by the environment (e.g., Claude).
+- Default LLM is configured via `LLM_PROVIDER` env var. Current default: `claude` (`claude-sonnet-4-6`).
+- Use `from core.llm import LLMClient` (Factory pattern) — never import Gemini or Anthropic SDK directly in modules.
 
 ## 3. Workflow Automation (n8n & MCP)
 When the user requests a new automated background task:
