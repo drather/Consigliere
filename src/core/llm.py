@@ -101,11 +101,20 @@ class ClaudeClient(BaseLLMClient):
             import re
             raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
             raw = re.sub(r"```\s*$", "", raw, flags=re.MULTILINE).strip()
-            # Extract JSON boundaries (handle leading/trailing text)
-            start = raw.find('{')
-            end = raw.rfind('}')
-            if start != -1 and end != -1:
-                raw = raw[start:end + 1]
+            # Extract JSON boundaries — handle both object {...} and array [...]
+            obj_start = raw.find('{')
+            arr_start = raw.find('[')
+            # Pick whichever comes first (and exists)
+            if obj_start == -1 and arr_start == -1:
+                pass  # fall through to json.loads which will raise
+            elif arr_start != -1 and (obj_start == -1 or arr_start < obj_start):
+                end = raw.rfind(']')
+                if end != -1:
+                    raw = raw[arr_start:end + 1]
+            else:
+                end = raw.rfind('}')
+                if end != -1:
+                    raw = raw[obj_start:end + 1]
             return json.loads(raw)
         except json.JSONDecodeError as e:
             logger.error(f"Claude LLM JSON Parse Error: {e}. Raw output saved.")

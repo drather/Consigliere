@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
@@ -6,6 +7,22 @@ try:
     from dashboard.api_client import DashboardClient
 except ImportError:
     from src.dashboard.api_client import DashboardClient
+
+
+def _mrkdwn_to_md(text: str) -> str:
+    """Slack mrkdwn → standard Markdown 변환."""
+    # *bold* → **bold** (단, **already bold** 는 건드리지 않음)
+    text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'**\1**', text)
+    # • 로 시작하는 줄 → - 목록 (줄바꿈 보장)
+    lines = text.split('\n')
+    converted = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('•'):
+            converted.append(stripped.replace('•', '-', 1))
+        else:
+            converted.append(line)
+    return '\n'.join(converted)
 
 
 def _render_tx_dataframe(df: pd.DataFrame):
@@ -272,9 +289,10 @@ def show_real_estate():
                         if btype == "header":
                             st.markdown(f"## {block.get('text', {}).get('text', '')}")
                         elif btype == "section":
-                            st.markdown(block.get("text", {}).get("text", ""))
+                            raw_text = block.get("text", {}).get("text", "")
+                            st.markdown(_mrkdwn_to_md(raw_text))
                         elif btype == "context":
                             for elem in block.get("elements", []):
-                                st.caption(elem.get("text", ""))
+                                st.caption(_mrkdwn_to_md(elem.get("text", "")))
                         elif btype == "divider":
                             st.markdown("---")
