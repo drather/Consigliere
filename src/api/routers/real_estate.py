@@ -209,3 +209,94 @@ def get_real_estate_news_content(filename: str, news_service: NewsService = Depe
     except Exception as e:
         logger.error(f"News Content Dashboard API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────
+# Job Endpoints: /jobs/real-estate/
+# ─────────────────────────────────────────────
+
+class JobFetchTransactionsRequest(BaseModel):
+    district_code: str = Field("11680", description="법정동 코드")
+    year_month: Optional[str] = Field(None, description="YYYYMM (기본: 현재 월)")
+
+class JobGenerateReportRequest(BaseModel):
+    district_code: str = Field("11680", description="법정동 코드")
+    target_date: Optional[str] = Field(None, description="YYYY-MM-DD (기본: 오늘)")
+
+@router.post("/jobs/real-estate/fetch-transactions")
+def job_fetch_transactions(
+    request: JobFetchTransactionsRequest,
+    agent: RealEstateAgent = Depends(get_real_estate_agent)
+):
+    """Job 1: 실거래가 외부 API 수집 → ChromaDB 저장."""
+    try:
+        result = agent.fetch_transactions(request.district_code, request.year_month)
+        return {"status": "success", **result}
+    except Exception as e:
+        logger.error(f"Job1 Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/jobs/real-estate/fetch-news")
+def job_fetch_news(agent: RealEstateAgent = Depends(get_real_estate_agent)):
+    """Job 2: 뉴스 수집 & 분석 → 마크다운 리포트 저장."""
+    try:
+        result = agent.fetch_news()
+        return {"status": "success", **result}
+    except Exception as e:
+        logger.error(f"Job2 Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/jobs/real-estate/fetch-macro")
+def job_fetch_macro(agent: RealEstateAgent = Depends(get_real_estate_agent)):
+    """Job 3: 한국은행 거시경제 지표 수집 → JSON 저장."""
+    try:
+        result = agent.fetch_macro_data()
+        return {"status": "success", **result}
+    except Exception as e:
+        logger.error(f"Job3 Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/jobs/real-estate/generate-report")
+def job_generate_report(
+    request: JobGenerateReportRequest,
+    agent: RealEstateAgent = Depends(get_real_estate_agent)
+):
+    """Job 4: 저장된 데이터 기반으로 인사이트 리포트 생성."""
+    try:
+        from datetime import date as date_type
+        target_dt = datetime.strptime(request.target_date, "%Y-%m-%d").date() if request.target_date else date_type.today()
+        result = agent.generate_report(request.district_code, target_dt)
+        return {"status": "success", **result}
+    except Exception as e:
+        logger.error(f"Job4 Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/jobs/real-estate/run-pipeline")
+def job_run_pipeline(
+    request: JobGenerateReportRequest,
+    send_slack: bool = True,
+    agent: RealEstateAgent = Depends(get_real_estate_agent)
+):
+    """Pipeline: Job1 → Job2 → Job3 → Job4 → Slack 전송."""
+    try:
+        from datetime import date as date_type
+        target_dt = datetime.strptime(request.target_date, "%Y-%m-%d").date() if request.target_date else date_type.today()
+        result = agent.run_insight_pipeline(request.district_code, target_dt, send_slack)
+        return {"status": "success", "pipeline": result}
+    except Exception as e:
+        logger.error(f"Pipeline Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/dashboard/real-estate/policy-facts")
+def get_policy_facts(
+    query: str = "부동산 정책 공급 개발",
+    n_results: int = 10,
+    chroma_repo: ChromaRealEstateRepository = Depends(get_chroma_repo)
+):
+    """ChromaDB policy_knowledge 컬렉션 검색."""
+    try:
+        results = chroma_repo.search_policy(query=query, n_results=n_results)
+        return results
+    except Exception as e:
+        logger.error(f"Policy Facts API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

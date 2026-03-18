@@ -49,28 +49,32 @@
 
 ---
 
-## Phase 3: 4개 독립 Job API + News Insight 탭 고도화
+## Phase 3: 4개 독립 Job API + News Insight 탭 고도화 ✅
 
 ### Backend — 신규 Job 엔드포인트 (`/jobs/real-estate/`)
-- [ ] `service.py` — `fetch_transactions()` 메서드 분리 (Job 1)
-- [ ] `service.py` — `fetch_news()` 메서드 분리 (Job 2)
-- [ ] `service.py` — `fetch_macro_data()` 메서드 분리 + 파일 저장 (Job 3)
-- [ ] `service.py` — `generate_report()` 가 저장 데이터 우선 사용 (Job 4)
-- [ ] `service.py` — `run_insight_pipeline()` 메서드 (Job 1~4 + Slack)
-- [ ] `real_estate.py` (router) — `/jobs/real-estate/fetch-transactions` 추가
-- [ ] `real_estate.py` (router) — `/jobs/real-estate/fetch-news` 추가
-- [ ] `real_estate.py` (router) — `/jobs/real-estate/fetch-macro` 추가
-- [ ] `real_estate.py` (router) — `/jobs/real-estate/generate-report` 추가
-- [ ] `real_estate.py` (router) — `/jobs/real-estate/run-pipeline` 추가
-- [ ] `real_estate.py` (router) — `GET /dashboard/real-estate/policy-facts` 추가
-- [ ] 기존 `GET /agent/real_estate/insight_report` → `run_pipeline()` 위임으로 변경
+- [x] `service.py` — `fetch_transactions()` 메서드 분리 (Job 1)
+- [x] `service.py` — `fetch_news()` 메서드 분리 (Job 2)
+- [x] `service.py` — `fetch_macro_data()` 메서드 분리 + `data/real_estate/macro/{date}_macro.json` 저장 (Job 3)
+- [x] `service.py` — `generate_report()` 가 저장된 macro 데이터 우선 사용, ChromaDB 실거래가 읽기 (Job 4)
+- [x] `service.py` — `run_insight_pipeline()` 메서드 (Job 1~4 + Slack)
+- [x] `real_estate.py` (router) — `POST /jobs/real-estate/fetch-transactions` 추가
+- [x] `real_estate.py` (router) — `POST /jobs/real-estate/fetch-news` 추가
+- [x] `real_estate.py` (router) — `POST /jobs/real-estate/fetch-macro` 추가
+- [x] `real_estate.py` (router) — `POST /jobs/real-estate/generate-report` 추가
+- [x] `real_estate.py` (router) — `POST /jobs/real-estate/run-pipeline` 추가
+- [x] `real_estate.py` (router) — `GET /dashboard/real-estate/policy-facts` 추가
 
 ### Dashboard
-- [ ] `api_client.py` — 신규 Job 트리거 메서드 추가
-- [ ] `views/real_estate.py` — News Insight 탭 서브탭 3개로 분리
-  - [ ] 📰 뉴스 리포트 (마크다운 리포트 목록 + 상세)
-  - [ ] 📌 정책 팩트 (ChromaDB 검색 + 목록)
-  - [ ] 🔄 데이터 수집 (Job 1~3 수동 트리거 + 상태 표시)
+- [x] `api_client.py` — Job 트리거 메서드 6개 추가 (fetch-transactions/news/macro, generate-report, run-pipeline, search_policy_facts)
+- [x] `views/real_estate.py` — News Insight 탭 서브탭 3개로 분리
+  - [x] 📰 뉴스 리포트 (마크다운 리포트 목록 + 상세)
+  - [x] 📌 정책 팩트 (ChromaDB 검색 + 아코디언 목록)
+  - [x] 🔄 데이터 수집 (Job 1~4 개별 버튼 + 전체 파이프라인 트리거)
+
+### 검증
+- [x] `GET /dashboard/real-estate/policy-facts?query=부동산` → 3건 정상 반환
+- [x] `POST /jobs/real-estate/fetch-macro` → 기준금리 2.5% 수집 + JSON 저장
+- [x] `POST /jobs/real-estate/fetch-transactions` → 18건 수집, 18건 저장
 
 ---
 

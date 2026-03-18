@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import date, datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from core.storage import get_storage_provider, StorageProvider
 from core.prompt_loader import PromptLoader
@@ -147,6 +147,137 @@ class RealEstateAgent:
             logger.info(f"✅ [RealEstateAgent] Report saved: {filename}")
         except Exception as e:
             logger.error(f"⚠️ [RealEstateAgent] Failed to save report: {e}")
+
+    # ─────────────────────────────────────────────
+    # Job Methods (independently callable)
+    # ─────────────────────────────────────────────
+
+    def fetch_transactions(self, district_code: str, year_month: Optional[str] = None) -> Dict[str, Any]:
+        """Job 1: Fetch transactions from external API and save to ChromaDB."""
+        from .monitor.service import TransactionMonitorService
+        monitor_service = TransactionMonitorService()
+        target_ym = year_month or datetime.now().strftime("%Y%m")
+        logger.info(f"[Job1] Fetching transactions: {district_code}, {target_ym}")
+
+        transactions = monitor_service.get_daily_transactions(district_code, target_ym)
+        if not transactions:
+            return {"fetched_count": 0, "saved_count": 0}
+
+        saved_count = 0
+        for tx in transactions:
+            try:
+                self.repository.save_transaction(tx)
+                saved_count += 1
+            except Exception as e:
+                logger.error(f"[Job1] Save failed for {tx.apt_name}: {e}")
+
+        return {"fetched_count": len(transactions), "saved_count": saved_count, "district_code": district_code, "year_month": target_ym}
+
+    def fetch_news(self) -> Dict[str, Any]:
+        """Job 2: Fetch & analyze news, save daily markdown report."""
+        logger.info("[Job2] Fetching & analyzing news...")
+        result = self.news_service.generate_daily_report()
+        success = not result.startswith("❌")
+        return {"success": success, "report_date": datetime.now().strftime("%Y-%m-%d"), "summary": result[:200]}
+
+    def fetch_macro_data(self) -> Dict[str, Any]:
+        """Job 3: Fetch macro data from BOK and save to data/real_estate/macro/{date}_macro.json."""
+        logger.info("[Job3] Fetching macro data from BOK...")
+        macro_data = self.macro_service.fetch_latest_macro_data()
+        macro_dict = macro_data.model_dump()
+
+        macro_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "macro")
+        os.makedirs(macro_dir, exist_ok=True)
+        today = datetime.now().strftime("%Y-%m-%d")
+        filename = os.path.join(macro_dir, f"{today}_macro.json")
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(macro_dict, f, ensure_ascii=False, indent=2)
+        logger.info(f"[Job3] Macro saved: {filename}")
+        return {"success": True, "date": today, "macro": macro_dict}
+
+    def generate_report(self, district_code: str = "11680", target_date: Optional[date] = None) -> Dict[str, Any]:
+        """Job 4: Generate insight report using stored data (macro from file, txs from ChromaDB)."""
+        if target_date is None:
+            target_date = date.today()
+        logger.info(f"[Job4] Generating report for {target_date}, {district_code}")
+
+        # Load macro: prefer stored file, fallback to real-time
+        macro_dict = self._load_stored_macro(target_date) or self.macro_service.fetch_latest_macro_data().model_dump()
+
+        # Load transactions from ChromaDB
+        where_clause = {"district_code": {"$eq": district_code}}
+        stored_txs = self.repository.get_transactions(limit=50, where=where_clause)
+        daily_txs = [t for t in stored_txs if str(t.get("deal_date", "")) == target_date.isoformat()][:15]
+        if not daily_txs:
+            daily_txs = stored_txs[:15]
+
+        # Load persona + policy context
+        persona_data = self._load_persona()
+        from core.policy_fetcher import fetch_latest_financial_policies
+        policy_context = fetch_latest_financial_policies()
+        try:
+            area = persona_data.get("user", {}).get("interest_areas", ["수도권"])[0]
+            policy_facts = self.repository.search_policy(query=f"{area} 부동산 정책 공급 개발", n_results=3)
+        except Exception:
+            policy_facts = []
+        budget_plan = self.calculator.calculate_budget(persona_data, policy_context)
+
+        report_json = self.insight_orchestrator.generate_strategy(
+            target_date=target_date,
+            macro_dict=macro_dict,
+            policy_context=policy_context,
+            daily_txs=daily_txs,
+            persona_data=persona_data.get("user", {}),
+            policy_facts=policy_facts,
+            budget_dict=budget_plan.model_dump(),
+            fallback_note=f"({target_date} 저장 데이터 기준)"
+        )
+
+        score = report_json.get("_score", 0)
+        self._save_report(report_json, target_date, len(daily_txs))
+        return {"success": True, "score": score, "tx_count": len(daily_txs), "date": target_date.isoformat()}
+
+    def run_insight_pipeline(self, district_code: str = "11680", target_date: Optional[date] = None, send_slack: bool = True) -> Dict[str, Any]:
+        """Pipeline: Job1 → Job2 → Job3 → Job4 → Slack."""
+        if target_date is None:
+            target_date = date.today()
+        year_month = target_date.strftime("%Y%m")
+
+        results = {}
+        results["job1"] = self.fetch_transactions(district_code, year_month)
+        results["job2"] = self.fetch_news()
+        results["job3"] = self.fetch_macro_data()
+        results["job4"] = self.generate_report(district_code, target_date)
+
+        if send_slack:
+            try:
+                from core.notify.slack import SlackSender
+                sender = SlackSender()
+                report_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "reports")
+                filename = os.path.join(report_dir, f"{target_date.isoformat()}_Report.json")
+                if os.path.exists(filename):
+                    with open(filename, "r", encoding="utf-8") as f:
+                        saved = json.load(f)
+                    sender.send_blocks(saved.get("blocks", []))
+                    results["slack"] = "sent"
+            except Exception as e:
+                logger.error(f"[Pipeline] Slack send failed: {e}")
+                results["slack"] = f"error: {e}"
+
+        return results
+
+    def _load_stored_macro(self, target_date: date) -> Optional[Dict[str, Any]]:
+        """Loads today's saved macro JSON if available."""
+        macro_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "macro")
+        filename = os.path.join(macro_dir, f"{target_date.isoformat()}_macro.json")
+        if os.path.exists(filename):
+            try:
+                with open(filename, "r", encoding="utf-8") as f:
+                    logger.info(f"[Job4] Using stored macro: {filename}")
+                    return json.load(f)
+            except Exception:
+                pass
+        return None
 
     def _load_persona(self) -> Dict[str, Any]:
         try:
