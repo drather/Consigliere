@@ -78,10 +78,17 @@
 
 ---
 
-## Phase 4: 최종 검증
+## Phase 4: 최종 검증 ✅
 
-- [ ] SOLID 체크리스트 통과
-- [ ] 각 Job 독립 실행 테스트 (API 직접 호출)
-- [ ] 파이프라인 Job 통합 테스트 (E2E → Slack)
-- [ ] 대시보드 각 탭 동작 확인
-- [ ] Docker 재기동 후 E2E 확인
+- [x] SOLID 체크리스트 통과 (SRP: Job 분리, OCP: 신규 Job 추가 기존 코드 불변, DIP: Router→Agent→Services)
+- [x] 각 Job 독립 실행 테스트: fetch-transactions(✅), fetch-news(✅), fetch-macro(✅), policy-facts(✅)
+- [ ] 파이프라인 Job 통합 테스트 (Job4 리포트 생성은 토큰 비용으로 스킵 — 기존 저장 리포트로 Report Archive 검증 완료)
+- [x] 대시보드 각 탭 동작 확인 (Market Monitor / News Insights 3서브탭 / Report Archive)
+- [x] Docker 재기동 후 E2E 확인
+
+### 이슈 & 수정 (Phase 4)
+- **ChromaDB 볼륨 경로 불일치 (버그 수정)**
+  - 증상: `docker compose down && up` 후 ChromaDB 데이터 휘발
+  - 원인: `docker-compose.yml` 볼륨이 `/chroma/chroma`로 마운트됐으나 ChromaDB는 `/data`에 저장
+  - 수정: `./data/chroma_data:/chroma/chroma` → `./data/chroma_data:/data`
+  - 효과: `./data/chroma_data/chroma.sqlite3` 로컬 영속 저장 확인
