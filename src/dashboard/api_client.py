@@ -72,6 +72,28 @@ class DashboardClient:
             return "❌ Error loading report."
 
     @staticmethod
+    def list_insight_reports() -> List[Dict]:
+        """저장된 인사이트 리포트 목록을 반환한다."""
+        try:
+            response = requests.get(f"{API_BASE_URL}/dashboard/real-estate/reports")
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching report list: {e}")
+            return []
+
+    @staticmethod
+    def get_insight_report(filename: str) -> Dict:
+        """저장된 인사이트 리포트 상세 내용을 반환한다."""
+        try:
+            response = requests.get(f"{API_BASE_URL}/dashboard/real-estate/reports/{filename}")
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching report detail: {e}")
+            return {}
+
+    @staticmethod
     def get_workflows() -> List[Dict]:
         """Fetches list of all n8n workflows."""
         try:

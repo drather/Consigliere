@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import date
+from datetime import date, datetime
 from typing import Dict, Any, List
 
 from core.storage import get_storage_provider, StorageProvider
@@ -123,7 +123,30 @@ class RealEstateAgent:
             fallback_note=f"({target_date} 데이터 기준)"
         )
 
+        self._save_report(report_json, target_date, len(daily_txs))
         return report_json.get("blocks", [])
+
+    def _save_report(self, report_json: Dict[str, Any], target_date: date, tx_count: int) -> None:
+        """생성된 리포트를 JSON 파일로 저장한다."""
+        try:
+            report_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "reports")
+            os.makedirs(report_dir, exist_ok=True)
+
+            score = report_json.pop("_score", 0)
+            save_data = {
+                "date": target_date.isoformat(),
+                "score": score,
+                "tx_count": tx_count,
+                "created_at": datetime.now().isoformat(),
+                "blocks": report_json.get("blocks", [])
+            }
+
+            filename = os.path.join(report_dir, f"{target_date.isoformat()}_Report.json")
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(save_data, f, ensure_ascii=False, indent=2)
+            logger.info(f"✅ [RealEstateAgent] Report saved: {filename}")
+        except Exception as e:
+            logger.error(f"⚠️ [RealEstateAgent] Failed to save report: {e}")
 
     def _load_persona(self) -> Dict[str, Any]:
         try:

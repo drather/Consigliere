@@ -1,7 +1,10 @@
+import json
+import os
 from datetime import datetime
+from glob import glob
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from api.dependencies import (
     get_real_estate_agent,
@@ -139,6 +142,49 @@ def list_real_estate_news(news_service: NewsService = Depends(get_news_service))
         return news_service.list_reports()
     except Exception as e:
         logger.error(f"News List Dashboard API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/dashboard/real-estate/reports")
+def list_insight_reports() -> List[Dict[str, Any]]:
+    """저장된 인사이트 리포트 목록을 반환한다."""
+    try:
+        report_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "reports")
+        if not os.path.exists(report_dir):
+            return []
+        files = sorted(glob(os.path.join(report_dir, "*_Report.json")), reverse=True)
+        result = []
+        for f in files:
+            try:
+                with open(f, "r", encoding="utf-8") as fh:
+                    meta = json.load(fh)
+                result.append({
+                    "filename": os.path.basename(f),
+                    "date": meta.get("date", ""),
+                    "score": meta.get("score", 0),
+                    "tx_count": meta.get("tx_count", 0),
+                    "created_at": meta.get("created_at", ""),
+                })
+            except Exception:
+                continue
+        return result
+    except Exception as e:
+        logger.error(f"Report List API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/dashboard/real-estate/reports/{filename}")
+def get_insight_report(filename: str) -> Dict[str, Any]:
+    """저장된 인사이트 리포트 상세 내용을 반환한다."""
+    try:
+        report_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "reports")
+        filepath = os.path.join(report_dir, filename)
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=404, detail="Report not found.")
+        with open(filepath, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Report Detail API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/dashboard/real-estate/news/{filename}")

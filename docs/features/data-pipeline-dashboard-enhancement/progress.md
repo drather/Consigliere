@@ -4,16 +4,22 @@
 
 ---
 
-## Phase 1: 리포트 저장 레이어 + Report Archive 탭
+## Phase 1: 리포트 저장 레이어 + Report Archive 탭 ✅
 
 ### Backend
-- [ ] `service.py` — `generate_report()` 메서드 분리, 결과를 `data/real_estate/reports/{date}_Report.json` 저장
-- [ ] `real_estate.py` (router) — `GET /dashboard/real-estate/reports` 추가
-- [ ] `real_estate.py` (router) — `GET /dashboard/real-estate/reports/{filename}` 추가
+- [x] `insight_orchestrator.py` — `_score` 반환값에 포함
+- [x] `service.py` — `_save_report()` 추가, 리포트 생성 후 `data/real_estate/reports/{date}_Report.json` 저장
+- [x] `real_estate.py` (router) — `GET /dashboard/real-estate/reports` 추가
+- [x] `real_estate.py` (router) — `GET /dashboard/real-estate/reports/{filename}` 추가
 
 ### Dashboard
-- [ ] `api_client.py` — `get_reports()`, `get_report_detail()` 메서드 추가
-- [ ] `views/real_estate.py` — "📋 Report Archive" 서브탭 추가
+- [x] `api_client.py` — `list_insight_reports()`, `get_insight_report()` 메서드 추가
+- [x] `views/real_estate.py` — "📋 Report Archive" 서브탭 추가 (목록 테이블 + 상세 블록 렌더링)
+
+### 검증
+- [x] API 테스트: `GET /dashboard/real-estate/reports` → 목록 정상 반환
+- [x] API 테스트: `GET /dashboard/real-estate/reports/{filename}` → 상세 정상 반환
+- [x] 대시보드 컨테이너 정상 기동 확인
 
 ---
 
