@@ -1,16 +1,22 @@
 # Project Consigliere: Active State
 **Last Updated:** 2026-03-18
-**Current Active Feature:** `Maintenance: Claude LLM 전환 및 토큰 최적화`
+**Current Active Feature:** `Feature: 데이터 파이프라인 분리 및 대시보드 고도화`
 
 ## 📍 Current Focus
-- **Status:** Stable (운영 중)
-- **Current Objective:** **LLM Claude 전환 완료, 인사이트 리포트 E2E 정상 동작 확인**
+- **Branch:** `feature/data-pipeline-dashboard-enhancement`
+- **Status:** 🟡 기획 완료, 구현 시작 전
+- **Current Objective:** 실거래가·뉴스·리포트 데이터 파이프라인 분리 및 대시보드 고도화
 
 ## 💡 Recent Context
 - **completed:** 기본 LLM Gemini → Claude (`claude-sonnet-4-6`) 전환
 - **completed:** `ClaudeClient.generate_json` JSON 파싱 버그 2건 수정 (truncation, 경계 추출)
 - **completed:** 토큰 최적화 (MAX_ITERATIONS 2, Validator 1024, 데이터 상한 축소)
 - **completed:** 인사이트 리포트 E2E 테스트 성공 (Score 82, Slack 전송 확인)
+- **in-progress:** 데이터 파이프라인 분리 및 대시보드 고도화 기획 완료
+  - Phase 1: 리포트 저장 레이어 + Report Archive 탭
+  - Phase 2: 실거래가 그리드 고도화 (날짜 필터, 50건, 정렬)
+  - Phase 3: News Insight 탭 고도화 (정책 팩트, 수집 트리거)
+  - Phase 4: 리포트 파이프라인 분리 (저장 데이터 우선 사용)
 - [x] **Maintenance: Update Real Estate Insight Report Schedule** <!-- id: 31 -->
     - Changed cron expression from `30 8 * * *` to `0 7 * * *` (07:00 KST).
     - Redeployed workflow and restarted Docker containers.
