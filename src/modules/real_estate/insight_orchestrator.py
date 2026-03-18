@@ -102,4 +102,6 @@ class InsightOrchestrator:
 
         # 3. Final Polish via Presenter
         final_report_json = self.presenter.inject_validation_warning(final_report_json, best_score)
-        return self.presenter.beautify_citations(final_report_json, policy_facts)
+        final_report_json = self.presenter.beautify_citations(final_report_json, policy_facts)
+        final_report_json["_score"] = best_score
+        return final_report_json
