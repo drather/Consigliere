@@ -16,32 +16,53 @@ def show_real_estate():
 
     # --- TAB 1: Market Monitor ---
     with tab1:
-        st.subheader("Apartment Transaction Monitor")
+        st.subheader("실거래가 조회")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            district_code = st.text_input("District Code (e.g., 41135)", value="")
-        with col2:
-            limit = st.slider("Limit Records", 10, 100, 50)
+        # 필터 영역
+        with st.expander("🔍 필터", expanded=True):
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                district_code = st.text_input("동코드 (예: 11680)", value="")
+            with col2:
+                date_from = st.text_input("조회 시작일 (YYYY-MM-DD)", value="")
+            with col3:
+                date_to = st.text_input("조회 종료일 (YYYY-MM-DD)", value="")
+            with col4:
+                limit = st.selectbox("최대 건수", [10, 20, 30, 50], index=1)
 
-        if st.button("Fetch Transactions"):
-            with st.spinner("Fetching data from ChromaDB..."):
-                df = DashboardClient.get_real_estate_transactions(district_code if district_code else None, limit)
+        if st.button("🔎 조회", type="primary"):
+            with st.spinner("ChromaDB에서 조회 중..."):
+                df = DashboardClient.get_real_estate_transactions(
+                    district_code=district_code if district_code else None,
+                    date_from=date_from if date_from else None,
+                    date_to=date_to if date_to else None,
+                    limit=limit,
+                )
 
             if df.empty:
-                st.info("No transaction records found.")
+                st.info("조회 결과가 없습니다. 필터 조건을 확인하거나 데이터를 먼저 수집해주세요.")
             else:
-                st.success(f"Found {len(df)} transactions.")
+                st.success(f"총 **{len(df)}건** 조회됨")
 
-                # Reorder columns for better readability if keys exist
-                preferred_cols = ["deal_date", "apt_name", "price", "floor", "exclusive_area"]
-                available_cols = [c for c in preferred_cols if c in df.columns]
-                remaining_cols = [c for c in df.columns if c not in preferred_cols]
+                # 컬럼 정리 및 포맷
+                if "price" in df.columns:
+                    df["거래가(억)"] = (df["price"] / 100_000_000).round(2)
+                col_map = {
+                    "deal_date": "거래일자",
+                    "apt_name": "아파트명",
+                    "exclusive_area": "전용면적(㎡)",
+                    "floor": "층",
+                    "build_year": "건축연도",
+                    "district_code": "동코드",
+                }
+                display_cols = ["deal_date", "apt_name", "거래가(억)", "floor", "exclusive_area", "build_year", "district_code"]
+                available = [c for c in display_cols if c in df.columns]
+                display_df = df[available].rename(columns=col_map)
 
                 st.dataframe(
-                    df[available_cols + remaining_cols],
+                    display_df,
                     use_container_width=True,
-                    hide_index=True
+                    hide_index=True,
                 )
 
     # --- TAB 2: News Insights ---

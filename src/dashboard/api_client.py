@@ -34,13 +34,22 @@ class DashboardClient:
             return pd.DataFrame()
 
     @staticmethod
-    def get_real_estate_transactions(district_code: Optional[str] = None, limit: int = 50) -> pd.DataFrame:
+    def get_real_estate_transactions(
+        district_code: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        limit: int = 20,
+    ) -> pd.DataFrame:
         """Fetches transactions for the monitor tab."""
         try:
-            params = {"limit": limit}
+            params: Dict = {"limit": min(limit, 50)}
             if district_code:
                 params["district_code"] = district_code
-                
+            if date_from:
+                params["date_from"] = date_from
+            if date_to:
+                params["date_to"] = date_to
+
             response = requests.get(f"{API_BASE_URL}/dashboard/real-estate/monitor", params=params)
             response.raise_for_status()
             data = response.json()

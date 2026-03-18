@@ -104,22 +104,41 @@ class ChromaRealEstateRepository:
         self.collection.delete(ids=[report_id])
         logger.info(f"🗑️ [ChromaDB] Deleted report: {report_id}")
 
-    def get_transactions(self, limit: int = 100, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def get_transactions(
+        self,
+        limit: int = 50,
+        where: Optional[Dict[str, Any]] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Fetches raw transaction data (metadata) from ChromaDB.
-        Useful for tabular display in dashboards.
+        - ChromaDB .get()은 $eq 필터만 지원하므로 district_code 필터만 DB 레벨에서 처리
+        - date_from / date_to 범위 필터는 Python 레벨에서 후처리
         """
         try:
+            # ChromaDB .get()은 $eq 호환 필터만 지원
+            fetch_limit = min(limit * 10, 500)  # 후처리 여유분 확보
             results = self.collection.get(
-                limit=limit,
+                limit=fetch_limit,
                 where=where,
                 include=["metadatas"]
             )
-            
+
             if not results or not results["metadatas"]:
                 return []
-                
-            return results["metadatas"]
+
+            metadatas = results["metadatas"]
+
+            # Python 레벨 날짜 범위 필터
+            if date_from:
+                metadatas = [m for m in metadatas if str(m.get("deal_date", "")) >= date_from]
+            if date_to:
+                metadatas = [m for m in metadatas if str(m.get("deal_date", "")) <= date_to]
+
+            # 최신 거래일 순 정렬 후 limit 적용
+            metadatas.sort(key=lambda x: str(x.get("deal_date", "")), reverse=True)
+            return metadatas[:limit]
         except Exception as e:
             logger.error(f"⚠️ [ChromaDB] Error fetching transactions: {e}")
             return []

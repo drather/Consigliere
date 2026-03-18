@@ -23,19 +23,29 @@
 
 ---
 
-## Phase 2: 실거래가 그리드 고도화
+## Phase 2: 실거래가 그리드 고도화 ✅
 
 ### Backend
-- [ ] `real_estate.py` (router) — `/dashboard/real-estate/monitor` 에 `date_from`, `date_to` 파라미터 추가
-- [ ] `repository.py` — ChromaDB 날짜 범위 필터 지원
-- [ ] limit 상한 50건으로 확장
+- [x] `real_estate.py` (router) — `/dashboard/real-estate/monitor` 에 `date_from`, `date_to` 파라미터 추가
+- [x] `repository.py` — ChromaDB 날짜 범위 필터 지원 (Python 레벨 후처리, ChromaDB `.get()` `$gte`/`$lte` 미지원으로 인해)
+- [x] limit 상한 50건으로 확장
 
 ### Dashboard
-- [ ] `api_client.py` — `get_transactions()` 파라미터 확장
-- [ ] `views/real_estate.py` — Market Monitor 탭 UI 개선
-  - [ ] 필터 영역 (동코드, 날짜 from/to, 건수 10·20·30·50)
-  - [ ] 그리드 컬럼 (거래일자, 아파트명, 전용면적, 층, 거래가(억), 건축연도, 동코드)
-  - [ ] 총 조회 건수 표시
+- [x] `api_client.py` — `get_transactions()` 파라미터 확장 (date_from, date_to, limit)
+- [x] `views/real_estate.py` — Market Monitor 탭 UI 개선
+  - [x] 필터 영역 (동코드, 날짜 from/to, 건수 10·20·30·50)
+  - [x] 그리드 컬럼 (거래일자, 아파트명, 전용면적, 층, 거래가(억), 건축연도, 동코드)
+  - [x] 총 조회 건수 표시
+
+### 검증
+- [x] API 테스트: `GET /dashboard/real-estate/monitor?date_from=2026-01-01&date_to=2026-03-18&limit=10` → 정상 반환
+- [x] API 테스트: `GET /dashboard/real-estate/monitor?district_code=11680&limit=5` → 5건 정상 반환
+- [x] 대시보드 컨테이너 정상 기동 확인
+
+### 이슈
+- ChromaDB `.get()` 메서드는 `$gte`/`$lte` 연산자를 지원하지 않음 (`InvalidArgumentError` 발생)
+- 해결: `limit * 10` (최대 500건)을 ChromaDB에서 가져온 뒤 Python 레벨에서 날짜 문자열 비교로 필터링
+- `"YYYY-MM-DD"` 포맷이 사전식 정렬과 일치하므로 올바른 날짜 범위 필터링 가능
 
 ---
 
