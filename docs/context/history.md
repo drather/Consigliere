@@ -1,6 +1,16 @@
 # Project Consigliere: History
-**Last Updated:** 2026-03-16
+**Last Updated:** 2026-03-18
 **Status:** Active
+
+## 2026-03-18: Claude LLM 전환 및 토큰 최적화
+- **Feature (claude-migration-token-optimization):** 기본 LLM을 Gemini에서 Claude(`claude-sonnet-4-6`)로 전환, JSON 파싱 버그 2건 수정, 토큰 사용량 최적화.
+- **Implementation:**
+    - `LLMFactory` 기본값 `"gemini"` → `"claude"` 변경, `.env.example` Claude 설정 추가.
+    - `ClaudeClient.generate_json` 버그 수정: `max_tokens` 4096 → 8192, JSON 경계 추출 로직(`find('{')`~`rfind('}'`) 추가.
+    - `generate_json(max_tokens=)` 파라미터화로 호출처별 토큰 제어 가능.
+    - 토큰 최적화: `MAX_ITERATIONS` 3→2, Validator `max_tokens` 1024, `daily_txs` 15건, `policy_facts` 3건.
+- **Verification:** E2E 테스트 성공 — 인사이트 리포트 HTTP 200 (Score 82), Slack 전송 `ok: true` 확인.
+- **Documentation:** `docs/features/claude-migration-token-optimization/` 내 spec, progress, result, issues 완비.
 
 ## 2026-03-16: Phase 4 SOLID Refactoring & Scalability
 - **Feature (architecture-refactor):** 부동산 모듈의 God Class 해체 및 SOLID 원칙 기반의 확장성 있는 아키텍처로 리팩토링.

@@ -17,17 +17,19 @@ class BaseLLMClient(ABC):
         pass
 
     @abstractmethod
-    def generate_json(self, prompt: str) -> Dict[str, Any]:
+    def generate_json(self, prompt: str, max_tokens: int = 8192) -> Dict[str, Any]:
         pass
 
 class GeminiClient(BaseLLMClient):
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        self.model_name = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")
         if not self.api_key:
             logger.warning("GEMINI_API_KEY not found. Gemini LLM features will fail.")
         else:
             genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel('gemini-2.5-flash')
+            self.model = genai.GenerativeModel(self.model_name)
+            logger.info(f"Gemini LLM Client initialized. Model: {self.model_name}")
 
     def generate(self, prompt: str) -> str:
         if not self.api_key:
@@ -84,14 +86,14 @@ class ClaudeClient(BaseLLMClient):
             logger.error(f"Claude LLM Error: {e}")
             return str(e)
 
-    def generate_json(self, prompt: str) -> Dict[str, Any]:
+    def generate_json(self, prompt: str, max_tokens: int = 8192) -> Dict[str, Any]:
         if not self.api_key:
             return {"error": "Missing Claude API Key"}
         try:
             full_prompt = f"{prompt}\n\nIMPORTANT: You MUST respond with ONLY a valid JSON object or JSON array. No markdown formatting, no ```json blocks, no explanation text. Just raw JSON."
             message = self.client.messages.create(
                 model=self.model_name,
-                max_tokens=4096,
+                max_tokens=max_tokens,
                 messages=[{"role": "user", "content": full_prompt}]
             )
             raw = message.content[0].text.strip()
@@ -99,6 +101,11 @@ class ClaudeClient(BaseLLMClient):
             import re
             raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
             raw = re.sub(r"```\s*$", "", raw, flags=re.MULTILINE).strip()
+            # Extract JSON boundaries (handle leading/trailing text)
+            start = raw.find('{')
+            end = raw.rfind('}')
+            if start != -1 and end != -1:
+                raw = raw[start:end + 1]
             return json.loads(raw)
         except json.JSONDecodeError as e:
             logger.error(f"Claude LLM JSON Parse Error: {e}. Raw output saved.")
@@ -114,7 +121,7 @@ class LLMFactory:
     """
     @staticmethod
     def create() -> BaseLLMClient:
-        provider = os.getenv("LLM_PROVIDER", "gemini").lower()
+        provider = os.getenv("LLM_PROVIDER", "claude").lower()
         if provider == "claude":
             logger.info("Initializing Claude LLM Client.")
             return ClaudeClient()

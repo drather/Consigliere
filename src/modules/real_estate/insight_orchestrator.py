@@ -56,7 +56,7 @@ class InsightOrchestrator:
             "fallback_note": fallback_note
         }
 
-        MAX_ITERATIONS = 3
+        MAX_ITERATIONS = 2
         current_iter = 0
         validator_feedback = ""
         final_report_json = None

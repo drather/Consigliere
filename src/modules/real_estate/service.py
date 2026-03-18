@@ -92,8 +92,8 @@ class RealEstateAgent:
             except Exception as e:
                 logger.error(f"⚠️ [RealEstateAgent] Data fetch failed for {d['code']}: {e}")
 
-        daily_txs = [tx.__dict__ for tx in all_transactions if tx.deal_date == target_date]
-        if not daily_txs: daily_txs = [tx.__dict__ for tx in sorted(all_transactions, key=lambda x: x.deal_date, reverse=True)[:20]]
+        daily_txs = [tx.__dict__ for tx in all_transactions if tx.deal_date == target_date][:15]
+        if not daily_txs: daily_txs = [tx.__dict__ for tx in sorted(all_transactions, key=lambda x: x.deal_date, reverse=True)[:15]]
         
         # 2. External Contexts
         persona_data = self._load_persona()
@@ -104,7 +104,7 @@ class RealEstateAgent:
         # RAG for Policy Facts
         try:
             area = persona_data.get("user", {}).get("interest_areas", ["수도권"])[0]
-            policy_facts = self.repository.search_policy(query=f"{area} 부동산 정책 공급 개발", n_results=5)
+            policy_facts = self.repository.search_policy(query=f"{area} 부동산 정책 공급 개발", n_results=3)
         except:
             policy_facts = []
 

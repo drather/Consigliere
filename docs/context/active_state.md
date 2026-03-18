@@ -1,17 +1,16 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-03-16
-**Current Active Feature:** `None (Phase 4 SOLID Refactoring Completed)`
+**Last Updated:** 2026-03-18
+**Current Active Feature:** `Maintenance: Claude LLM 전환 및 토큰 최적화`
 
 ## 📍 Current Focus
-- **Status:** Architecture Stabilization (Phase 4: SOLID & Scalability)
-- **Current Objective:** **부동산 모듈 아키텍처 고도화 및 SOLID 원칙 적용 완료**
+- **Status:** Stable (운영 중)
+- **Current Objective:** **LLM Claude 전환 완료, 인사이트 리포트 E2E 정상 동작 확인**
 
 ## 💡 Recent Context
-- **completed:** `RealEstateAgent` God Class 해체 및 `TourService`, `InsightOrchestrator`, `RealEstatePresenter` 분리
-- **completed:** `config.yaml` 기반 동적 설정 시스템 도입 (한국은행 코드, 세율 등 하드코딩 제거)
-- **completed:** AI 에이전트 추상화 (`BaseAgent`) 및 플러거블 구조 확보
-- **completed:** 리포트 내 출처(Citation) 클릭 가능한 Slack 링크 형식으로 자동 변환 로직 구현
-- **completed:** Red Team Validator를 통한 예산 정합성 검증 루프 강화 (242만원 오차 발견 및 수정 확인)
+- **completed:** 기본 LLM Gemini → Claude (`claude-sonnet-4-6`) 전환
+- **completed:** `ClaudeClient.generate_json` JSON 파싱 버그 2건 수정 (truncation, 경계 추출)
+- **completed:** 토큰 최적화 (MAX_ITERATIONS 2, Validator 1024, 데이터 상한 축소)
+- **completed:** 인사이트 리포트 E2E 테스트 성공 (Score 82, Slack 전송 확인)
 - [x] **Maintenance: Update Real Estate Insight Report Schedule** <!-- id: 31 -->
     - Changed cron expression from `30 8 * * *` to `0 7 * * *` (07:00 KST).
     - Redeployed workflow and restarted Docker containers.
@@ -21,6 +20,10 @@
     - Cleaned up duplicate/inactive workflows from n8n environment.
     - Fixed `Header NoneType` bug in `AutomationService`.
 ## ✅ Completed Tasks (Recent)
+- [x] **Maintenance: Gemini Model Update** <!-- id: 33 -->
+    - Updated default Gemini model to `gemini-3.1-flash-lite-preview`.
+    - Refactored `GeminiClient` to support `GEMINI_MODEL` environment variable.
+    - Updated `.env` and `.env.example` with the new model configuration.
 - [x] **Feature: Funding Plan Logic Correction & Logic Guard** <!-- id: 29 -->
     - Implemented LTV-back-calculation constraint to prevent simple budget summation.
     - Added 100-iteration self-reflection loop with scoring and feedback.

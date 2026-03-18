@@ -26,7 +26,7 @@ class StrategyValidatorAgent(BaseAgent):
             "macro_data": json.dumps(context.get("macro_data", {}), ensure_ascii=False),
             "generated_report": json.dumps(context.get("generated_report", {}), ensure_ascii=False)
         })
-        return self.llm.generate_json(prompt)
+        return self.llm.generate_json(prompt, max_tokens=1024)
 
 class SynthesizerAgent(BaseAgent):
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
