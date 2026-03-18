@@ -7,165 +7,218 @@
 
 ---
 
-## 배경 및 목표
+## 핵심 설계 원칙
+
+현재 `generate_insight_report()` 는 아래 4가지를 하나의 함수 안에서 순차 실행한다:
+
+```
+실거래가 수집 → 뉴스/정책 수집 → 금융/거시경제 수집 → LLM 리포트 생성 → Slack 전송
+```
+
+이를 **4개의 독립 Job** + **1개의 파이프라인 Job**으로 분리한다.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    독립 Job (각각 단독 실행 가능)           │
+│                                                         │
+│  Job 1: fetch_transactions()                            │
+│    MOLIT API → 파싱 → ChromaDB (real_estate_transactions)│
+│                                                         │
+│  Job 2: fetch_news()                                    │
+│    Naver API + AdvancedScraper                          │
+│    → 마크다운 파일 (data/real_estate/news/)              │
+│    → ChromaDB (policy_knowledge)                        │
+│                                                         │
+│  Job 3: fetch_macro_data()                              │
+│    한국은행 API + DuckDuckGo 정책 검색                    │
+│    → JSON 파일 (data/real_estate/macro/)                 │
+│                                                         │
+│  Job 4: generate_report()                               │
+│    저장된 데이터(Job1~3 결과)를 읽어서 LLM 리포트 생성     │
+│    → JSON 파일 (data/real_estate/reports/)               │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│                    파이프라인 Job                         │
+│                                                         │
+│  run_insight_pipeline()                                 │
+│    = Job1 → Job2 → Job3 → Job4 → POST /notify/slack     │
+│    (= 현재의 부동산 인사이트 리포트 기능)                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 배경
 
 ### 현재 문제점
-현재 인사이트 리포트는 단일 API 호출 한 번에 아래를 모두 수행한다:
-```
-실거래가 수집 → 뉴스/정책 수집 → LLM 분석 → 리포트 생성 → Slack 전송
-```
-이로 인해:
-- 각 데이터를 독립적으로 조회·저장·재사용할 수 없음
-- 리포트 결과가 Slack 전송 후 사라짐 (영속적 저장 없음)
-- 대시보드의 Market Monitor는 단순 테이블로 필터링·정렬 기능 부족
-- News Insights 탭은 마크다운 파일 목록만 표시하는 수준
+1. 4가지 수집 작업이 결합되어 있어, 하나라도 실패하면 전체 실패
+2. 이미 수집된 데이터가 있어도 매번 재수집 (비효율, 토큰 낭비)
+3. 수집 결과를 대시보드에서 독립적으로 조회 불가
+4. 각 Job을 개별 스케줄링 불가 (예: 실거래가는 1일 1회, 뉴스는 2회)
+5. 생성된 리포트가 Slack 전송 후 영속적으로 저장되지 않음
 
-### 목표
-각 데이터 파이프라인을 독립적으로 분리하여 **수집 → 저장 → 조회**가 각각 가능하도록 하고, 대시보드에서 통합적으로 확인할 수 있는 구조로 고도화한다.
-
-```
-[수집 단계] (독립 스케줄링 가능)
-  실거래가 수집 (MOLIT API) ─────→ ChromaDB (real_estate_transactions)
-  뉴스/정책 수집 (Naver API) ────→ 파일시스템 + ChromaDB (policy_knowledge)
-  리포트 생성 (LLM) ─────────────→ 파일시스템 (data/real_estate/reports/)
-
-[조회 단계] (대시보드)
-  Market Monitor  ← ChromaDB 조회 (50건, 날짜·동코드 필터)
-  News Insight    ← 파일 + ChromaDB 정책 팩트 조회
-  Report Archive  ← 저장된 리포트 목록·상세 조회
-```
+### 기대 효과
+- 각 Job을 n8n에서 개별 스케줄 등록 가능
+- Job 4 (리포트 생성)는 이미 저장된 데이터를 읽어 빠르게 실행 (LLM 비용 절감)
+- 대시보드에서 각 데이터를 독립 조회 가능
+- 실패 격리: 뉴스 수집 실패가 리포트 생성에 영향 없음 (저장 데이터 fallback)
 
 ---
 
-## 아키텍처 변경 계획
+## 구현 상세
 
-### Phase 1: 인사이트 리포트 저장 레이어 추가
-생성된 리포트를 `data/real_estate/reports/` 에 JSON으로 저장하고, 대시보드에서 목록·상세 조회 가능하게 한다.
+### Job 1: fetch_transactions (실거래가 수집)
 
-**변경 파일:**
-- `src/modules/real_estate/service.py` — 리포트 생성 후 파일 저장 로직 추가
-- `src/api/routers/real_estate.py` — 리포트 조회 엔드포인트 2개 추가
-- `src/dashboard/views/real_estate.py` — "📋 Report Archive" 서브탭 추가
-
-**신규 엔드포인트:**
+**API 엔드포인트 (신규):**
 ```
-GET /dashboard/real-estate/reports
-  → 저장된 리포트 목록 (날짜, 파일명)
-
-GET /dashboard/real-estate/reports/{filename}
-  → 리포트 상세 내용 (blocks JSON)
+POST /jobs/real-estate/fetch-transactions
+  Body: { "district_codes": ["11680", "41135"], "year_month": "202603" }
+  Response: { "status": "ok", "saved_count": 42 }
 ```
+
+**내부 로직:**
+- `TransactionMonitorService.get_daily_transactions()` 호출 (기존 유지)
+- ChromaDB `real_estate_transactions` 컬렉션에 upsert
+- 저장 메타데이터에 `fetched_at` 타임스탬프 추가
 
 ---
 
-### Phase 2: 실거래가 대시보드 그리드 고도화
-Market Monitor를 최대 50건, 날짜·동코드 필터 지원 그리드로 개선한다.
+### Job 2: fetch_news (뉴스/정책 수집)
 
-**변경 파일:**
-- `src/api/routers/real_estate.py` — `/dashboard/real-estate/monitor` 파라미터 확장
-- `src/dashboard/views/real_estate.py` — Market Monitor 탭 UI 개선
-
-**API 파라미터 확장:**
+**API 엔드포인트 (신규):**
 ```
-GET /dashboard/real-estate/monitor
-  기존: district_code (str), limit (int)
-  추가: date_from (str, YYYY-MM-DD), date_to (str, YYYY-MM-DD)
-  limit 상한: 10 → 50
+POST /jobs/real-estate/fetch-news
+  Body: {} (옵션: keywords)
+  Response: { "status": "ok", "news_saved": "2026-03-18_News.md", "facts_indexed": 12 }
 ```
 
-**대시보드 UI 변경:**
-- 필터 영역: 동코드, 날짜 범위(from/to), 최대 건수(10·20·30·50)
-- 그리드 컬럼: 거래일자, 아파트명, 전용면적(㎡), 층, 거래가(억), 건축연도, 동코드
-- 컬럼 정렬 가능 (Streamlit `st.dataframe` sort 활용)
-- 총 조회 건수 표시
+**내부 로직:**
+- 기존 `NewsService.generate_daily_report()` 실행 → 마크다운 저장
+- 기존 `AdvancedScraper.run_daily_scraping()` 실행 → ChromaDB 저장
+- 두 작업을 하나의 Job으로 통합
 
 ---
 
-### Phase 3: News Insight 탭 고도화
-실거래가 수집, 뉴스 수집을 각각 별도 트리거로 실행 가능하게 하고, 수집된 정책 팩트(ChromaDB)도 함께 표시한다.
+### Job 3: fetch_macro_data (금융/거시경제 수집)
 
-**변경 파일:**
-- `src/api/routers/real_estate.py` — 정책 팩트 목록 조회 엔드포인트 추가
-- `src/dashboard/views/real_estate.py` — News Insight 탭 UI 고도화
-
-**신규 엔드포인트:**
+**API 엔드포인트 (신규):**
 ```
-GET /dashboard/real-estate/policy-facts
-  params: query (str), limit (int, max 20)
-  → ChromaDB policy_knowledge 검색 결과
-
-POST /dashboard/real-estate/trigger/fetch-transactions
-  params: district_codes (List[str]), year_month (str)
-  → 실거래가 수집 실행 (비동기)
-
-POST /dashboard/real-estate/trigger/scrape-news
-  → 뉴스/정책 스크래핑 실행 (비동기)
+POST /jobs/real-estate/fetch-macro
+  Body: {}
+  Response: { "status": "ok", "saved_at": "data/real_estate/macro/2026-03-18_Macro.json" }
 ```
 
-**대시보드 UI 변경:**
-- 서브탭 구성:
-  - `📰 뉴스 리포트` — 기존 마크다운 리포트 목록·상세 (개선)
-  - `📌 정책 팩트` — ChromaDB policy_knowledge 조회 및 검색
-  - `🔄 데이터 수집` — 실거래가/뉴스 수동 트리거 버튼
+**내부 로직:**
+- 기존 `MacroService.fetch_latest_macro_data()` 실행
+- 기존 `fetch_latest_financial_policies()` 실행 (DuckDuckGo 정책 검색)
+- 결과를 `data/real_estate/macro/{YYYY-MM-DD}_Macro.json` 으로 저장
+- `MacroDataRepository` 신규 생성 (저장/로딩 담당)
 
 ---
 
-### Phase 4: 인사이트 리포트 파이프라인 분리
-`generate_insight_report()` 가 이미 저장된 데이터를 기반으로 동작하도록 리팩토링한다.
+### Job 4: generate_report (리포트 생성)
 
-**변경 파일:**
-- `src/modules/real_estate/service.py`
+**API 엔드포인트 (신규):**
+```
+POST /jobs/real-estate/generate-report
+  Body: { "target_date": "2026-03-18" }  (생략 시 오늘)
+  Response: { "status": "ok", "report_file": "2026-03-18_Report.json", "score": 82 }
+```
 
-**변경 내용:**
-- 현재: 리포트 생성 시 실시간으로 MOLIT API, 뉴스 API 직접 호출
-- 변경: ChromaDB에 저장된 당일 실거래 데이터를 우선 사용, 없으면 실시간 수집 (fallback)
-- 리포트 생성 후 `data/real_estate/reports/{YYYY-MM-DD}_Report.json` 으로 저장
+**내부 로직:**
+- ChromaDB에서 `target_date`의 실거래 데이터 로딩 (Job 1 결과)
+- 파일에서 당일 뉴스 리포트 로딩 (Job 2 결과)
+- 파일에서 당일 거시경제 데이터 로딩 (Job 3 결과)
+- 없으면 실시간 수집으로 fallback (기존 로직)
+- `InsightOrchestrator.generate_strategy()` 실행
+- 결과를 `data/real_estate/reports/{YYYY-MM-DD}_Report.json` 으로 저장
 
 ---
 
-## 데이터 모델
+### 파이프라인 Job: run_insight_pipeline
 
-### ReportSummary (신규)
+**API 엔드포인트 (신규):**
+```
+POST /jobs/real-estate/run-pipeline
+  Body: { "target_date": "2026-03-18" }
+  Response: { "status": "ok", "report_file": "...", "slack_sent": true }
+```
+
+**내부 로직 (순서):**
 ```python
-class ReportSummary(BaseModel):
-    date: str           # "YYYY-MM-DD"
-    filename: str       # "2026-03-18_Report.json"
-    score: int          # Validator 승인 점수
-    tx_count: int       # 사용된 실거래 건수
-    created_at: str     # 생성 시각
+1. fetch_transactions(district_codes, year_month)
+2. fetch_news()
+3. fetch_macro_data()
+4. generate_report(target_date)
+5. POST /notify/slack  (생성된 리포트 blocks 전송)
 ```
 
-### TransactionFilter (신규)
-```python
-class TransactionFilter(BaseModel):
-    district_code: Optional[str] = None
-    date_from: Optional[str] = None  # "YYYY-MM-DD"
-    date_to: Optional[str] = None    # "YYYY-MM-DD"
-    limit: int = 20                  # max 50
-```
+**기존 `GET /agent/real_estate/insight_report`는 이 파이프라인으로 위임:**
+- n8n 기존 워크플로우 호환 유지를 위해 기존 엔드포인트는 내부적으로 `run_insight_pipeline()` 호출
 
 ---
 
-## 구현 순서 (수행 계획)
+## 대시보드 변경
 
-| Phase | 내용 | 예상 범위 |
+### Real Estate 탭 서브탭 구성 (변경 후)
+
+```
+🏢 Real Estate
+  ├─ 📊 Market Monitor     (실거래가 그리드 - Phase 2)
+  ├─ 📰 News Insight        (뉴스/정책 - Phase 3)
+  └─ 📋 Report Archive      (생성된 리포트 목록/상세 - Phase 1)
+```
+
+### Market Monitor 개선 (Phase 2)
+- 필터: 동코드, 날짜 범위(from/to), 건수(최대 50)
+- 그리드 컬럼: 거래일자 | 아파트명 | 전용면적㎡ | 층 | 거래가(억) | 건축연도 | 동코드
+- 컬럼 정렬 가능
+
+### News Insight 개선 (Phase 3)
+서브탭 3개로 분리:
+- `📰 뉴스 리포트` — 저장된 마크다운 리포트 목록 및 상세
+- `📌 정책 팩트` — ChromaDB `policy_knowledge` 검색 및 목록
+- `🔄 데이터 수집` — Job 1~3 수동 트리거 버튼 및 실행 상태
+
+### Report Archive (Phase 1, 신규)
+- 저장된 리포트 목록 (날짜, score, 실거래 건수)
+- 선택한 리포트 상세 내용 (Slack Block Kit → 마크다운 렌더링)
+
+---
+
+## 신규 API 라우터 설계
+
+기존 `/agent/real_estate/` 와 `/dashboard/real-estate/` 외에 `/jobs/real-estate/` 네임스페이스 신규 추가.
+
+| Method | Endpoint | 역할 |
 |---|---|---|
-| Phase 1 | 리포트 저장 레이어 + 대시보드 Report Archive 탭 | 소 |
-| Phase 2 | 실거래가 그리드 고도화 (필터, 50건, 정렬) | 소~중 |
-| Phase 3 | News Insight 탭 고도화 (정책팩트, 트리거) | 중 |
-| Phase 4 | 인사이트 리포트 파이프라인 분리 (저장 데이터 우선 사용) | 중 |
+| POST | `/jobs/real-estate/fetch-transactions` | Job 1 |
+| POST | `/jobs/real-estate/fetch-news` | Job 2 |
+| POST | `/jobs/real-estate/fetch-macro` | Job 3 |
+| POST | `/jobs/real-estate/generate-report` | Job 4 |
+| POST | `/jobs/real-estate/run-pipeline` | 파이프라인 (Job 1~4 + Slack) |
+| GET | `/dashboard/real-estate/reports` | 저장된 리포트 목록 |
+| GET | `/dashboard/real-estate/reports/{filename}` | 리포트 상세 |
+| GET | `/dashboard/real-estate/policy-facts` | ChromaDB 정책 팩트 조회 |
 
 ---
 
-## SOLID 원칙 준수 계획
+## 관련 파일 변경 목록
 
-- **SRP:** 각 데이터 타입(거래, 뉴스, 리포트)별로 Repository 메서드를 독립적으로 유지
-- **OCP:** 신규 엔드포인트는 기존 라우터 수정 없이 추가
-- **DIP:** 대시보드는 API Client(`DashboardClient`)를 통해서만 백엔드에 의존
+| 파일 | 변경 유형 | 내용 |
+|---|---|---|
+| `src/api/routers/real_estate.py` | 수정 | 신규 엔드포인트 추가 |
+| `src/modules/real_estate/service.py` | 수정 | 4개 Job 메서드 분리 |
+| `src/modules/real_estate/macro/bok_service.py` | 수정 | 수집 결과 파일 저장 추가 |
+| `src/core/policy_fetcher.py` | 수정 | 수집 결과 파일 저장 추가 |
+| `src/dashboard/api_client.py` | 수정 | 신규 API 메서드 추가 |
+| `src/dashboard/views/real_estate.py` | 수정 | 탭 구조 개편 및 UI 개선 |
 
 ---
 
 ## Zero Hardcoding 점검
 
-- 리포트 저장 경로: `config.yaml` 또는 `.env`의 `LOCAL_STORAGE_PATH` 활용
-- 필터 기본값(limit=20, max=50): `config.yaml`에서 관리
+- 저장 경로: `LOCAL_STORAGE_PATH` 환경변수 활용
+- district_codes 기본값: `config.yaml`의 `districts` 설정 사용
+- Job 실행 시 날짜 기본값: 실행 당일 (`date.today()`)
