@@ -227,7 +227,7 @@ def get_real_estate_news_content(filename: str, news_service: NewsService = Depe
 # ─────────────────────────────────────────────
 
 class JobFetchTransactionsRequest(BaseModel):
-    district_code: str = Field("11680", description="법정동 코드")
+    district_code: Optional[str] = Field(None, description="법정동 코드 (미입력 시 수도권 전체 수집)")
     year_month: Optional[str] = Field(None, description="YYYYMM (기본: 현재 월)")
 
 class JobGenerateReportRequest(BaseModel):

@@ -57,7 +57,7 @@ def show_real_estate():
         with st.expander("📥 실거래가 수집", expanded=False):
             c1, c2, c3 = st.columns([2, 2, 1])
             with c1:
-                collect_district = st.text_input("동코드", value="11680", key="collect_district")
+                collect_district = st.text_input("동코드 (비워두면 수도권 전체)", value="", placeholder="예: 11680", key="collect_district")
             with c2:
                 collect_ym = st.text_input("년월 YYYYMM (빈값=현재월)", value="", key="collect_ym")
             with c3:
@@ -66,14 +66,16 @@ def show_real_estate():
                 collect_btn = st.button("📥 수집", use_container_width=True, key="collect_tx_btn")
 
             if collect_btn:
-                with st.spinner("실거래가 수집 중..."):
+                msg = f"{collect_district} 수집 중..." if collect_district else "수도권 전체 수집 중... (수분 소요)"
+                with st.spinner(msg):
                     r = DashboardClient.trigger_fetch_transactions(
-                        collect_district, collect_ym if collect_ym else None
+                        collect_district if collect_district else None,
+                        collect_ym if collect_ym else None
                     )
                 if "error" in r:
                     st.error(r["error"])
                 else:
-                    st.success(f"✅ 수집 {r.get('fetched_count', 0)}건 / 저장 {r.get('saved_count', 0)}건")
+                    st.success(f"✅ {r.get('district_count', 1)}개 지구 | 수집 {r.get('fetched_count', 0)}건 / 저장 {r.get('saved_count', 0)}건")
                     st.session_state.pop("tx_df", None)
 
         # 필터 영역

@@ -152,26 +152,54 @@ class RealEstateAgent:
     # Job Methods (independently callable)
     # ─────────────────────────────────────────────
 
-    def fetch_transactions(self, district_code: str, year_month: Optional[str] = None) -> Dict[str, Any]:
-        """Job 1: Fetch transactions from external API and save to ChromaDB."""
+    def fetch_transactions(self, district_code: Optional[str] = None, year_month: Optional[str] = None) -> Dict[str, Any]:
+        """Job 1: Fetch transactions from external API and save to ChromaDB.
+
+        district_code=None → config.yaml의 전체 지구(수도권) 순회
+        district_code 지정 → 해당 지구만 수집
+        """
         from .monitor.service import TransactionMonitorService
         monitor_service = TransactionMonitorService()
         target_ym = year_month or datetime.now().strftime("%Y%m")
-        logger.info(f"[Job1] Fetching transactions: {district_code}, {target_ym}")
 
-        transactions = monitor_service.get_daily_transactions(district_code, target_ym)
-        if not transactions:
-            return {"fetched_count": 0, "saved_count": 0}
+        # 수집 대상 지구 결정
+        if district_code:
+            targets = [{"code": district_code, "name": district_code}]
+        else:
+            targets = self.config.get("districts", [])
+            logger.info(f"[Job1] 전체 수도권 수집 모드: {len(targets)}개 지구, {target_ym}")
 
-        saved_count = 0
-        for tx in transactions:
+        total_fetched = 0
+        total_saved = 0
+        results = []
+
+        for district in targets:
+            code = district["code"]
+            name = district.get("name", code)
             try:
-                self.repository.save_transaction(tx)
-                saved_count += 1
+                transactions = monitor_service.get_daily_transactions(code, target_ym)
+                saved = 0
+                for tx in transactions:
+                    try:
+                        self.repository.save_transaction(tx)
+                        saved += 1
+                    except Exception as e:
+                        logger.error(f"[Job1] Save failed {name} {tx.apt_name}: {e}")
+                total_fetched += len(transactions)
+                total_saved += saved
+                if transactions:
+                    results.append({"district": name, "fetched": len(transactions), "saved": saved})
+                    logger.info(f"[Job1] {name}({code}): {len(transactions)}건 수집, {saved}건 저장")
             except Exception as e:
-                logger.error(f"[Job1] Save failed for {tx.apt_name}: {e}")
+                logger.error(f"[Job1] Failed for {name}({code}): {e}")
 
-        return {"fetched_count": len(transactions), "saved_count": saved_count, "district_code": district_code, "year_month": target_ym}
+        return {
+            "fetched_count": total_fetched,
+            "saved_count": total_saved,
+            "district_count": len(targets),
+            "year_month": target_ym,
+            "details": results
+        }
 
     def fetch_news(self) -> Dict[str, Any]:
         """Job 2: Fetch & analyze news, save daily markdown report."""
