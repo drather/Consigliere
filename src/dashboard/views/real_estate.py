@@ -1,10 +1,7 @@
 import streamlit as st
 import pandas as pd
-import sys
-import os
 from datetime import date, timedelta
 
-# Import API Client
 try:
     from dashboard.api_client import DashboardClient
 except ImportError:
@@ -12,7 +9,6 @@ except ImportError:
 
 
 def _render_tx_dataframe(df: pd.DataFrame):
-    """실거래가 DataFrame을 포맷해서 표시한다."""
     if "price" in df.columns:
         df["거래가(억)"] = (df["price"] / 100_000_000).round(2)
     col_map = {
@@ -25,8 +21,7 @@ def _render_tx_dataframe(df: pd.DataFrame):
     }
     display_cols = ["deal_date", "apt_name", "거래가(억)", "floor", "exclusive_area", "build_year", "district_code"]
     available = [c for c in display_cols if c in df.columns]
-    display_df = df[available].rename(columns=col_map)
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
+    st.dataframe(df[available].rename(columns=col_map), use_container_width=True, hide_index=True)
 
 
 def show_real_estate():
@@ -34,43 +29,59 @@ def show_real_estate():
 
     tab1, tab2, tab3 = st.tabs(["📊 Market Monitor", "📰 News Insights", "📋 Report Archive"])
 
-    # --- TAB 1: Market Monitor ---
+    # ──────────────────────────────────────────────────────────
+    # TAB 1: Market Monitor
+    # ──────────────────────────────────────────────────────────
     with tab1:
         st.subheader("실거래가 조회")
 
+        # 수집 영역
+        with st.expander("📥 실거래가 수집", expanded=False):
+            c1, c2, c3 = st.columns([2, 2, 1])
+            with c1:
+                collect_district = st.text_input("동코드", value="11680", key="collect_district")
+            with c2:
+                collect_ym = st.text_input("년월 YYYYMM (빈값=현재월)", value="", key="collect_ym")
+            with c3:
+                st.write("")
+                st.write("")
+                collect_btn = st.button("📥 수집", use_container_width=True, key="collect_tx_btn")
+
+            if collect_btn:
+                with st.spinner("실거래가 수집 중..."):
+                    r = DashboardClient.trigger_fetch_transactions(
+                        collect_district, collect_ym if collect_ym else None
+                    )
+                if "error" in r:
+                    st.error(r["error"])
+                else:
+                    st.success(f"✅ 수집 {r.get('fetched_count', 0)}건 / 저장 {r.get('saved_count', 0)}건")
+                    st.session_state.pop("tx_df", None)
+
         # 필터 영역
-        with st.expander("🔍 필터", expanded=True):
+        with st.expander("🔍 조회 필터", expanded=True):
             col1, col2 = st.columns(2)
             with col1:
-                district_code = st.text_input("동코드 (예: 11680)", value="", placeholder="비워두면 전체")
+                district_code = st.text_input("동코드", value="", placeholder="비워두면 전체", key="filter_district")
             with col2:
                 apt_name_filter = st.text_input("아파트명 (부분 검색)", value="", placeholder="예: 래미안")
 
             col3, col4, col5 = st.columns(3)
             with col3:
-                date_from_val = st.date_input(
-                    "조회 시작일",
-                    value=date.today() - timedelta(days=90),
-                    format="YYYY-MM-DD"
-                )
+                date_from_val = st.date_input("시작일", value=date.today() - timedelta(days=90), format="YYYY-MM-DD")
             with col4:
-                date_to_val = st.date_input(
-                    "조회 종료일",
-                    value=date.today(),
-                    format="YYYY-MM-DD"
-                )
+                date_to_val = st.date_input("종료일", value=date.today(), format="YYYY-MM-DD")
             with col5:
                 limit = st.selectbox("최대 건수", [10, 20, 30, 50], index=1)
 
         filter_btn = st.button("🔎 필터 적용", type="primary")
 
-        # 초기 로드 또는 필터 적용 시 데이터 조회
         if "tx_df" not in st.session_state:
             with st.spinner("최신 실거래가 로딩 중..."):
                 st.session_state.tx_df = DashboardClient.get_real_estate_transactions(limit=20)
 
         if filter_btn:
-            with st.spinner("ChromaDB에서 조회 중..."):
+            with st.spinner("조회 중..."):
                 st.session_state.tx_df = DashboardClient.get_real_estate_transactions(
                     district_code=district_code if district_code else None,
                     apt_name=apt_name_filter if apt_name_filter else None,
@@ -81,22 +92,38 @@ def show_real_estate():
 
         df = st.session_state.tx_df
         if df.empty:
-            st.info("조회 결과가 없습니다. 필터 조건을 확인하거나 '🔄 데이터 수집' 탭에서 실거래가를 수집하세요.")
+            st.info("조회 결과가 없습니다. 위 '📥 실거래가 수집'을 먼저 실행하세요.")
         else:
             st.caption(f"총 **{len(df)}건** 표시 중")
             _render_tx_dataframe(df)
 
-    # --- TAB 2: News Insights ---
+    # ──────────────────────────────────────────────────────────
+    # TAB 2: News Insights (서브탭 2개)
+    # ──────────────────────────────────────────────────────────
     with tab2:
-        news_tab1, news_tab2, news_tab3 = st.tabs(["📰 뉴스 리포트", "📌 정책 팩트", "🔄 데이터 수집"])
+        news_tab1, news_tab2 = st.tabs(["📰 뉴스 리포트", "📌 정책 팩트"])
 
-        # ── 서브탭 1: 뉴스 리포트 ──────────────────────────
+        # ── 뉴스 리포트 ──
         with news_tab1:
             st.subheader("일별 뉴스 분석 리포트")
+
+            # 수집 버튼
+            with st.expander("📥 뉴스 수집", expanded=False):
+                st.caption("오늘 날짜 기준으로 부동산 뉴스를 수집·분석해 마크다운 리포트를 저장합니다. (30초~1분 소요)")
+                if st.button("📥 뉴스 수집 실행", key="fetch_news_btn"):
+                    with st.spinner("뉴스 수집 및 LLM 분석 중..."):
+                        r = DashboardClient.trigger_fetch_news()
+                    if "error" in r:
+                        st.error(r["error"])
+                    else:
+                        st.success(f"✅ {r.get('report_date', '')} 뉴스 리포트 생성 완료")
+                        st.rerun()
+
+            st.markdown("---")
+
             report_files = DashboardClient.list_news_reports()
             if not report_files:
-                st.warning("생성된 뉴스 리포트가 없습니다.")
-                st.info("'🔄 데이터 수집' 탭에서 뉴스 수집을 실행하세요.")
+                st.warning("생성된 뉴스 리포트가 없습니다. 위 '📥 뉴스 수집'을 먼저 실행하세요.")
             else:
                 selected_file = st.selectbox("리포트 날짜 선택", report_files)
                 if selected_file:
@@ -105,10 +132,24 @@ def show_real_estate():
                     st.markdown("---")
                     st.markdown(content)
 
-        # ── 서브탭 2: 정책 팩트 ──────────────────────────
+        # ── 정책 팩트 ──
         with news_tab2:
             st.subheader("정책·개발 팩트 검색")
-            st.caption("ChromaDB에 저장된 정책/개발 팩트를 의미 기반으로 검색합니다. 데이터가 없으면 '🔄 데이터 수집' 탭에서 정책 팩트 수집을 먼저 실행하세요.")
+
+            # 수집 버튼
+            with st.expander("📥 정책 팩트 수집", expanded=False):
+                st.caption("뉴스를 크롤링해 확정된 정책·개발 사실(Hard Facts)을 LLM으로 추출하고 ChromaDB에 저장합니다. (1~2분 소요)")
+                if st.button("📥 정책 팩트 수집 실행", key="fetch_policy_btn"):
+                    with st.spinner("크롤링 및 팩트 추출 중..."):
+                        r = DashboardClient.trigger_update_policy()
+                    if "error" in r:
+                        st.error(r["error"])
+                    else:
+                        st.success(f"✅ 팩트 {r.get('indexed_facts', 0)}건 저장 완료")
+                        st.session_state.pop("policy_facts", None)
+                        st.rerun()
+
+            st.markdown("---")
 
             col_q, col_n, col_btn = st.columns([3, 1, 1])
             with col_q:
@@ -118,10 +159,8 @@ def show_real_estate():
             with col_btn:
                 policy_search_btn = st.button("🔍 검색", key="policy_search", use_container_width=True)
 
-            # 초기 로드
             if "policy_facts" not in st.session_state:
-                facts_init = DashboardClient.search_policy_facts("부동산 정책 공급 개발", 10)
-                st.session_state.policy_facts = facts_init
+                st.session_state.policy_facts = DashboardClient.search_policy_facts("부동산 정책 공급 개발", 10)
 
             if policy_search_btn:
                 with st.spinner("ChromaDB 검색 중..."):
@@ -130,7 +169,7 @@ def show_real_estate():
             facts = st.session_state.policy_facts
             if not facts:
                 st.warning("저장된 정책 팩트가 없습니다.")
-                st.info("👉 '🔄 데이터 수집' 탭 → **'정책 팩트 수집'** 버튼을 실행하세요. (LLM 분석 포함, 1~2분 소요)")
+                st.info("위 '📥 정책 팩트 수집'을 먼저 실행하세요.")
             else:
                 st.success(f"**{len(facts)}건** 검색됨")
                 for fact in facts:
@@ -140,145 +179,102 @@ def show_real_estate():
                         st.caption(f"분류: {meta.get('category', '-')} | 출처: {meta.get('source', '-')} | 날짜: {meta.get('date', '-')}")
                         st.markdown(fact.get("content", ""))
 
-        # ── 서브탭 3: 데이터 수집 ──────────────────────────
-        with news_tab3:
-            st.subheader("데이터 수집 Job 수동 실행")
-            st.caption("각 Job은 독립적으로 실행 가능합니다. 전체 파이프라인은 Job 1~4를 순서대로 실행합니다.")
+    # ──────────────────────────────────────────────────────────
+    # TAB 3: Report Archive
+    # ──────────────────────────────────────────────────────────
+    with tab3:
+        st.subheader("인사이트 리포트")
 
-            col_dc, col_ym = st.columns(2)
-            with col_dc:
-                job_district = st.text_input("동코드 (Job1·Job4)", value="11680")
-            with col_ym:
-                job_ym = st.text_input("년월 YYYYMM (Job1, 빈값=현재월)", value="")
+        # 리포트 생성 영역
+        with st.expander("⚙️ 리포트 생성", expanded=False):
+            rc1, rc2 = st.columns(2)
+            with rc1:
+                report_district = st.text_input("동코드", value="11680", key="report_district")
 
-            st.markdown("---")
+            st.caption("거시경제 지표를 먼저 수집한 뒤 리포트를 생성하면 저장된 데이터를 활용합니다.")
+            mc1, mc2, mc3 = st.columns(3)
 
-            col1, col2, col3, col4, col5 = st.columns(5)
-
-            with col1:
-                if st.button("1️⃣ 실거래가 수집", use_container_width=True):
-                    with st.spinner("실거래가 수집 중..."):
-                        r = DashboardClient.trigger_fetch_transactions(
-                            job_district, job_ym if job_ym else None
-                        )
-                    if "error" in r:
-                        st.error(r["error"])
-                    else:
-                        st.success(f"✅ 수집 {r.get('fetched_count',0)}건 / 저장 {r.get('saved_count',0)}건")
-                        st.session_state.pop("tx_df", None)  # 캐시 초기화
-
-            with col2:
-                if st.button("2️⃣ 뉴스 수집", use_container_width=True):
-                    with st.spinner("뉴스 수집·분석 중... (30초~1분 소요)"):
-                        r = DashboardClient.trigger_fetch_news()
-                    if "error" in r:
-                        st.error(r["error"])
-                    else:
-                        st.success(f"✅ {r.get('report_date','')} 리포트 생성 완료")
-
-            with col3:
-                if st.button("3️⃣ 거시경제 수집", use_container_width=True):
+            with mc1:
+                if st.button("📈 거시경제 수집", use_container_width=True):
                     with st.spinner("한국은행 API 조회 중..."):
                         r = DashboardClient.trigger_fetch_macro()
                     if "error" in r:
                         st.error(r["error"])
                     else:
                         macro = r.get("macro", {})
-                        br = macro.get("base_rate") or {}
-                        lr = macro.get("loan_rate") or {}
-                        st.success(f"✅ 기준금리 {br.get('value','-')}% | 주담대 {lr.get('value','-')}%")
-                        st.caption(f"📊 출처: 한국은행 ECOS API | 기준: 예금은행 가중평균금리(신규취급액) | 기준월: {lr.get('date','-')} | ⚠️ 시중은행 실제 금리와 차이 있을 수 있음")
+                        br = (macro.get("base_rate") or {})
+                        lr = (macro.get("loan_rate") or {})
+                        st.success(f"✅ 기준금리 {br.get('value', '-')}% | 주담대 {lr.get('value', '-')}%")
+                        st.caption(f"출처: 한국은행 ECOS | 예금은행 가중평균금리(신규취급액) | 기준월: {lr.get('date', '-')} | ⚠️ 시중은행 실제 금리와 차이 있음")
 
-            with col4:
-                if st.button("📌 정책 팩트 수집", use_container_width=True):
-                    with st.spinner("뉴스 크롤링 + LLM 팩트 추출 중... (1~2분 소요)"):
-                        r = DashboardClient.trigger_update_policy()
-                    if "error" in r:
-                        st.error(r["error"])
-                    else:
-                        st.success(f"✅ 팩트 {r.get('indexed_facts', 0)}건 ChromaDB 저장 완료")
-                        st.session_state.pop("policy_facts", None)  # 캐시 초기화
-
-            with col5:
-                if st.button("4️⃣ 리포트 생성", use_container_width=True):
+            with mc2:
+                if st.button("📊 리포트 생성", use_container_width=True):
                     with st.spinner("인사이트 리포트 생성 중... (1~3분 소요)"):
-                        r = DashboardClient.trigger_generate_report(job_district)
+                        r = DashboardClient.trigger_generate_report(report_district)
                     if "error" in r:
                         st.error(r["error"])
                     else:
-                        st.success(f"✅ 점수 {r.get('score',0)}점 | 실거래 {r.get('tx_count',0)}건")
+                        st.success(f"✅ 점수 {r.get('score', 0)}점 | 실거래 {r.get('tx_count', 0)}건")
+                        st.rerun()
 
-            st.markdown("---")
-            st.markdown("**전체 파이프라인 (Job 1→2→3→4 + Slack)**")
-            send_slack = st.checkbox("Slack 전송", value=True)
-            if st.button("🚀 파이프라인 실행", type="primary", use_container_width=True):
-                with st.spinner("파이프라인 실행 중... (최대 5분 소요)"):
-                    r = DashboardClient.trigger_run_pipeline(job_district, send_slack=send_slack)
-                if "error" in r:
-                    st.error(r["error"])
-                else:
-                    pipeline = r.get("pipeline", {})
-                    j4 = pipeline.get("job4", {})
-                    slack_status = pipeline.get("slack", "미전송")
-                    st.success(f"✅ 파이프라인 완료 | 점수 {j4.get('score',0)}점 | Slack: {slack_status}")
-                    with st.expander("상세 결과"):
-                        st.json(pipeline)
+            with mc3:
+                send_slack = st.checkbox("Slack 전송", value=True, key="pipeline_slack")
+                if st.button("🚀 전체 파이프라인", use_container_width=True, type="primary"):
+                    with st.spinner("파이프라인 실행 중... (최대 5분 소요)"):
+                        r = DashboardClient.trigger_run_pipeline(report_district, send_slack=send_slack)
+                    if "error" in r:
+                        st.error(r["error"])
+                    else:
+                        pipeline = r.get("pipeline", {})
+                        j4 = pipeline.get("job4", {})
+                        st.success(f"✅ 완료 | 점수 {j4.get('score', 0)}점 | Slack: {pipeline.get('slack', '미전송')}")
+                        with st.expander("상세 결과"):
+                            st.json(pipeline)
+                        st.rerun()
 
-    # --- TAB 3: Report Archive ---
-    with tab3:
-        st.subheader("Insight Report Archive")
+        st.markdown("---")
 
+        # 리포트 목록
         reports = DashboardClient.list_insight_reports()
-
         if not reports:
             st.warning("저장된 인사이트 리포트가 없습니다.")
-            st.info("부동산 인사이트 리포트를 실행하면 자동으로 저장됩니다.")
+            st.info("위 '⚙️ 리포트 생성'을 실행하면 자동으로 저장됩니다.")
         else:
-            # 목록 테이블
             df_reports = pd.DataFrame(reports)
             df_reports["score_label"] = df_reports["score"].apply(
                 lambda s: f"{'🟢' if s >= 80 else '🟡' if s >= 60 else '🔴'} {s}점"
             )
             st.dataframe(
                 df_reports[["date", "score_label", "tx_count", "created_at"]].rename(columns={
-                    "date": "날짜",
-                    "score_label": "검증 점수",
-                    "tx_count": "실거래 건수",
-                    "created_at": "생성 시각"
+                    "date": "날짜", "score_label": "검증 점수", "tx_count": "실거래 건수", "created_at": "생성 시각"
                 }),
                 use_container_width=True,
-                hide_index=True
+                hide_index=True,
             )
 
             st.markdown("---")
 
-            # 상세 조회
             filenames = [r["filename"] for r in reports]
             labels = [f"{r['date']} (Score {r['score']})" for r in reports]
             selected_idx = st.selectbox("리포트 선택", range(len(labels)), format_func=lambda i: labels[i])
-            selected_filename = filenames[selected_idx]
 
             if st.button("📄 리포트 보기"):
-                with st.spinner("Loading report..."):
-                    report = DashboardClient.get_insight_report(selected_filename)
-
+                with st.spinner("로딩 중..."):
+                    report = DashboardClient.get_insight_report(filenames[selected_idx])
                 if not report:
                     st.error("리포트를 불러올 수 없습니다.")
                 else:
                     st.markdown(f"### 📋 {report.get('date')} 인사이트 리포트")
                     st.caption(f"검증 점수: {report.get('score')}점 | 실거래 건수: {report.get('tx_count')}건 | 생성: {report.get('created_at', '')[:19]}")
                     st.markdown("---")
-
-                    # Slack Block Kit blocks → Markdown 렌더링
                     for block in report.get("blocks", []):
-                        block_type = block.get("type")
-                        if block_type == "header":
+                        btype = block.get("type")
+                        if btype == "header":
                             st.markdown(f"## {block.get('text', {}).get('text', '')}")
-                        elif block_type == "section":
-                            text = block.get("text", {}).get("text", "")
-                            st.markdown(text)
-                        elif block_type == "context":
+                        elif btype == "section":
+                            st.markdown(block.get("text", {}).get("text", ""))
+                        elif btype == "context":
                             for elem in block.get("elements", []):
                                 st.caption(elem.get("text", ""))
-                        elif block_type == "divider":
+                        elif btype == "divider":
                             st.markdown("---")
