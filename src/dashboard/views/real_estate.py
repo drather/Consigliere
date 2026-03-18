@@ -26,18 +26,29 @@ def _mrkdwn_to_md(text: str) -> str:
     return '\n'.join(converted)
 
 
-def _render_tx_dataframe(df: pd.DataFrame):
+def _render_tx_dataframe(df: pd.DataFrame, code_to_name: Dict[str, str] = None):
     if "price" in df.columns:
         df["거래가(억)"] = (df["price"] / 100_000_000).round(2)
-    col_map = {
-        "deal_date": "거래일자",
-        "apt_name": "아파트명",
-        "exclusive_area": "전용면적(㎡)",
-        "floor": "층",
-        "build_year": "건축연도",
-        "district_code": "동코드",
-    }
-    display_cols = ["deal_date", "apt_name", "거래가(억)", "floor", "exclusive_area", "build_year", "district_code"]
+    if code_to_name and "district_code" in df.columns:
+        df["구/시"] = df["district_code"].map(lambda c: code_to_name.get(str(c), str(c)))
+        display_cols = ["deal_date", "apt_name", "거래가(억)", "floor", "exclusive_area", "build_year", "구/시"]
+        col_map = {
+            "deal_date": "거래일자",
+            "apt_name": "아파트명",
+            "exclusive_area": "전용면적(㎡)",
+            "floor": "층",
+            "build_year": "건축연도",
+        }
+    else:
+        display_cols = ["deal_date", "apt_name", "거래가(억)", "floor", "exclusive_area", "build_year", "district_code"]
+        col_map = {
+            "deal_date": "거래일자",
+            "apt_name": "아파트명",
+            "exclusive_area": "전용면적(㎡)",
+            "floor": "층",
+            "build_year": "건축연도",
+            "district_code": "동코드",
+        }
     available = [c for c in display_cols if c in df.columns]
     st.dataframe(df[available].rename(columns=col_map), use_container_width=True, hide_index=True)
 
@@ -57,7 +68,12 @@ def show_real_estate():
         with st.expander("📥 실거래가 수집", expanded=False):
             c1, c2, c3 = st.columns([2, 2, 1])
             with c1:
-                collect_district = st.text_input("동코드 (비워두면 수도권 전체)", value="", placeholder="예: 11680", key="collect_district")
+                if not st.session_state.get("districts"):
+                    st.session_state.districts = DashboardClient.get_districts()
+                _collect_options = {d["name"]: d["code"] for d in st.session_state.get("districts", [])}
+                _collect_names = ["수도권 전체"] + list(_collect_options.keys())
+                _collect_sel = st.selectbox("수집 시/구 (기본: 수도권 전체)", _collect_names, index=0, key="collect_district_name")
+                collect_district = _collect_options.get(_collect_sel) if _collect_sel != "수도권 전체" else None
             with c2:
                 collect_ym = st.text_input("년월 YYYYMM (빈값=현재월)", value="", key="collect_ym")
             with c3:
@@ -66,7 +82,7 @@ def show_real_estate():
                 collect_btn = st.button("📥 수집", use_container_width=True, key="collect_tx_btn")
 
             if collect_btn:
-                msg = f"{collect_district} 수집 중..." if collect_district else "수도권 전체 수집 중... (수분 소요)"
+                msg = f"{_collect_sel} 수집 중..." if collect_district else "수도권 전체 수집 중... (수분 소요)"
                 with st.spinner(msg):
                     r = DashboardClient.trigger_fetch_transactions(
                         collect_district if collect_district else None,
@@ -78,11 +94,32 @@ def show_real_estate():
                     st.success(f"✅ {r.get('district_count', 1)}개 지구 | 수집 {r.get('fetched_count', 0)}건 / 저장 {r.get('saved_count', 0)}건")
                     st.session_state.pop("tx_df", None)
 
+        # 시/구 목록 캐싱 (빈 결과는 캐싱하지 않고 재시도)
+        if not st.session_state.get("districts"):
+            st.session_state.districts = DashboardClient.get_districts()
+        district_options = {d["name"]: d["code"] for d in st.session_state.get("districts", [])}
+        district_names = ["전체"] + list(district_options.keys())
+
+        # 금액 슬라이더-입력 동기화 초기화
+        for k, v in [("_pmin", 0), ("_pmax", 200)]:
+            if k not in st.session_state:
+                st.session_state[k] = v
+
+        def _sync_slider():
+            st.session_state._pmin, st.session_state._pmax = st.session_state._price_slider
+
+        def _sync_from_min():
+            st.session_state._pmin = min(st.session_state._pmin_input, st.session_state._pmax)
+
+        def _sync_from_max():
+            st.session_state._pmax = max(st.session_state._pmax_input, st.session_state._pmin)
+
         # 필터 영역
         with st.expander("🔍 조회 필터", expanded=True):
             col1, col2 = st.columns(2)
             with col1:
-                district_code = st.text_input("동코드", value="", placeholder="비워두면 전체", key="filter_district")
+                selected_name = st.selectbox("시/구 선택", district_names, index=0, key="filter_district_name")
+                district_code = district_options.get(selected_name) if selected_name != "전체" else None
             with col2:
                 apt_name_filter = st.text_input("아파트명 (부분 검색)", value="", placeholder="예: 래미안")
 
@@ -92,30 +129,73 @@ def show_real_estate():
             with col4:
                 date_to_val = st.date_input("종료일", value=date.today(), format="YYYY-MM-DD")
             with col5:
-                limit = st.selectbox("최대 건수", [10, 20, 30, 50], index=1)
+                page_size = st.selectbox("페이지당 건수", [10, 20, 30, 50], index=1)
+
+            # 금액 필터: 입력값 ↔ 슬라이더 양방향 동기화
+            st.caption("거래금액 범위 (억원) — 직접 입력하거나 슬라이더로 조정")
+            ci1, ci2, ci3 = st.columns([1, 4, 1])
+            with ci1:
+                st.number_input("최소", 0, 200, value=st.session_state._pmin,
+                                key="_pmin_input", on_change=_sync_from_min, step=1, label_visibility="visible")
+            with ci2:
+                st.slider("", 0, 200, value=(st.session_state._pmin, st.session_state._pmax),
+                          key="_price_slider", on_change=_sync_slider, format="%d억",
+                          label_visibility="collapsed")
+            with ci3:
+                st.number_input("최대", 0, 200, value=st.session_state._pmax,
+                                key="_pmax_input", on_change=_sync_from_max, step=1, label_visibility="visible")
+
+            price_min_krw = st.session_state._pmin * 100_000_000 if st.session_state._pmin > 0 else None
+            price_max_krw = st.session_state._pmax * 100_000_000 if st.session_state._pmax < 200 else None
 
         filter_btn = st.button("🔎 필터 적용", type="primary")
 
         if "tx_df" not in st.session_state:
             with st.spinner("최신 실거래가 로딩 중..."):
-                st.session_state.tx_df = DashboardClient.get_real_estate_transactions(limit=20)
+                st.session_state.tx_df = DashboardClient.get_real_estate_transactions(limit=500)
+            st.session_state.tx_page = 0
 
         if filter_btn:
             with st.spinner("조회 중..."):
                 st.session_state.tx_df = DashboardClient.get_real_estate_transactions(
-                    district_code=district_code if district_code else None,
+                    district_code=district_code,
                     apt_name=apt_name_filter if apt_name_filter else None,
                     date_from=date_from_val.strftime("%Y-%m-%d"),
                     date_to=date_to_val.strftime("%Y-%m-%d"),
-                    limit=limit,
+                    price_min=price_min_krw,
+                    price_max=price_max_krw,
+                    limit=500,
                 )
+            st.session_state.tx_page = 0
 
         df = st.session_state.tx_df
         if df.empty:
             st.info("조회 결과가 없습니다. 위 '📥 실거래가 수집'을 먼저 실행하세요.")
         else:
-            st.caption(f"총 **{len(df)}건** 표시 중")
-            _render_tx_dataframe(df)
+            total = len(df)
+            total_pages = max(1, -(-total // page_size))  # ceiling division
+            page = st.session_state.get("tx_page", 0)
+            page = max(0, min(page, total_pages - 1))
+
+            code_to_name = {d["code"]: d["name"] for d in st.session_state.get("districts", [])}
+            page_df = df.iloc[page * page_size: (page + 1) * page_size]
+            _render_tx_dataframe(page_df.copy(), code_to_name)
+
+            # 페이지 네비게이션
+            nav1, nav2, nav3 = st.columns([1, 3, 1])
+            with nav1:
+                if st.button("◀ 이전", disabled=(page == 0), use_container_width=True):
+                    st.session_state.tx_page = page - 1
+                    st.rerun()
+            with nav2:
+                st.markdown(
+                    f"<div style='text-align:center;padding-top:6px'>총 <b>{total}건</b> · {page+1} / {total_pages} 페이지</div>",
+                    unsafe_allow_html=True
+                )
+            with nav3:
+                if st.button("다음 ▶", disabled=(page >= total_pages - 1), use_container_width=True):
+                    st.session_state.tx_page = page + 1
+                    st.rerun()
 
     # ──────────────────────────────────────────────────────────
     # TAB 2: Insight (서브탭 3개)

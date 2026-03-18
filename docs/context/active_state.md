@@ -1,22 +1,31 @@
 # Project Consigliere: Active State
 **Last Updated:** 2026-03-18
-**Current Active Feature:** `Feature: 데이터 파이프라인 분리 및 대시보드 고도화`
+**Current Active Feature:** 없음 (진행 중인 작업 없음)
 
 ## 📍 Current Focus
-- **Branch:** `feature/data-pipeline-dashboard-enhancement`
-- **Status:** 🟡 기획 완료, 구현 시작 전
-- **Current Objective:** 실거래가·뉴스·리포트 데이터 파이프라인 분리 및 대시보드 고도화
+- **Branch:** `master`
+- **Status:** ✅ 최근 피처 완료, 다음 작업 대기 중
 
 ## 💡 Recent Context
 - **completed:** 기본 LLM Gemini → Claude (`claude-sonnet-4-6`) 전환
-- **completed:** `ClaudeClient.generate_json` JSON 파싱 버그 2건 수정 (truncation, 경계 추출)
+- **completed:** `ClaudeClient.generate_json` JSON 파싱 버그 2건 수정 (truncation, 배열/객체 경계 추출)
 - **completed:** 토큰 최적화 (MAX_ITERATIONS 2, Validator 1024, 데이터 상한 축소)
-- **completed:** 인사이트 리포트 E2E 테스트 성공 (Score 82, Slack 전송 확인)
-- **in-progress:** 데이터 파이프라인 분리 및 대시보드 고도화 기획 완료
-  - Phase 1: 리포트 저장 레이어 + Report Archive 탭
-  - Phase 2: 실거래가 그리드 고도화 (날짜 필터, 50건, 정렬)
-  - Phase 3: News Insight 탭 고도화 (정책 팩트, 수집 트리거)
-  - Phase 4: 리포트 파이프라인 분리 (저장 데이터 우선 사용)
+- **completed:** 데이터 파이프라인 분리 및 대시보드 고도화
+  - Phase 1: Report Archive 탭 신설 (저장 리포트 목록·상세·mrkdwn 변환)
+  - Phase 2: Market Monitor 고도화 (시/구 selectbox, 아파트명 검색, 금액 범위 필터, 페이지네이션)
+  - Phase 3: 4개 독립 Job API + Insight 탭 (거시경제 차트, 뉴스, 정책 팩트)
+  - Phase 4: 수도권 71개 지구 전체 수집, n8n 4개 스케줄 워크플로우 자동화
+  - BugFix: ChromaDB 볼륨 경로 수정, LLM JSON 배열 파싱 수정
+
+## ✅ Completed Tasks (Recent)
+- [x] **Feature: 데이터 파이프라인 분리 및 대시보드 고도화** <!-- id: 34 -->
+    - 4개 독립 Job API 분리 및 `/jobs/real-estate/` 네임스페이스 신설
+    - 수도권 전체(71개 지구) 실거래가 자동 수집
+    - Market Monitor: 시/구 selectbox, 금액 슬라이더↔숫자 입력 동기화, 페이지네이션
+    - Insight 탭: 거시경제 시계열 차트, 뉴스 리포트, 정책 팩트
+    - Report Archive: 저장 리포트 목록·상세 뷰어
+    - n8n 4개 스케줄 워크플로우 등록 (05:00 실거래가·뉴스, 월1회 거시경제, 06:00 리포트+Slack)
+    - ChromaDB 볼륨 경로 버그 수정 (데이터 영속성 확보)
 - [x] **Maintenance: Update Real Estate Insight Report Schedule** <!-- id: 31 -->
     - Changed cron expression from `30 8 * * *` to `0 7 * * *` (07:00 KST).
     - Redeployed workflow and restarted Docker containers.
@@ -25,7 +34,6 @@
     - Added automatic activation logic to the deployment pipeline.
     - Cleaned up duplicate/inactive workflows from n8n environment.
     - Fixed `Header NoneType` bug in `AutomationService`.
-## ✅ Completed Tasks (Recent)
 - [x] **Maintenance: Gemini Model Update** <!-- id: 33 -->
     - Updated default Gemini model to `gemini-3.1-flash-lite-preview`.
     - Refactored `GeminiClient` to support `GEMINI_MODEL` environment variable.
@@ -41,21 +49,3 @@
     - Expanded data collection to 9+ metropolitan districts (10+ txs).
     - Integrated 2026 Financial Policy (Stress DSR Phase 3) check.
     - Resolved Slack Block Kit formatting issues (`invalid_blocks_format`).
-- [x] **Feature: Insight Report Delivery Fix** <!-- id: 28 -->
-    - Integrated `insight_report_workflow.json` into deployment script.
-    - Added data fallback notes for empty transactions.
-- [x] **Feature: Real Estate Daily Summary (Slack)** <!-- id: 26 -->
-    - Created daily summary API with data deduplication.
-    - Integrated Naver Map links and Slack Block Kit.
-    - Deployed n8n template for 08:00 KST schedule.
-- [x] **Feature: Scheduled Real Estate News (Slack)** <!-- id: 25 -->
-    - Integrated `/notify/slack` with n8n at 06:00 KST schedule.
-- [x] **Feature: Workflow Verification & Notifications (Real Estate)** <!-- id: 24 -->
-- [x] **Feature: n8n Version Upgrade (v1.72.0 -> v2.9.4)** <!-- id: 23 -->
-- [x] **Feature: n8n Workflow Organization**
-    - Created `workflows/finance/` and `workflows/real_estate/`
-    - Moved existing workflows to their domain folders
-    - Updated `docs/workflows_registry.md` with active workflows
-- [x] **Feature:** Automation Dashboard UI
-- [x] **Feature:** Workflow Automation (MCP-n8n Interface)
-- [x] **Feature:** Fix `400 Bad Request` in `scripts/deploy_workflows.py` and successfully deploy the workflows.

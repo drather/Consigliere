@@ -132,11 +132,13 @@ def get_real_estate_monitor(
     apt_name: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    price_min: Optional[int] = None,
+    price_max: Optional[int] = None,
     limit: int = 20,
     chroma_repo: ChromaRealEstateRepository = Depends(get_chroma_repo)
 ):
     try:
-        limit = min(limit, 50)
+        limit = min(limit, 500)
         where_clause = {"district_code": {"$eq": district_code}} if district_code else None
         transactions = chroma_repo.get_transactions(
             limit=limit,
@@ -144,6 +146,8 @@ def get_real_estate_monitor(
             date_from=date_from,
             date_to=date_to,
             apt_name=apt_name,
+            price_min=price_min,
+            price_max=price_max,
         )
         return transactions
     except Exception as e:
@@ -297,6 +301,13 @@ def job_run_pipeline(
     except Exception as e:
         logger.error(f"Pipeline Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/dashboard/real-estate/districts")
+def get_districts():
+    """config.yaml의 구/시 목록 반환 (이름 검색용)."""
+    from modules.real_estate.config import RealEstateConfig
+    cfg = RealEstateConfig()
+    return cfg.get("districts", [])
 
 @router.get("/dashboard/real-estate/policy-facts")
 def get_policy_facts(

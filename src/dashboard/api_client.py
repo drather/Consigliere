@@ -39,11 +39,13 @@ class DashboardClient:
         apt_name: Optional[str] = None,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
+        price_min: Optional[int] = None,
+        price_max: Optional[int] = None,
         limit: int = 20,
     ) -> pd.DataFrame:
         """Fetches transactions for the monitor tab."""
         try:
-            params: Dict = {"limit": min(limit, 50)}
+            params: Dict = {"limit": min(limit, 500)}
             if district_code:
                 params["district_code"] = district_code
             if apt_name:
@@ -52,6 +54,10 @@ class DashboardClient:
                 params["date_from"] = date_from
             if date_to:
                 params["date_to"] = date_to
+            if price_min is not None:
+                params["price_min"] = price_min
+            if price_max is not None:
+                params["price_max"] = price_max
 
             response = requests.get(f"{API_BASE_URL}/dashboard/real-estate/monitor", params=params)
             response.raise_for_status()
@@ -104,6 +110,17 @@ class DashboardClient:
         except requests.exceptions.RequestException as e:
             print(f"Error fetching report detail: {e}")
             return {}
+
+    @staticmethod
+    def get_districts() -> List[Dict]:
+        """구/시 목록 반환 [{code, name}, ...]."""
+        try:
+            response = requests.get(f"{API_BASE_URL}/dashboard/real-estate/districts")
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching districts: {e}")
+            return []
 
     @staticmethod
     def get_macro_history() -> Dict:

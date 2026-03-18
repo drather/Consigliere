@@ -2,6 +2,24 @@
 **Last Updated:** 2026-03-18
 **Status:** Active
 
+## 2026-03-18: 데이터 파이프라인 분리 및 대시보드 고도화
+- **Feature (data-pipeline-dashboard-enhancement):** 실거래가·뉴스·거시경제·리포트 파이프라인을 4개 독립 Job으로 분리하고, 수도권 전체(71개 지구) 자동 수집 및 대시보드 전면 개편.
+- **Implementation:**
+    - 4개 Job API (`/jobs/real-estate/fetch-transactions|news|macro|generate-report`) 및 파이프라인 엔드포인트 신설.
+    - `service.py` Job 메서드 분리: `fetch_transactions()` (수도권 71개 지구 순회), `fetch_news()`, `fetch_macro_data()` (JSON 파일 저장), `generate_report()` (저장 데이터 우선 사용), `run_insight_pipeline()` (Job1~4+Slack).
+    - `config.yaml` districts 9→71개 확장 (서울 25구 + 경기 38시군구 + 인천 8구).
+    - `repository.py` 필터 확장: apt_name 부분 검색, price_min/price_max 범위, limit 500.
+    - `bok_service.py`: BOK 10개월 시계열 조회 (`fetch_macro_history()`).
+    - `llm.py`: `generate_json()` 배열(`[...]`) 응답 파싱 버그 수정.
+    - `docker-compose.yml`: ChromaDB 볼륨 경로 `/chroma/chroma` → `/data` 수정 (데이터 휘발 버그).
+- **Dashboard:**
+    - Market Monitor: 시/구 selectbox (71개), 아파트명 검색, 금액 범위 슬라이더↔숫자 입력 동기화, 페이지네이션 (최대 500건).
+    - Insight 탭: 거시경제 카드+시계열 차트, 뉴스 리포트, 정책 팩트(ChromaDB 검색).
+    - Report Archive: 저장 리포트 목록+상세, mrkdwn→Markdown 변환 렌더링.
+- **Automation:** n8n 비활성 워크플로우 삭제 후 4개 스케줄 워크플로우 신규 등록 (05:00 실거래가·뉴스, 05:00 월1회 거시경제, 06:00 리포트+Slack).
+- **Verification:** 각 Job 독립 실행 확인, ChromaDB 데이터 영속성 확인, 대시보드 전 탭 E2E 확인.
+- **Documentation:** `docs/features/data-pipeline-dashboard-enhancement/` 내 spec, progress, result 완비.
+
 ## 2026-03-18: Claude LLM 전환 및 토큰 최적화
 - **Feature (claude-migration-token-optimization):** 기본 LLM을 Gemini에서 Claude(`claude-sonnet-4-6`)로 전환, JSON 파싱 버그 2건 수정, 토큰 사용량 최적화.
 - **Implementation:**
