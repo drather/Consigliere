@@ -1,7 +1,7 @@
 import os
 import requests
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from core.logger import get_logger
 from .models import MacroData, MacroIndicator
 
@@ -37,7 +37,7 @@ class BOKClient:
             dt_start = datetime.now() - timedelta(days=90)
             start_date = dt_start.strftime("%Y%m%d") if period == "D" else dt_start.strftime("%Y%m")
 
-        url = f"{self.BASE_URL}/{self.api_key}/json/kr/1/1/{stat_code}/{period}/{start_date}/{end_date}/{item_code1}/{item_code2}/{item_code3}"
+        url = f"{self.BASE_URL}/{self.api_key}/json/kr/1/10/{stat_code}/{period}/{start_date}/{end_date}/{item_code1}/{item_code2}/{item_code3}"
         
         try:
             logger.info(f"🌐 [BOKClient] Fetching: {stat_code} ({period})")
@@ -53,6 +53,32 @@ class BOKClient:
         except Exception as e:
             logger.error(f"❌ [BOKClient] Error fetching {stat_code}: {e}")
             return None
+
+    def get_statistic_series(
+        self,
+        stat_code: str,
+        item_code1: str,
+        months: int = 10,
+        item_code2: str = "?",
+        item_code3: str = "?",
+    ) -> List[Dict[str, Any]]:
+        """Fetches a monthly time series (up to 10 rows with sample key)."""
+        end_dt = datetime.now()
+        start_dt = end_dt - timedelta(days=30 * months)
+        start_date = start_dt.strftime("%Y%m")
+        end_date = end_dt.strftime("%Y%m")
+        rows = min(months, 10)  # sample key limit
+
+        url = f"{self.BASE_URL}/{self.api_key}/json/kr/1/{rows}/{stat_code}/M/{start_date}/{end_date}/{item_code1}/{item_code2}/{item_code3}"
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            return data.get("StatisticSearch", {}).get("row", [])
+        except Exception as e:
+            logger.error(f"❌ [BOKClient] Series fetch error {stat_code}: {e}")
+            return []
+
 
 class MacroService:
     def __init__(self, api_key: Optional[str] = None):
@@ -106,3 +132,26 @@ class MacroService:
             loan_rate=loan_rate,
             updated_at=datetime.now().isoformat()
         )
+
+    def fetch_macro_history(self, months: int = 10) -> Dict[str, List[Dict[str, Any]]]:
+        """Returns time series data for base_rate and loan_rate (last N months)."""
+        codes = self.config.get_bok_codes()
+
+        def parse_series(rows, name):
+            result = []
+            for r in rows:
+                try:
+                    ym = r["TIME"]  # e.g. "202503"
+                    label = f"{ym[:4]}-{ym[4:]}"
+                    result.append({"date": label, "value": float(r["DATA_VALUE"]), "name": name})
+                except Exception:
+                    continue
+            return result
+
+        base_rows = self.client.get_statistic_series(codes["base_rate"], "0101000", months)
+        loan_rows = self.client.get_statistic_series(codes["loan_rate"], "BEABAA2", months)
+
+        return {
+            "base_rate": parse_series(base_rows, "한국은행 기준금리(%)"),
+            "loan_rate": parse_series(loan_rows, "주담대금리(%)"),
+        }

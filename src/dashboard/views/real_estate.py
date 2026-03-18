@@ -2,6 +2,7 @@ import re
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
+from typing import Dict, List
 
 try:
     from dashboard.api_client import DashboardClient
@@ -44,7 +45,7 @@ def _render_tx_dataframe(df: pd.DataFrame):
 def show_real_estate():
     st.title("🏢 Real Estate Insights")
 
-    tab1, tab2, tab3 = st.tabs(["📊 Market Monitor", "📰 News Insights", "📋 Report Archive"])
+    tab1, tab2, tab3 = st.tabs(["📊 Market Monitor", "💡 Insight", "📋 Report Archive"])
 
     # ──────────────────────────────────────────────────────────
     # TAB 1: Market Monitor
@@ -115,10 +116,82 @@ def show_real_estate():
             _render_tx_dataframe(df)
 
     # ──────────────────────────────────────────────────────────
-    # TAB 2: News Insights (서브탭 2개)
+    # TAB 2: Insight (서브탭 3개)
     # ──────────────────────────────────────────────────────────
     with tab2:
-        news_tab1, news_tab2 = st.tabs(["📰 뉴스 리포트", "📌 정책 팩트"])
+        news_tab0, news_tab1, news_tab2 = st.tabs(["📈 거시경제", "📰 뉴스 리포트", "📌 정책 팩트"])
+
+        # ── 거시경제 ──────────────────────────────────────────
+        with news_tab0:
+            st.subheader("거시경제 지표")
+
+            if "macro_history" not in st.session_state:
+                with st.spinner("한국은행 지표 로딩 중..."):
+                    st.session_state.macro_history = DashboardClient.get_macro_history()
+
+            history = st.session_state.macro_history
+            base_series = history.get("base_rate", [])
+            loan_series = history.get("loan_rate", [])
+
+            # 최신값 요약 카드
+            if base_series or loan_series:
+                latest_base = base_series[-1] if base_series else {}
+                latest_loan = loan_series[-1] if loan_series else {}
+                prev_base = base_series[-2] if len(base_series) >= 2 else latest_base
+                prev_loan = loan_series[-2] if len(loan_series) >= 2 else latest_loan
+
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    delta_b = round(latest_base.get("value", 0) - prev_base.get("value", 0), 2)
+                    st.metric(
+                        "🏦 한국은행 기준금리",
+                        f"{latest_base.get('value', '-')}%",
+                        delta=f"{delta_b:+.2f}%p" if delta_b != 0 else "변동 없음",
+                        help=f"기준월: {latest_base.get('date', '-')} | 출처: 한국은행 ECOS"
+                    )
+                with c2:
+                    delta_l = round(latest_loan.get("value", 0) - prev_loan.get("value", 0), 2)
+                    st.metric(
+                        "🏠 주택담보대출 금리",
+                        f"{latest_loan.get('value', '-')}%",
+                        delta=f"{delta_l:+.2f}%p" if delta_l != 0 else "변동 없음",
+                        help=f"기준월: {latest_loan.get('date', '-')} | 예금은행 가중평균(신규취급액) | ⚠️ 시중은행 실제 금리와 다를 수 있음"
+                    )
+                with c3:
+                    st.caption("📊 데이터 출처")
+                    st.caption("한국은행 ECOS Open API")
+                    st.caption(f"기준: 예금은행 가중평균금리 (신규취급액, 월별)")
+                    st.caption("⚠️ 시중은행 광고 금리와 차이 있음")
+
+                st.markdown("---")
+
+                # 시계열 차트
+                if base_series and loan_series:
+                    # 두 시리즈를 같은 날짜 기준으로 DataFrame 생성
+                    base_map = {r["date"]: r["value"] for r in base_series}
+                    loan_map = {r["date"]: r["value"] for r in loan_series}
+                    all_dates = sorted(set(base_map) | set(loan_map))
+
+                    chart_df = pd.DataFrame({
+                        "기준금리(%)": [base_map.get(d) for d in all_dates],
+                        "주담대금리(%)": [loan_map.get(d) for d in all_dates],
+                    }, index=all_dates)
+
+                    st.markdown("**금리 추이 (최근 10개월)**")
+                    st.line_chart(chart_df, height=280)
+                    st.caption("기준금리: 한국은행 722Y001 / 주담대금리: 예금은행 가중평균 121Y002")
+                elif base_series:
+                    df_b = pd.DataFrame({"기준금리(%)": [r["value"] for r in base_series]},
+                                        index=[r["date"] for r in base_series])
+                    st.line_chart(df_b, height=280)
+
+            else:
+                st.info("거시경제 데이터를 불러올 수 없습니다.")
+                st.caption("BOK API 응답 없음 — 네트워크 확인 또는 '📋 Report Archive' 탭에서 거시경제 수집을 실행하세요.")
+
+            if st.button("🔄 새로고침", key="macro_refresh"):
+                st.session_state.pop("macro_history", None)
+                st.rerun()
 
         # ── 뉴스 리포트 ──
         with news_tab1:
@@ -192,8 +265,11 @@ def show_real_estate():
                 for fact in facts:
                     meta = fact.get("metadata", {})
                     title = meta.get("short_title") or meta.get("title") or fact.get("id", "")
-                    with st.expander(f"📌 {title}", expanded=False):
-                        st.caption(f"분류: {meta.get('category', '-')} | 출처: {meta.get('source', '-')} | 날짜: {meta.get('date', '-')}")
+                    fact_date = meta.get("date", "")
+                    category = meta.get("category", "")
+                    label = f"📌 [{fact_date}] [{category}] {title}" if fact_date else f"📌 [{category}] {title}"
+                    with st.expander(label, expanded=False):
+                        st.caption(f"출처: {meta.get('source', '-')}")
                         st.markdown(fact.get("content", ""))
 
     # ──────────────────────────────────────────────────────────

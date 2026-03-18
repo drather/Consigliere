@@ -106,6 +106,17 @@ class DashboardClient:
             return {}
 
     @staticmethod
+    def get_macro_history() -> Dict:
+        """거시경제 지표 시계열 데이터 반환."""
+        try:
+            response = requests.get(f"{API_BASE_URL}/dashboard/real-estate/macro-history")
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching macro history: {e}")
+            return {}
+
+    @staticmethod
     def trigger_update_policy() -> Dict:
         """정책 팩트 수집: AdvancedScraper → ChromaDB policy_knowledge."""
         try:

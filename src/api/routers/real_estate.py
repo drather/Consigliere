@@ -150,6 +150,15 @@ def get_real_estate_monitor(
         logger.error(f"Monitor Dashboard API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/dashboard/real-estate/macro-history")
+def get_macro_history(agent: RealEstateAgent = Depends(get_real_estate_agent)):
+    """거시경제 지표 시계열 데이터 (최근 10개월)."""
+    try:
+        return agent.macro_service.fetch_macro_history()
+    except Exception as e:
+        logger.error(f"Macro History API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/dashboard/real-estate/news")
 def list_real_estate_news(news_service: NewsService = Depends(get_news_service)):
     try:
