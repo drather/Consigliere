@@ -36,6 +36,7 @@ class DashboardClient:
     @staticmethod
     def get_real_estate_transactions(
         district_code: Optional[str] = None,
+        apt_name: Optional[str] = None,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
         limit: int = 20,
@@ -45,6 +46,8 @@ class DashboardClient:
             params: Dict = {"limit": min(limit, 50)}
             if district_code:
                 params["district_code"] = district_code
+            if apt_name:
+                params["apt_name"] = apt_name
             if date_from:
                 params["date_from"] = date_from
             if date_to:
@@ -101,6 +104,16 @@ class DashboardClient:
         except requests.exceptions.RequestException as e:
             print(f"Error fetching report detail: {e}")
             return {}
+
+    @staticmethod
+    def trigger_update_policy() -> Dict:
+        """정책 팩트 수집: AdvancedScraper → ChromaDB policy_knowledge."""
+        try:
+            response = requests.post(f"{API_BASE_URL}/agent/real_estate/news/update_policy", timeout=120)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            return {"error": str(e)}
 
     @staticmethod
     def trigger_fetch_transactions(district_code: str = "11680", year_month: Optional[str] = None) -> Dict:

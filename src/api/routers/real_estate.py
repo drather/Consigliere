@@ -129,6 +129,7 @@ def update_policy_knowledge(news_service: NewsService = Depends(get_news_service
 @router.get("/dashboard/real-estate/monitor")
 def get_real_estate_monitor(
     district_code: Optional[str] = None,
+    apt_name: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     limit: int = 20,
@@ -142,6 +143,7 @@ def get_real_estate_monitor(
             where=where_clause,
             date_from=date_from,
             date_to=date_to,
+            apt_name=apt_name,
         )
         return transactions
     except Exception as e:

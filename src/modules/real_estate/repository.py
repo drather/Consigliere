@@ -110,15 +110,15 @@ class ChromaRealEstateRepository:
         where: Optional[Dict[str, Any]] = None,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
+        apt_name: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Fetches raw transaction data (metadata) from ChromaDB.
         - ChromaDB .get()은 $eq 필터만 지원하므로 district_code 필터만 DB 레벨에서 처리
-        - date_from / date_to 범위 필터는 Python 레벨에서 후처리
+        - date_from / date_to / apt_name 필터는 Python 레벨에서 후처리
         """
         try:
-            # ChromaDB .get()은 $eq 호환 필터만 지원
-            fetch_limit = min(limit * 10, 500)  # 후처리 여유분 확보
+            fetch_limit = min(limit * 10, 500)
             results = self.collection.get(
                 limit=fetch_limit,
                 where=where,
@@ -130,11 +130,14 @@ class ChromaRealEstateRepository:
 
             metadatas = results["metadatas"]
 
-            # Python 레벨 날짜 범위 필터
+            # Python 레벨 필터
             if date_from:
                 metadatas = [m for m in metadatas if str(m.get("deal_date", "")) >= date_from]
             if date_to:
                 metadatas = [m for m in metadatas if str(m.get("deal_date", "")) <= date_to]
+            if apt_name:
+                keyword = apt_name.strip().lower()
+                metadatas = [m for m in metadatas if keyword in str(m.get("apt_name", "")).lower()]
 
             # 최신 거래일 순 정렬 후 limit 적용
             metadatas.sort(key=lambda x: str(x.get("deal_date", "")), reverse=True)
