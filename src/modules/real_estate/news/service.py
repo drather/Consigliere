@@ -1,6 +1,7 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from email.utils import parsedate_to_datetime
 from glob import glob
 from typing import List, Optional, Dict, Any
 
@@ -42,20 +43,32 @@ class NewsService:
         if not items:
             return "❌ No news found or API error."
         
-        # Convert to Domain Models
+        # Convert to Domain Models — filter to last 7 days only
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
         articles = []
         for item in items:
+            try:
+                pub_dt = parsedate_to_datetime(item['pubDate'])
+                if pub_dt.tzinfo is None:
+                    pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                if pub_dt < cutoff:
+                    continue
+            except Exception:
+                pass  # 파싱 실패 시 포함
             articles.append(NewsArticle(
                 title=item['title'].replace('<b>', '').replace('</b>', ''),
-                link=item['originallink'] or item['link'], # Use originallink if available
+                link=item['originallink'] or item['link'],
                 description=item['description'].replace('<b>', '').replace('</b>', ''),
                 pub_date=item['pubDate']
             ))
 
-        # Format news list for LLM (Text only)
+        if not articles:
+            return "❌ No recent news found (within 7 days)."
+
+        # Format news list for LLM — include pub_date so LLM can judge recency
         news_text = ""
         for i, article in enumerate(articles, 1):
-            news_text += f"{i}. {article.title}\n   - {article.description}\n"
+            news_text += f"{i}. [{article.pub_date}] {article.title}\n   - {article.description}\n"
 
         # 2. Load Historical Context (Last Report)
         history_context = self._get_last_report_summary()

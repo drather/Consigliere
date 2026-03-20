@@ -16,6 +16,7 @@ Your job is to read today's news headlines and descriptions, compare them with r
 {{ news_list }}
 
 # Instructions
+0. **Date Check:** Each article includes its publish date in brackets (e.g., `[Thu, 20 Mar 2026 ...]`). **Discard any content that refers to events or plans from before {{ today }}** — do not treat past projections (e.g., "2025년까지 공급 계획") as current news.
 1. **Analyze:** Read the provided news articles. Identify the top 3-5 major topics (e.g., "공급 확대", "대출 규제").
 2. **Summarize:** Write a 3-sentence summary of the most critical market movements today **in Korean**.
 3. **Compare (RAG):** Compare today's news with the `Historical Context`.
