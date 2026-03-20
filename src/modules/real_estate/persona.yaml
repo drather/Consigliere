@@ -16,6 +16,11 @@ user:
       partner: "서울시 송파구 삼전역 인근 (전세 자취)"
     hometown_partner: "화성시 향남읍"
     workplace: "서울시 강남구 삼성역 ~ 선릉역 인근"
+  interest_areas:
+    - "강남구"
+    - "서초구"
+    - "성남시 분당구"
+    - "송파구"
   plans:
     wedding: "2027년 이내"
     is_first_time_buyer: true # 생애최초 주택구입 여부

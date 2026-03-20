@@ -65,16 +65,26 @@ class GeminiClient(BaseLLMClient):
                     "max_output_tokens": max_tokens,
                 }),
             )
-            return json.loads(response.text)
+            raw = response.text.strip()
+            # Strip markdown fences that thinking mode may prepend
+            import re
+            raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
+            raw = re.sub(r"```\s*$", "", raw, flags=re.MULTILINE).strip()
+            # Extract outermost JSON object or array
+            obj_start, arr_start = raw.find("{"), raw.find("[")
+            if obj_start == -1 and arr_start == -1:
+                pass  # let json.loads raise
+            elif arr_start != -1 and (obj_start == -1 or arr_start < obj_start):
+                end = raw.rfind("]")
+                if end != -1:
+                    raw = raw[arr_start:end + 1]
+            else:
+                end = raw.rfind("}")
+                if end != -1:
+                    raw = raw[obj_start:end + 1]
+            return json.loads(raw)
         except Exception as e:
             logger.error(f"Gemini LLM JSON Error: {e}")
-            try:
-                import re
-                match = re.search(r"\{.*\}", str(e), re.DOTALL)
-                if match:
-                    return json.loads(match.group(0))
-            except Exception:
-                pass
             return {"error": str(e)}
 
 class ClaudeClient(BaseLLMClient):

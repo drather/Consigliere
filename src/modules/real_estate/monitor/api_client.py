@@ -53,11 +53,12 @@ class MOLITClient:
             response = requests.get(self.BASE_URL, params=params, timeout=15)
             
             # Check for API-level errors
-            # API might return '00' or '000' for success depending on version
+            # MOLIT API success codes: "0", "00", "000" depending on endpoint version
             if "<resultCode>" in response.text:
-                if "<resultCode>00</resultCode>" not in response.text and "<resultCode>000</resultCode>" not in response.text:
-                     logger.error(f"❌ [MOLIT] API Logic Error: {response.text[:300]}")
-                     return None
+                success_codes = ["<resultCode>0</resultCode>", "<resultCode>00</resultCode>", "<resultCode>000</resultCode>"]
+                if not any(code in response.text for code in success_codes):
+                    logger.error(f"❌ [MOLIT] API Logic Error: {response.text[:300]}")
+                    return None
                  
             response.raise_for_status()
             return response.text

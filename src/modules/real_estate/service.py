@@ -286,7 +286,7 @@ class RealEstateAgent:
                 if os.path.exists(filename):
                     with open(filename, "r", encoding="utf-8") as f:
                         saved = json.load(f)
-                    sender.send_blocks(saved.get("blocks", []))
+                    sender.send("📊 부동산 인사이트 리포트가 도착했습니다.", blocks=saved.get("blocks", []))
                     results["slack"] = "sent"
             except Exception as e:
                 logger.error(f"[Pipeline] Slack send failed: {e}")
