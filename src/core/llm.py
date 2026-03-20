@@ -130,7 +130,7 @@ class LLMFactory:
     """
     @staticmethod
     def create() -> BaseLLMClient:
-        provider = os.getenv("LLM_PROVIDER", "claude").lower()
+        provider = os.getenv("LLM_PROVIDER", "gemini").lower()
         if provider == "claude":
             logger.info("Initializing Claude LLM Client.")
             return ClaudeClient()
