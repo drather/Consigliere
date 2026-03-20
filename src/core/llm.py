@@ -41,13 +41,16 @@ class GeminiClient(BaseLLMClient):
             logger.error(f"Gemini LLM Error: {e}")
             return str(e)
 
-    def generate_json(self, prompt: str) -> Dict[str, Any]:
+    def generate_json(self, prompt: str, max_tokens: int = 8192) -> Dict[str, Any]:
         if not self.api_key:
             return {"error": "Missing API Key"}
         try:
             response = self.model.generate_content(
                 prompt,
-                generation_config={"response_mime_type": "application/json"}
+                generation_config={
+                    "response_mime_type": "application/json",
+                    "max_output_tokens": max_tokens,
+                }
             )
             return json.loads(response.text)
         except Exception as e:
