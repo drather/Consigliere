@@ -12,8 +12,16 @@ except ImportError:
 
 def _mrkdwn_to_md(text: str) -> str:
     """Slack mrkdwn → standard Markdown 변환."""
+    # <URL|label> → [label](URL)
+    text = re.sub(r'<(https?://[^|>]+)\|([^>]+)>', r'[\2](\1)', text)
+    # <URL> → <URL> (bare link, leave as-is for markdown)
+    text = re.sub(r'<(https?://[^>]+)>', r'\1', text)
     # *bold* → **bold** (단, **already bold** 는 건드리지 않음)
     text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'**\1**', text)
+    # _italic_ → *italic*
+    text = re.sub(r'(?<!_)_(?!_)(.+?)(?<!_)_(?!_)', r'*\1*', text)
+    # ~strikethrough~ → ~~strikethrough~~
+    text = re.sub(r'~(.+?)~', r'~~\1~~', text)
     # • 로 시작하는 줄 → - 목록 (줄바꿈 보장)
     lines = text.split('\n')
     converted = []
