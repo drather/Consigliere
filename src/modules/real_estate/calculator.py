@@ -53,8 +53,15 @@ class FinancialCalculator:
                 ltv_str = ltv_dict.get("non_regulated_area", "70%")
             
             ltv_rate = self._parse_numeric(ltv_str) or 0.7
+            if not (0.3 <= ltv_rate <= 0.9):
+                logger.warning(f"⚠️ [Calculator] Abnormal LTV rate {ltv_rate:.2f}, falling back to 0.7")
+                ltv_rate = 0.7
+
             dsr_str = policy.get("dsr", {}).get("limit", "40%")
             dsr_rate = self._parse_numeric(dsr_str) or 0.4
+            if not (0.3 <= dsr_rate <= 0.6):
+                logger.warning(f"⚠️ [Calculator] Abnormal DSR rate {dsr_rate:.4f} (parsed from '{dsr_str}'), falling back to 0.4")
+                dsr_rate = 0.4
             
             # Additional limit for first time buyers (e.g. 600M KRW cap for LTV 80%)
             first_time_loan_cap = 600_000_000
