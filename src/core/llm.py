@@ -33,8 +33,10 @@ class GeminiClient(BaseLLMClient):
 
     def _make_config(self, extra: Optional[Dict[str, Any]] = None):
         from google.genai import types
-        thinking = types.ThinkingConfig(thinking_level=self.thinking_level)
-        kwargs = {"thinking_config": thinking}
+        kwargs = {}
+        # Only attach ThinkingConfig when thinking is explicitly enabled
+        if self.thinking_level and self.thinking_level.lower() not in ("none", "off", ""):
+            kwargs["thinking_config"] = types.ThinkingConfig(thinking_level=self.thinking_level)
         if extra:
             kwargs.update(extra)
         return types.GenerateContentConfig(**kwargs)

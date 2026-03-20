@@ -1,4 +1,5 @@
 import json
+import os
 import yaml
 from datetime import datetime
 from typing import List, Dict, Any
@@ -56,20 +57,30 @@ class AdvancedScraper:
         ]
 
     def run_daily_scraping(self):
+        # Dedup: skip entirely if already scraped today
+        marker_dir = "data/real_estate/policy"
+        marker_path = os.path.join(marker_dir, ".last_scrape")
+        today = datetime.now().strftime("%Y-%m-%d")
+        if os.path.exists(marker_path):
+            with open(marker_path, "r") as f:
+                if f.read().strip() == today:
+                    logger.info(f"✅ [AdvancedScraper] Already scraped today ({today}), skipping.")
+                    return 0
+
         logger.info("🚀 [AdvancedScraper] Starting daily high-fidelity scraping...")
-        
+
         target_queries = self._generate_dynamic_queries()
         all_facts = []
         for query in target_queries:
             items = self.news_client.search_news(query, display=10)
             if not items:
                 continue
-            
+
             # Extract Facts via LLM
             logger.info(f"🧠 [AdvancedScraper] Extracting facts from query: {query}")
             facts = self._extract_facts(items)
             all_facts.extend(facts)
-            
+
         # Index into ChromaDB
         for fact in all_facts:
             policy_id = f"fact_{datetime.now().strftime('%Y%m%d')}_{hash(fact['content'])}"
@@ -82,7 +93,12 @@ class AdvancedScraper:
                 "relevance": "high"
             }
             self.repo.save_policy(policy_id, fact['content'], metadata)
-            
+
+        # Write today's marker so repeat calls are skipped
+        os.makedirs(marker_dir, exist_ok=True)
+        with open(marker_path, "w") as f:
+            f.write(today)
+
         logger.info(f"✅ [AdvancedScraper] Indexed {len(all_facts)} facts into policy_knowledge.")
         return len(all_facts)
 
