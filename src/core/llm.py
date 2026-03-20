@@ -2,7 +2,6 @@ import os
 import json
 from typing import Dict, Any, Optional
 from abc import ABC, abstractmethod
-import google.generativeai as genai
 from core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -23,19 +22,32 @@ class BaseLLMClient(ABC):
 class GeminiClient(BaseLLMClient):
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        self.model_name = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")
+        self.model_name = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+        self.thinking_level = os.getenv("GEMINI_THINKING_LEVEL", "low")
         if not self.api_key:
             logger.warning("GEMINI_API_KEY not found. Gemini LLM features will fail.")
         else:
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel(self.model_name)
-            logger.info(f"Gemini LLM Client initialized. Model: {self.model_name}")
+            from google import genai
+            self.client = genai.Client(api_key=self.api_key)
+            logger.info(f"Gemini LLM Client initialized. Model: {self.model_name}, Thinking: {self.thinking_level}")
+
+    def _make_config(self, extra: Optional[Dict[str, Any]] = None):
+        from google.genai import types
+        thinking = types.ThinkingConfig(thinking_level=self.thinking_level)
+        kwargs = {"thinking_config": thinking}
+        if extra:
+            kwargs.update(extra)
+        return types.GenerateContentConfig(**kwargs)
 
     def generate(self, prompt: str) -> str:
         if not self.api_key:
             return "[Error: Missing API Key]"
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=self._make_config(),
+            )
             return response.text
         except Exception as e:
             logger.error(f"Gemini LLM Error: {e}")
@@ -45,12 +57,13 @@ class GeminiClient(BaseLLMClient):
         if not self.api_key:
             return {"error": "Missing API Key"}
         try:
-            response = self.model.generate_content(
-                prompt,
-                generation_config={
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=self._make_config({
                     "response_mime_type": "application/json",
                     "max_output_tokens": max_tokens,
-                }
+                }),
             )
             return json.loads(response.text)
         except Exception as e:
@@ -60,7 +73,7 @@ class GeminiClient(BaseLLMClient):
                 match = re.search(r"\{.*\}", str(e), re.DOTALL)
                 if match:
                     return json.loads(match.group(0))
-            except:
+            except Exception:
                 pass
             return {"error": str(e)}
 
