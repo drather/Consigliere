@@ -90,7 +90,7 @@ class InsightOrchestrator:
                 best_score = score
                 final_report_json = report_json
 
-            if status == "PASS" or score >= 90:
+            if score >= 90:
                 logger.info(f"✅ [Orchestrator] Approved (Score: {score}).")
                 break
             else:
