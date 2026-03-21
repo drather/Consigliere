@@ -15,13 +15,27 @@
   - ThreadPoolExecutor 방식 한계 확인 → aiohttp + asyncio 전환 설계 완료
 - **blocked:** 국토부 API 일일 호출 횟수 초과 → 내일 자정 이후 해소
 
-## 🔜 내일 할 일 (2026-03-22)
-1. **Job1 aiohttp 전환** — `fix/real-estate-comprehensive-review` 브랜치에서 계속
-   - 설계 문서: `docs/features/real-estate-comprehensive-bugfix/` 참조
-   - 구현 계획: `/Users/kks/.claude/plans/zazzy-doodling-kahan.md`
-   - 수정 파일 5개: `requirements.txt`, `monitor/service.py`, `models.py`, `repository.py`, `service.py`
-2. **검증**: `docker compose up --build` → Job1 실행 → OOM/429 없이 완주 확인
-3. **완료 후**: result.md 작성, history.md 업데이트, master 머지
+## 🔜 다음 작업 로드맵
+
+### 1순위 — 내일 (2026-03-22): Job1 aiohttp 전환 (브랜치 계속)
+- **브랜치:** `fix/real-estate-comprehensive-review`
+- **설계 문서:** `docs/features/real-estate-comprehensive-bugfix/` + `/Users/kks/.claude/plans/zazzy-doodling-kahan.md`
+- **수정 파일 5개:** `requirements.txt`, `monitor/service.py`, `models.py`, `repository.py`, `service.py`
+- **핵심 변경:**
+  - aiohttp + asyncio.Semaphore(2) → OOM/429 근본 해결
+  - 3일치만 저장 (deal_date 필터)
+  - 1년 이상 ChromaDB 데이터 자동 삭제
+- **완료 조건:** OOM·429 없이 71개 구 완주, 3~5분 이내
+
+### 2순위 — Job4 부동산 전략 리포트 고도화
+- 현재 리포트 품질 개선 (점수 안정화, 예산 준수, 단지 추천 정확도)
+- 페르소나 기반 개인화 강화 (interest_areas 매핑 고도화)
+- 거시경제 + 뉴스 + 실거래 데이터 통합 인사이트 품질 향상
+
+### 3순위 — 커리어 Daily Report (신규 모듈)
+- 개인화된 커리어 관련 일일 리포트 기능
+- 구직 동향, 기술 트렌드, 채용 공고 요약 등 포함 예정
+- 설계 필요 (spec 없음)
 
 ## ✅ Completed Tasks (Recent)
 - [x] **Feature: 데이터 파이프라인 분리 및 대시보드 고도화** <!-- id: 34 -->
