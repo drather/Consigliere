@@ -83,21 +83,29 @@ class ChromaRealEstateRepository:
         return reports
 
     def save_transaction(self, transaction: "RealEstateTransaction") -> None:
-        """
-        Saves a transaction record into ChromaDB.
-        Uses the model's logic to format data.
-        """
+        """Saves a single transaction record into ChromaDB."""
         data = transaction.to_chroma_format()
-        
-        logger.info(f"💾 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Upserting transaction: {data['id']}")
-        
-        # Upsert
         self.collection.upsert(
             ids=[data["id"]],
             documents=[data["document"]],
             metadatas=[data["metadata"]]
         )
-        logger.info(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Saved txn: {transaction.apt_name}")
+
+    def save_transactions_batch(self, transactions: "List[RealEstateTransaction]") -> int:
+        """여러 거래를 단일 ChromaDB upsert로 일괄 저장. 저장 건수 반환."""
+        if not transactions:
+            return 0
+        seen, ids, documents, metadatas = set(), [], [], []
+        for tx in transactions:
+            data = tx.to_chroma_format()
+            if data["id"] in seen:
+                continue
+            seen.add(data["id"])
+            ids.append(data["id"])
+            documents.append(data["document"])
+            metadatas.append(data["metadata"])
+        self.collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
+        return len(ids)
 
     def delete(self, report_id: str) -> None:
         """Deletes a report by ID."""

@@ -47,8 +47,7 @@ class InsightOrchestrator:
         economist_insight = context_result["economist_insight"]
         analyst_insight = context_result["analyst_insight"]
 
-        # 2. Synthesize (single LLM call)
-        logger.info("🧠 [Orchestrator] Synthesizing report...")
+        # 2. Synthesize (최대 3회 재시도)
         base_variables = {
             "target_date": target_date.strftime("%Y-%m-%d"),
             "economist_insight": economist_insight,
@@ -60,10 +59,16 @@ class InsightOrchestrator:
             "fallback_note": fallback_note,
             "validator_feedback": "",
         }
-        report_json = self.synthesizer.run(base_variables)
+        report_json = {}
+        for attempt in range(1, 4):
+            logger.info(f"🧠 [Orchestrator] Synthesizing report (attempt {attempt}/3)...")
+            report_json = self.synthesizer.run(base_variables)
+            if "blocks" in report_json:
+                break
+            logger.warning(f"⚠️ [Orchestrator] Invalid structure on attempt {attempt}: {str(report_json)[:200]}")
 
         if "blocks" not in report_json:
-            logger.error("❌ [Orchestrator] Synthesizer returned invalid structure.")
+            logger.error("❌ [Orchestrator] Synthesizer failed after 3 attempts.")
             return {"blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 리포트 생성 중 오류가 발생했습니다."}}]}
 
         # 3. Rule-based validation (no LLM call)

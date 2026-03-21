@@ -25,3 +25,23 @@ user:
     wedding: "2027년 이내"
     is_first_time_buyer: true # 생애최초 주택구입 여부
     primary_goal: "실거주 및 투자 가치 동시 고려"
+
+investment_style: "투자우선형"
+investment_priorities:
+  1: "출퇴근편의성"   # 삼성역~선릉역, 도어투도어 50분 이내
+  2: "역세권"         # 도보 10분 이내 지하철역
+  3: "환금성"         # 500세대 이상 대단지, 강남권 입지
+  4: "학군"           # 대치·반포 학원가, 명문 초등
+  5: "가격상승가능성"  # 재건축 추진, GTX 호재
+  6: "실거주편의성"   # 낮은 우선순위
+
+commute:
+  max_door_to_door_minutes: 50
+  preferred_lines: [2, 9, "신분당선"]
+  tolerated_transfers: 1
+  workplace_station: "삼성역"
+
+apartment_preferences:
+  min_exclusive_area_sqm: 59
+  preferred_area_sqm: [84, 99]
+  min_household_count: 500

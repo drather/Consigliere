@@ -84,7 +84,25 @@ class GeminiClient(BaseLLMClient):
                 end = raw.rfind("}")
                 if end != -1:
                     raw = raw[obj_start:end + 1]
-            return json.loads(raw)
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                # JSON 문자열 값 내부의 literal 줄바꿈을 \n으로 이스케이프 후 재시도
+                fixed, in_string, escape_next = "", False, False
+                for ch in raw:
+                    if escape_next:
+                        fixed += ch; escape_next = False
+                    elif ch == "\\":
+                        fixed += ch; escape_next = True
+                    elif ch == '"':
+                        fixed += ch; in_string = not in_string
+                    elif in_string and ch == "\n":
+                        fixed += "\\n"
+                    elif in_string and ch == "\r":
+                        fixed += "\\r"
+                    else:
+                        fixed += ch
+                return json.loads(fixed)
         except Exception as e:
             logger.error(f"Gemini LLM JSON Error: {e}")
             return {"error": str(e)}

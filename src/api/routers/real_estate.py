@@ -93,7 +93,7 @@ def get_real_estate_daily_summary(district_code: str = "41135", target_date: Opt
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/agent/real_estate/insight_report")
-def get_real_estate_insight_report(district_code: str = "11680", target_date: Optional[str] = None, agent: RealEstateAgent = Depends(get_real_estate_agent)):
+def get_real_estate_insight_report(district_code: Optional[str] = None, target_date: Optional[str] = None, agent: RealEstateAgent = Depends(get_real_estate_agent)):
     try:
         target_dt = datetime.strptime(target_date, "%Y-%m-%d").date() if target_date else datetime.now().date()
         blocks_data = agent.generate_insight_report(district_code, target_dt)
@@ -235,7 +235,7 @@ class JobFetchTransactionsRequest(BaseModel):
     year_month: Optional[str] = Field(None, description="YYYYMM (기본: 현재 월)")
 
 class JobGenerateReportRequest(BaseModel):
-    district_code: str = Field("11680", description="법정동 코드")
+    district_code: Optional[str] = Field(None, description="법정동 코드 (미입력 시 페르소나 관심 지역 전체)")
     target_date: Optional[str] = Field(None, description="YYYY-MM-DD (기본: 오늘)")
 
 @router.post("/jobs/real-estate/fetch-transactions")

@@ -372,7 +372,13 @@ def show_real_estate():
         with st.expander("⚙️ 리포트 생성", expanded=False):
             rc1, rc2 = st.columns(2)
             with rc1:
-                report_district = st.text_input("동코드", value="11680", key="report_district")
+                if not st.session_state.get("districts"):
+                    st.session_state.districts = DashboardClient.get_districts()
+                _report_options = {"페르소나 관심 지역 전체 (강남·서초·분당·송파)": None}
+                _report_options.update({d["name"]: d["code"] for d in st.session_state.get("districts", [])})
+                _report_names = list(_report_options.keys())
+                _report_sel = st.selectbox("수집 지역", _report_names, index=0, key="report_district_select")
+                report_district = _report_options.get(_report_sel)
 
             st.caption("거시경제 지표를 먼저 수집한 뒤 리포트를 생성하면 저장된 데이터를 활용합니다.")
             mc1, mc2, mc3 = st.columns(3)

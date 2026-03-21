@@ -1,21 +1,27 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-03-18
-**Current Active Feature:** 없음 (진행 중인 작업 없음)
+**Last Updated:** 2026-03-21
+**Current Active Feature:** 부동산 모듈 종합 버그픽스 & 성능 개선
 
 ## 📍 Current Focus
-- **Branch:** `master`
-- **Status:** ✅ 최근 피처 완료, 다음 작업 대기 중
+- **Branch:** `fix/real-estate-comprehensive-review`
+- **Feature Doc:** `docs/features/real-estate-comprehensive-bugfix/`
+- **Status:** 🔧 진행 중 — Phase 2.5 (SOLID Review) 단계
 
 ## 💡 Recent Context
-- **completed:** 기본 LLM Gemini → Claude (`claude-sonnet-4-6`) 전환
-- **completed:** `ClaudeClient.generate_json` JSON 파싱 버그 2건 수정 (truncation, 배열/객체 경계 추출)
-- **completed:** 토큰 최적화 (MAX_ITERATIONS 2, Validator 1024, 데이터 상한 축소)
-- **completed:** 데이터 파이프라인 분리 및 대시보드 고도화
-  - Phase 1: Report Archive 탭 신설 (저장 리포트 목록·상세·mrkdwn 변환)
-  - Phase 2: Market Monitor 고도화 (시/구 selectbox, 아파트명 검색, 금액 범위 필터, 페이지네이션)
-  - Phase 3: 4개 독립 Job API + Insight 탭 (거시경제 차트, 뉴스, 정책 팩트)
-  - Phase 4: 수도권 71개 지구 전체 수집, n8n 4개 스케줄 워크플로우 자동화
-  - BugFix: ChromaDB 볼륨 경로 수정, LLM JSON 배열 파싱 수정
+- **completed:** 부동산 파이프라인 종합 버그픽스 7건 (BUG-001 ~ BUG-007)
+- **completed:** gemini-2.5-flash 전환, API 호출 최적화 (6→2회)
+- **completed:** api_client.py 429 재시도 로직 추가 (exponential backoff)
+- **blocked:** Job1 병렬화 — OOM(max_workers=8), 429(max_workers=3) 이슈로 불안정
+  - ThreadPoolExecutor 방식 한계 확인 → aiohttp + asyncio 전환 설계 완료
+- **blocked:** 국토부 API 일일 호출 횟수 초과 → 내일 자정 이후 해소
+
+## 🔜 내일 할 일 (2026-03-22)
+1. **Job1 aiohttp 전환** — `fix/real-estate-comprehensive-review` 브랜치에서 계속
+   - 설계 문서: `docs/features/real-estate-comprehensive-bugfix/` 참조
+   - 구현 계획: `/Users/kks/.claude/plans/zazzy-doodling-kahan.md`
+   - 수정 파일 5개: `requirements.txt`, `monitor/service.py`, `models.py`, `repository.py`, `service.py`
+2. **검증**: `docker compose up --build` → Job1 실행 → OOM/429 없이 완주 확인
+3. **완료 후**: result.md 작성, history.md 업데이트, master 머지
 
 ## ✅ Completed Tasks (Recent)
 - [x] **Feature: 데이터 파이프라인 분리 및 대시보드 고도화** <!-- id: 34 -->

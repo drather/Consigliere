@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 import xml.etree.ElementTree as ET
 from datetime import date
@@ -46,25 +47,31 @@ class MOLITClient:
             "DEAL_YMD": year_month,
         }
 
-        try:
-            logger.info(f"📡 [MOLIT] Fetching data from: {self.BASE_URL} (LAWD: {district_code}, YMD: {year_month})")
-            
-            # Use standard requests
-            response = requests.get(self.BASE_URL, params=params, timeout=15)
-            
-            # Check for API-level errors
-            # MOLIT API success codes: "0", "00", "000" depending on endpoint version
-            if "<resultCode>" in response.text:
-                success_codes = ["<resultCode>0</resultCode>", "<resultCode>00</resultCode>", "<resultCode>000</resultCode>"]
-                if not any(code in response.text for code in success_codes):
-                    logger.error(f"❌ [MOLIT] API Logic Error: {response.text[:300]}")
-                    return None
-                 
-            response.raise_for_status()
-            return response.text
-        except Exception as e:
-            logger.error(f"❌ [MOLIT] API Connection Error: {e}")
-            return None
+        logger.info(f"📡 [MOLIT] Fetching data from: {self.BASE_URL} (LAWD: {district_code}, YMD: {year_month})")
+        for attempt in range(3):
+            try:
+                response = requests.get(self.BASE_URL, params=params, timeout=15)
+
+                if response.status_code == 429:
+                    wait = 2 ** attempt  # 1s, 2s, 4s
+                    logger.warning(f"⏳ [MOLIT] 429 Rate Limited ({district_code}), {wait}s 후 재시도 ({attempt+1}/3)")
+                    time.sleep(wait)
+                    continue
+
+                # MOLIT API success codes: "0", "00", "000" depending on endpoint version
+                if "<resultCode>" in response.text:
+                    success_codes = ["<resultCode>0</resultCode>", "<resultCode>00</resultCode>", "<resultCode>000</resultCode>"]
+                    if not any(code in response.text for code in success_codes):
+                        logger.error(f"❌ [MOLIT] API Logic Error: {response.text[:300]}")
+                        return None
+
+                response.raise_for_status()
+                return response.text
+            except Exception as e:
+                logger.error(f"❌ [MOLIT] API Connection Error: {e}")
+                return None
+        logger.error(f"❌ [MOLIT] 3회 재시도 실패 ({district_code})")
+        return None
 
     def parse_xml_to_dict_list(self, xml_data: str) -> List[Dict[str, Any]]:
         """
