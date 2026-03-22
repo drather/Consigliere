@@ -1,4 +1,17 @@
 # Project Consigliere: History
+**Last Updated:** 2026-03-22
+
+## 2026-03-22: Job1 aiohttp 비동기 전환 + 데이터 라이프사이클
+- **Feature (job1-aiohttp-migration):** ThreadPoolExecutor 방식의 OOM/429 문제를 근본 해결. aiohttp + asyncio.Semaphore(2)로 전환, 7일 필터 + 1년 삭제 정책 추가.
+- **결과:** 71개 구 999건 수집, OOM·429 없음, 약 3분 30초 완주.
+- **변경 파일:** `requirements.txt`, `monitor/service.py`, `models.py`, `repository.py`, `service.py`
+- **주요 변경:**
+    - `_parse_item_to_transaction` 모듈 레벨 함수 추출 (async 파이프라인 재사용)
+    - `models.py` `deal_date_int` 필드 추가 (숫자 범위 필터용)
+    - `repository.py` `save_transactions_batch`, `delete_old_transactions` 추가
+    - `service.py` `fetch_transactions` async 재구현 + `_async_fetch_all`, `_fetch_one_district` 헬퍼
+    - 수집 범위 7일 이내로 제한 (API 신고 지연 특성 반영)
+
 **Last Updated:** 2026-03-18
 **Status:** Active
 

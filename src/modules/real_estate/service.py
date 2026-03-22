@@ -1,7 +1,8 @@
+import asyncio
 import json
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime
+import aiohttp
+from datetime import date, datetime, timedelta
 from typing import Dict, Any, List, Optional
 
 from core.storage import get_storage_provider, StorageProvider
@@ -154,42 +155,39 @@ class RealEstateAgent:
     # ─────────────────────────────────────────────
 
     def fetch_transactions(self, district_code: Optional[str] = None, year_month: Optional[str] = None) -> Dict[str, Any]:
-        """Job 1: Fetch transactions from external API and save to ChromaDB.
+        """Job 1: aiohttp 비동기 병렬 수집 + 7일 필터 + 1년 데이터 삭제.
 
-        district_code=None → config.yaml의 전체 지구(수도권) 병렬 수집 (ThreadPoolExecutor)
+        district_code=None → config.yaml의 전체 지구(수도권) 수집
         district_code 지정 → 해당 지구만 수집
         """
-        from .monitor.service import TransactionMonitorService
+        from .monitor.api_client import MOLITClient
+
         target_ym = year_month or datetime.now().strftime("%Y%m")
+        today = date.today()
+        cutoff_3days = today - timedelta(days=7)
+        cutoff_1year = today - timedelta(days=365)
 
         if district_code:
             targets = [{"code": district_code, "name": district_code}]
         else:
             targets = self.config.get("districts", [])
-            logger.info(f"[Job1] 병렬 수집 모드: {len(targets)}개 지구, {target_ym}")
+            logger.info(f"[Job1] 비동기 수집: {len(targets)}개 지구, {target_ym}")
 
+        # Step 0: 1년 이상 된 데이터 삭제
+        deleted = self.repository.delete_old_transactions(cutoff_1year)
+
+        # Step 1: 비동기 병렬 fetch
+        molit_client = MOLITClient()
+        loop = asyncio.new_event_loop()
+        try:
+            fetched_results = loop.run_until_complete(
+                self._async_fetch_all(targets, target_ym, molit_client, cutoff_3days)
+            )
+        finally:
+            loop.close()
+
+        # Step 2: 직렬 ChromaDB save (onnxruntime 임베딩 동시 실행 시 OOM)
         total_fetched, total_saved, results = 0, 0, []
-
-        def _fetch_only(district):
-            """Phase 1: MOLIT API 호출만 병렬 수행 (I/O bound, 메모리 부담 없음)"""
-            code = district["code"]
-            name = district.get("name", code)
-            try:
-                svc = TransactionMonitorService()  # 스레드별 독립 인스턴스
-                txs = svc.get_daily_transactions(code, target_ym)
-                return name, code, txs
-            except Exception as e:
-                logger.error(f"[Job1] Fetch failed for {name}({code}): {e}")
-                return name, code, []
-
-        # Phase 1: 병렬 fetch (MOLIT API, I/O bound) — max_workers=3: rate limit 대응
-        fetched_results = []
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            futures = {executor.submit(_fetch_only, d): d for d in targets}
-            for future in as_completed(futures):
-                fetched_results.append(future.result())
-
-        # Phase 2: 직렬 save (ChromaDB onnxruntime 임베딩, 동시 실행 시 OOM)
         for name, code, txs in fetched_results:
             total_fetched += len(txs)
             if not txs:
@@ -198,17 +196,66 @@ class RealEstateAgent:
                 saved = self.repository.save_transactions_batch(txs)
                 total_saved += saved
                 results.append({"district": name, "fetched": len(txs), "saved": saved})
-                logger.info(f"[Job1] {name}({code}): {len(txs)}건 수집, {saved}건 저장")
+                logger.info(f"[Job1] {name}({code}): {len(txs)}건(7일) 수집, {saved}건 저장")
             except Exception as e:
-                logger.error(f"[Job1] Save failed for {name}({code}): {e}")
+                logger.error(f"[Job1] Save 실패 {name}({code}): {e}")
 
         return {
             "fetched_count": total_fetched,
             "saved_count": total_saved,
             "district_count": len(targets),
             "year_month": target_ym,
-            "details": results
+            "deleted_old_count": deleted,
+            "details": results,
         }
+
+    async def _async_fetch_all(self, targets, target_ym, molit_client, cutoff_3days):
+        semaphore = asyncio.Semaphore(2)
+        async with aiohttp.ClientSession() as session:
+            tasks = [
+                self._fetch_one_district(d, target_ym, semaphore, session, molit_client, cutoff_3days)
+                for d in targets
+            ]
+            return await asyncio.gather(*tasks)
+
+    async def _fetch_one_district(self, district, target_ym, semaphore, session, molit_client, cutoff_3days):
+        from .monitor.service import _parse_item_to_transaction
+        code = district["code"]
+        name = district.get("name", code)
+        async with semaphore:
+            for attempt in range(3):
+                try:
+                    params = {
+                        "serviceKey": molit_client.service_key,
+                        "pageNo": "1",
+                        "numOfRows": "100",
+                        "LAWD_CD": code,
+                        "DEAL_YMD": target_ym,
+                    }
+                    async with session.get(
+                        molit_client.BASE_URL, params=params,
+                        timeout=aiohttp.ClientTimeout(total=15)
+                    ) as resp:
+                        if resp.status == 429:
+                            wait = 2 ** attempt
+                            logger.warning(f"[Job1] 429 {name}({code}), {wait}s 재시도")
+                            await asyncio.sleep(wait)
+                            continue
+                        xml_text = await resp.text()
+                        success_codes = ["<resultCode>0</resultCode>", "<resultCode>00</resultCode>", "<resultCode>000</resultCode>"]
+                        if "<resultCode>" in xml_text and not any(c in xml_text for c in success_codes):
+                            logger.error(f"[Job1] API 오류 {name}: {xml_text[:150]}")
+                            return name, code, []
+                        dict_items = molit_client.parse_xml_to_dict_list(xml_text)
+                        all_txs = [t for item in dict_items if (t := _parse_item_to_transaction(item, code)) is not None]
+                        recent = [tx for tx in all_txs if tx.deal_date >= cutoff_3days]
+                        return name, code, recent
+                except asyncio.TimeoutError:
+                    logger.error(f"[Job1] Timeout {name}({code}) ({attempt+1}/3)")
+                except Exception as e:
+                    logger.error(f"[Job1] 오류 {name}({code}): {e}")
+                    return name, code, []
+        return name, code, []
 
     def fetch_news(self) -> Dict[str, Any]:
         """Job 2: Fetch & analyze news, save daily markdown report."""

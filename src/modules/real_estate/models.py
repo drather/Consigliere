@@ -43,6 +43,7 @@ class RealEstateTransaction(BaseModel):
         # Pydantic date/datetime needs to be string for Chroma metadata
         metadata = self.model_dump()
         metadata["deal_date"] = str(self.deal_date)
+        metadata["deal_date_int"] = int(self.deal_date.strftime("%Y%m%d"))
         if self.cancel_deal_date:
             metadata["cancel_deal_date"] = str(self.cancel_deal_date)
             
