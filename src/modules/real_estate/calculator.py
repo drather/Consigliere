@@ -53,8 +53,15 @@ class FinancialCalculator:
                 ltv_str = ltv_dict.get("non_regulated_area", "70%")
             
             ltv_rate = self._parse_numeric(ltv_str) or 0.7
+            if not (0.3 <= ltv_rate <= 0.9):
+                logger.warning(f"⚠️ [Calculator] Abnormal LTV rate {ltv_rate:.2f}, falling back to 0.7")
+                ltv_rate = 0.7
+
             dsr_str = policy.get("dsr", {}).get("limit", "40%")
             dsr_rate = self._parse_numeric(dsr_str) or 0.4
+            if not (0.3 <= dsr_rate <= 0.6):
+                logger.warning(f"⚠️ [Calculator] Abnormal DSR rate {dsr_rate:.4f} (parsed from '{dsr_str}'), falling back to 0.4")
+                dsr_rate = 0.4
             
             # Additional limit for first time buyers (e.g. 600M KRW cap for LTV 80%)
             first_time_loan_cap = 600_000_000
@@ -85,12 +92,13 @@ class FinancialCalculator:
             estimated_loan = min(loan_ltv, max_loan_dsr)
             estimated_taxes = int(final_max_price * self.tax_rate_multiplier)
             
-            # 6. Reasoning String
+            # 6. Reasoning String  (단위: 1억 = 100,000,000원)
+            _억 = 100_000_000
             reasoning = (
-                f"총 자산 {capital//10000000}억원, 연소득 {income//10000000}억원 기준.\n"
-                f"- LTV ({ltv_rate*100:.0f}%) 한도: {max_p_ltv//10000000}억원 (대출 {loan_ltv//10000000}억원)\n"
-                f"- DSR ({dsr_rate*100:.0f}%) 한도: {max_p_dsr//10000000}억원 (대출 {max_loan_dsr//10000000}억원)\n"
-                f"☞ 최종 보수적 매수 한도: {final_max_price//10000000}억원 (예상 부대비용: {estimated_taxes//10000000}억원)"
+                f"총 자산 {capital/_억:.1f}억원, 연소득 {income/_억:.1f}억원 기준.\n"
+                f"- LTV ({ltv_rate*100:.0f}%) 한도: {max_p_ltv/_억:.2f}억원 (대출 {loan_ltv/_억:.2f}억원)\n"
+                f"- DSR ({dsr_rate*100:.0f}%) 한도: {max_p_dsr/_억:.2f}억원 (대출 {max_loan_dsr/_억:.2f}억원)\n"
+                f"☞ 최종 보수적 매수 한도: {final_max_price/_억:.2f}억원 (예상 부대비용: {estimated_taxes/_억:.2f}억원)"
             )
             
             logger.info(f"🧮 [FinancialCalculator] Calculated Max Price: {final_max_price:,} KRW")

@@ -1,7 +1,7 @@
 import chromadb
 from chromadb.config import Settings
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, date as date_type
 import os
 
 from .models import RealEstateReport, RealEstateMetadata, RealEstateTransaction
@@ -83,21 +83,29 @@ class ChromaRealEstateRepository:
         return reports
 
     def save_transaction(self, transaction: "RealEstateTransaction") -> None:
-        """
-        Saves a transaction record into ChromaDB.
-        Uses the model's logic to format data.
-        """
+        """Saves a single transaction record into ChromaDB."""
         data = transaction.to_chroma_format()
-        
-        logger.info(f"💾 [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Upserting transaction: {data['id']}")
-        
-        # Upsert
         self.collection.upsert(
             ids=[data["id"]],
             documents=[data["document"]],
             metadatas=[data["metadata"]]
         )
-        logger.info(f"✅ [{datetime.now().strftime('%H:%M:%S')}] [ChromaDB] Saved txn: {transaction.apt_name}")
+
+    def save_transactions_batch(self, transactions: "List[RealEstateTransaction]") -> int:
+        """여러 거래를 단일 ChromaDB upsert로 일괄 저장. 저장 건수 반환."""
+        if not transactions:
+            return 0
+        seen, ids, documents, metadatas = set(), [], [], []
+        for tx in transactions:
+            data = tx.to_chroma_format()
+            if data["id"] in seen:
+                continue
+            seen.add(data["id"])
+            ids.append(data["id"])
+            documents.append(data["document"])
+            metadatas.append(data["metadata"])
+        self.collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
+        return len(ids)
 
     def delete(self, report_id: str) -> None:
         """Deletes a report by ID."""
@@ -151,6 +159,41 @@ class ChromaRealEstateRepository:
         except Exception as e:
             logger.error(f"⚠️ [ChromaDB] Error fetching transactions: {e}")
             return []
+    def delete_old_transactions(self, cutoff_date: date_type) -> int:
+        """deal_date < cutoff_date인 거래 레코드 삭제. 삭제 건수 반환.
+
+        ChromaDB 1.5.0은 문자열 $lt/$gt 미지원 → ID 전체 조회 후 Python 레벨 필터링.
+        """
+        cutoff_str = cutoff_date.isoformat()
+        logger.info(f"[ChromaDB] 만료 데이터 스캔 (cutoff: {cutoff_str})...")
+        try:
+            PAGE_SIZE = 1000
+            offset, all_ids, all_metas = 0, [], []
+            while True:
+                page = self.collection.get(include=["metadatas"], limit=PAGE_SIZE, offset=offset)
+                if not page or not page["ids"]:
+                    break
+                all_ids.extend(page["ids"])
+                all_metas.extend(page["metadatas"])
+                if len(page["ids"]) < PAGE_SIZE:
+                    break
+                offset += PAGE_SIZE
+
+            ids_to_delete = [
+                rid for rid, meta in zip(all_ids, all_metas)
+                if str(meta.get("deal_date", "9999-12-31")) < cutoff_str
+            ]
+            if not ids_to_delete:
+                return 0
+
+            for i in range(0, len(ids_to_delete), 500):
+                self.collection.delete(ids=ids_to_delete[i:i + 500])
+            logger.info(f"[ChromaDB] {len(ids_to_delete)}건 삭제 완료")
+            return len(ids_to_delete)
+        except Exception as e:
+            logger.error(f"[ChromaDB] delete_old_transactions 실패: {e}")
+            return 0
+
     def save_policy(self, policy_id: str, content: str, metadata: Dict[str, Any]) -> None:
         """Saves a policy or development fact to ChromaDB."""
         logger.info(f"💾 [ChromaDB] Saving policy: {policy_id}")

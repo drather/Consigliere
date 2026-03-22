@@ -36,7 +36,16 @@ class NewsService:
     def generate_daily_report(self) -> str:
         """
         Main workflow: Fetch News -> Load Context -> Analyze -> Save Report.
+        Skips LLM call if today's report already exists (same-day cache).
         """
+        # Cache check: return existing report if already generated today
+        today = datetime.now().strftime("%Y-%m-%d")
+        cached_file = os.path.join(self.report_dir, f"{today}_News.md")
+        if os.path.exists(cached_file):
+            logger.info(f"✅ [News] Today's report already exists, skipping LLM call.")
+            with open(cached_file, "r", encoding="utf-8") as f:
+                return f.read()
+
         # 1. Fetch News
         logger.info("📰 [News] Fetching latest real estate news...")
         items = self.client.search_news("부동산 정책 아파트 분양", display=30)

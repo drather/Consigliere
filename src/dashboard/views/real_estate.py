@@ -12,8 +12,16 @@ except ImportError:
 
 def _mrkdwn_to_md(text: str) -> str:
     """Slack mrkdwn → standard Markdown 변환."""
+    # <URL|label> → [label](URL)
+    text = re.sub(r'<(https?://[^|>]+)\|([^>]+)>', r'[\2](\1)', text)
+    # <URL> → <URL> (bare link, leave as-is for markdown)
+    text = re.sub(r'<(https?://[^>]+)>', r'\1', text)
     # *bold* → **bold** (단, **already bold** 는 건드리지 않음)
     text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'**\1**', text)
+    # _italic_ → *italic*
+    text = re.sub(r'(?<!_)_(?!_)(.+?)(?<!_)_(?!_)', r'*\1*', text)
+    # ~strikethrough~ → ~~strikethrough~~
+    text = re.sub(r'~(.+?)~', r'~~\1~~', text)
     # • 로 시작하는 줄 → - 목록 (줄바꿈 보장)
     lines = text.split('\n')
     converted = []
@@ -364,7 +372,13 @@ def show_real_estate():
         with st.expander("⚙️ 리포트 생성", expanded=False):
             rc1, rc2 = st.columns(2)
             with rc1:
-                report_district = st.text_input("동코드", value="11680", key="report_district")
+                if not st.session_state.get("districts"):
+                    st.session_state.districts = DashboardClient.get_districts()
+                _report_options = {"페르소나 관심 지역 전체 (강남·서초·분당·송파)": None}
+                _report_options.update({d["name"]: d["code"] for d in st.session_state.get("districts", [])})
+                _report_names = list(_report_options.keys())
+                _report_sel = st.selectbox("수집 지역", _report_names, index=0, key="report_district_select")
+                report_district = _report_options.get(_report_sel)
 
             st.caption("거시경제 지표를 먼저 수집한 뒤 리포트를 생성하면 저장된 데이터를 활용합니다.")
             mc1, mc2, mc3 = st.columns(3)

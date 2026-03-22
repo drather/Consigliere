@@ -144,7 +144,7 @@ class DashboardClient:
             return {"error": str(e)}
 
     @staticmethod
-    def trigger_fetch_transactions(district_code: str = "11680", year_month: Optional[str] = None) -> Dict:
+    def trigger_fetch_transactions(district_code: Optional[str] = None, year_month: Optional[str] = None) -> Dict:
         """Job 1: 실거래가 수집 트리거."""
         try:
             payload = {"district_code": district_code}
@@ -177,7 +177,7 @@ class DashboardClient:
             return {"error": str(e)}
 
     @staticmethod
-    def trigger_generate_report(district_code: str = "11680", target_date: Optional[str] = None) -> Dict:
+    def trigger_generate_report(district_code: Optional[str] = None, target_date: Optional[str] = None) -> Dict:
         """Job 4: 리포트 생성 트리거."""
         try:
             payload = {"district_code": district_code}
@@ -190,7 +190,7 @@ class DashboardClient:
             return {"error": str(e)}
 
     @staticmethod
-    def trigger_run_pipeline(district_code: str = "11680", target_date: Optional[str] = None, send_slack: bool = True) -> Dict:
+    def trigger_run_pipeline(district_code: Optional[str] = None, target_date: Optional[str] = None, send_slack: bool = True) -> Dict:
         """Pipeline: Job1~4 + Slack."""
         try:
             payload = {"district_code": district_code}

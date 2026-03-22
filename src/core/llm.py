@@ -22,7 +22,7 @@ class BaseLLMClient(ABC):
 class GeminiClient(BaseLLMClient):
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        self.model_name = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+        self.model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.thinking_level = os.getenv("GEMINI_THINKING_LEVEL", "low")
         if not self.api_key:
             logger.warning("GEMINI_API_KEY not found. Gemini LLM features will fail.")
@@ -33,8 +33,10 @@ class GeminiClient(BaseLLMClient):
 
     def _make_config(self, extra: Optional[Dict[str, Any]] = None):
         from google.genai import types
-        thinking = types.ThinkingConfig(thinking_level=self.thinking_level)
-        kwargs = {"thinking_config": thinking}
+        kwargs = {}
+        # Only attach ThinkingConfig when thinking is explicitly enabled
+        if self.thinking_level and self.thinking_level.lower() not in ("none", "off", ""):
+            kwargs["thinking_config"] = types.ThinkingConfig(thinking_level=self.thinking_level)
         if extra:
             kwargs.update(extra)
         return types.GenerateContentConfig(**kwargs)
@@ -65,16 +67,44 @@ class GeminiClient(BaseLLMClient):
                     "max_output_tokens": max_tokens,
                 }),
             )
-            return json.loads(response.text)
+            raw = response.text.strip()
+            # Strip markdown fences that thinking mode may prepend
+            import re
+            raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
+            raw = re.sub(r"```\s*$", "", raw, flags=re.MULTILINE).strip()
+            # Extract outermost JSON object or array
+            obj_start, arr_start = raw.find("{"), raw.find("[")
+            if obj_start == -1 and arr_start == -1:
+                pass  # let json.loads raise
+            elif arr_start != -1 and (obj_start == -1 or arr_start < obj_start):
+                end = raw.rfind("]")
+                if end != -1:
+                    raw = raw[arr_start:end + 1]
+            else:
+                end = raw.rfind("}")
+                if end != -1:
+                    raw = raw[obj_start:end + 1]
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                # JSON 문자열 값 내부의 literal 줄바꿈을 \n으로 이스케이프 후 재시도
+                fixed, in_string, escape_next = "", False, False
+                for ch in raw:
+                    if escape_next:
+                        fixed += ch; escape_next = False
+                    elif ch == "\\":
+                        fixed += ch; escape_next = True
+                    elif ch == '"':
+                        fixed += ch; in_string = not in_string
+                    elif in_string and ch == "\n":
+                        fixed += "\\n"
+                    elif in_string and ch == "\r":
+                        fixed += "\\r"
+                    else:
+                        fixed += ch
+                return json.loads(fixed)
         except Exception as e:
             logger.error(f"Gemini LLM JSON Error: {e}")
-            try:
-                import re
-                match = re.search(r"\{.*\}", str(e), re.DOTALL)
-                if match:
-                    return json.loads(match.group(0))
-            except Exception:
-                pass
             return {"error": str(e)}
 
 class ClaudeClient(BaseLLMClient):
