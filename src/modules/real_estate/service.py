@@ -291,6 +291,8 @@ class RealEstateAgent:
 
         # Load macro: prefer stored file, fallback to real-time
         macro_dict = self._load_stored_macro(target_date) or self.macro_service.fetch_latest_macro_data().model_dump()
+        # Phase 3: Load Job2 news summary
+        news_summary = self._load_stored_news(target_date)
 
         # Load persona + policy context
         persona_data = self._load_persona()
@@ -335,6 +337,14 @@ class RealEstateAgent:
             policy_facts = []
         budget_plan = self.calculator.calculate_budget(persona_data, policy_context)
 
+        # Phase 1: 예산 이하 단지만 LLM에 전달 (구조적 강제)
+        budget_ceiling = budget_plan.final_max_price
+        pre_filter_count = len(daily_txs)
+        daily_txs = [tx for tx in daily_txs if tx.get("price", 0) <= budget_ceiling]
+        filtered_tx_count = pre_filter_count - len(daily_txs)
+        if filtered_tx_count > 0:
+            logger.info(f"[Job4] Budget filter: {filtered_tx_count}건 제거 (한도: {budget_ceiling/1e8:.1f}억, 잔여: {len(daily_txs)}건)")
+
         report_json = self.insight_orchestrator.generate_strategy(
             target_date=target_date,
             macro_dict=macro_dict,
@@ -343,6 +353,8 @@ class RealEstateAgent:
             persona_data=persona_data.get("user", {}),
             policy_facts=policy_facts,
             budget_dict=budget_plan.model_dump(),
+            filtered_tx_count=filtered_tx_count,
+            news_summary=news_summary,
             fallback_note=f"({target_date} 저장 데이터 기준, {len(target_codes)}개 구)"
         )
 
@@ -426,10 +438,36 @@ class RealEstateAgent:
             logger.error(f"[Job4] Failed to load area_intel.json: {e}")
             return {}
 
+    def _compute_district_average(self, dist_intel: Dict[str, Any]) -> Dict[str, Any]:
+        """구 내 모든 동의 데이터를 평균/집계하여 fallback 데이터 생성."""
+        dongs = list(dist_intel.get("dongs", {}).values())
+        if not dongs:
+            return {}
+
+        commutes = [d["commute_minutes_to_samsung"] for d in dongs if d.get("commute_minutes_to_samsung")]
+        avg_commute = int(sum(commutes) / len(commutes)) if commutes else dist_intel.get("default_commute_minutes", 99)
+
+        seen, all_stations = set(), []
+        for d in dongs:
+            for s in d.get("nearest_stations", []):
+                if s["name"] not in seen:
+                    all_stations.append(s)
+                    seen.add(s["name"])
+
+        school_notes = [d.get("school_zone_notes", "") for d in dongs if d.get("school_zone_notes")]
+
+        return {
+            "commute_minutes_to_samsung": avg_commute,
+            "nearest_stations": all_stations[:4],
+            "school_zone_notes": school_notes[0] if school_notes else f"{dist_intel.get('name', '')} 구 평균 데이터",
+            "elementary_schools": [],
+            "_is_district_average": True,
+        }
+
     def _enrich_transactions(self, txs: List[Dict[str, Any]], area_intel: Dict[str, Any]) -> List[Dict[str, Any]]:
         """각 거래 dict에 commute_minutes, nearest_stations, school_zone, reconstruction 정보 부착.
 
-        매칭 우선순위: apt_name → notable_complexes 포함 여부 → 구 기본값
+        매칭 우선순위: apt_name → notable_complexes 포함 여부 → 구 동 평균 → ChromaDB policy 검색
         """
         if not area_intel:
             return txs
@@ -442,6 +480,7 @@ class RealEstateAgent:
             tx = dict(tx)
             apt_name = tx.get("apt_name", "")
             district_code = str(tx.get("district_code", ""))
+            has_reconstruction = False
 
             # 재건축 정보: apartment_overrides에서 exact match
             for override_key, override_val in apt_overrides.items():
@@ -449,7 +488,23 @@ class RealEstateAgent:
                     tx["reconstruction_status"] = override_val.get("reconstruction_status", "")
                     tx["reconstruction_potential"] = override_val.get("reconstruction_potential", "UNKNOWN")
                     tx["gtx_benefit"] = override_val.get("gtx_benefit", False)
+                    has_reconstruction = True
                     break
+
+            # 재건축 정보가 없는 단지 → ChromaDB policy 검색으로 보완
+            if not has_reconstruction and apt_name:
+                try:
+                    policy_hits = self.repository.search_policy(
+                        query=f"{apt_name} 재건축 리모델링 GTX", n_results=1
+                    )
+                    if policy_hits:
+                        content = policy_hits[0].get("content", "")
+                        if apt_name in content or any(w in content for w in ["재건축", "리모델링", "GTX"]):
+                            tx["reconstruction_status"] = content[:120]
+                            tx["reconstruction_potential"] = "MEDIUM"
+                            tx["gtx_benefit"] = "GTX" in content
+                except Exception:
+                    pass
 
             # 역세권/출퇴근/학군: district → dong 순서로 매칭
             dist_intel = districts_intel.get(district_code, {})
@@ -464,10 +519,11 @@ class RealEstateAgent:
                     matched_dong = dong_data
                     break
 
-            # fallback: 구의 첫 번째 dong 또는 district default
+            # Phase 2 fallback: 구 내 동 평균값 (기존 첫 번째 dong 대신)
             if not matched_dong:
-                dongs = dist_intel.get("dongs", {})
-                matched_dong = next(iter(dongs.values()), None) if dongs else None
+                matched_dong = self._compute_district_average(dist_intel)
+                if matched_dong:
+                    logger.debug(f"[Job4] '{apt_name}': dong 미매칭 → 구 평균 fallback 적용")
 
             if matched_dong:
                 tx["commute_minutes_to_samsung"] = matched_dong.get("commute_minutes_to_samsung",
@@ -481,6 +537,21 @@ class RealEstateAgent:
             enriched.append(tx)
 
         return enriched
+
+    def _load_stored_news(self, target_date: date) -> str:
+        """당일 Job2 뉴스 마크다운 파일 로드. 없으면 빈 문자열 반환."""
+        news_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "news")
+        filename = os.path.join(news_dir, f"{target_date.isoformat()}_News.md")
+        if os.path.exists(filename):
+            try:
+                with open(filename, "r", encoding="utf-8") as f:
+                    content = f.read()
+                logger.info(f"[Job4] Loaded news summary: {filename}")
+                return content[:3000]  # 토큰 절약을 위해 앞부분만 전달
+            except Exception as e:
+                logger.error(f"[Job4] Failed to load news file: {e}")
+        logger.warning(f"[Job4] No news file found for {target_date} — skipping news section")
+        return ""
 
     def _load_stored_macro(self, target_date: date) -> Optional[Dict[str, Any]]:
         """Loads today's saved macro JSON if available."""
@@ -504,3 +575,42 @@ class RealEstateAgent:
         except Exception as e:
             logger.error(f"⚠️ Failed to load persona: {e}")
             return {"user": {}}
+
+    def get_persona(self) -> Dict[str, Any]:
+        """현재 persona.yaml을 dict로 반환."""
+        return self._load_persona()
+
+    def update_persona(self, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """persona.yaml을 부분 업데이트하고 이력을 백업한다."""
+        import yaml
+
+        current = self._load_persona()
+
+        # 이력 백업 (변경 전)
+        history_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "persona_history")
+        os.makedirs(history_dir, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = os.path.join(history_dir, f"{ts}_persona.yaml")
+        with open(backup_path, "w", encoding="utf-8") as f:
+            yaml.dump(current, f, allow_unicode=True, default_flow_style=False)
+
+        # Deep merge
+        merged = self._deep_merge(current, updates)
+
+        # persona.yaml 저장
+        persona_path = os.path.join(os.path.dirname(__file__), "persona.yaml")
+        with open(persona_path, "w", encoding="utf-8") as f:
+            yaml.dump(merged, f, allow_unicode=True, default_flow_style=False)
+
+        logger.info(f"[Persona] Updated and backed up to {backup_path}")
+        return merged
+
+    def _deep_merge(self, base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+        """updates를 base에 재귀적으로 병합한다."""
+        result = dict(base)
+        for k, v in updates.items():
+            if isinstance(v, dict) and isinstance(result.get(k), dict):
+                result[k] = self._deep_merge(result[k], v)
+            else:
+                result[k] = v
+        return result

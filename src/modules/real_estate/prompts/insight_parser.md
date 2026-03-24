@@ -9,6 +9,7 @@
 4. **금융 정책 컨텍스트 (policy_context):** {{policy_context}}
 5. **정책 팩트 RAG (policy_facts):** {{policy_facts}}
 6. **확정 예산 계획 (budget_plan):** {{budget_plan}}
+7. **오늘의 부동산 뉴스 요약 (news_summary):** {{news_summary}}
 
 ---
 
@@ -17,6 +18,7 @@
 - **이 금액을 초과하는 단지를 단 하나도 추천해서는 안 됩니다.** "급매", "협의 가능" 등의 이유로도 예외 없음.
 - 금액 단위: 값의 단위는 **원(KRW)**입니다. 예: `873786407` = **8억 7천만 원** (87억이 아님).
 - `analyst_insight`의 enriched 거래 데이터에 포함된 `commute_minutes_to_samsung`, `nearest_stations`, `school_zone_notes`, `reconstruction_status` 필드를 스코어카드 근거로 반드시 인용하십시오.
+{{budget_constraint_note}}
 
 ---
 
@@ -60,7 +62,11 @@
 종합 점수: [합계]점/100점
 ```
 
-### 4. 💡 전문가의 제언
+### 4. 📰 오늘의 부동산 뉴스 요약
+`news_summary`에 내용이 있는 경우, 주요 뉴스 이슈 2~3건을 bullet point로 정리하고 시장에 미치는 영향을 한 문장으로 평가하십시오.
+`news_summary`가 비어있는 경우 이 섹션은 생략하십시오.
+
+### 5. 💡 전문가의 제언
 `policy_facts`의 최신 정책 변화(공급 일정, GTX 착공 등)를 인용하여, 향후 1~2년 내 자산 가치 변화를 예측하십시오.
 
 ---

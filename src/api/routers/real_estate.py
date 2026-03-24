@@ -302,6 +302,36 @@ def job_run_pipeline(
         logger.error(f"Pipeline Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+class PersonaUpdateRequest(BaseModel):
+    user: Optional[Dict[str, Any]] = None
+    investment_style: Optional[str] = None
+    commute: Optional[Dict[str, Any]] = None
+    apartment_preferences: Optional[Dict[str, Any]] = None
+
+@router.get("/dashboard/real-estate/persona")
+def get_persona(agent: RealEstateAgent = Depends(get_real_estate_agent)):
+    """현재 persona.yaml 반환."""
+    try:
+        return agent.get_persona()
+    except Exception as e:
+        logger.error(f"Persona GET Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.patch("/dashboard/real-estate/persona")
+def update_persona(request: PersonaUpdateRequest, agent: RealEstateAgent = Depends(get_real_estate_agent)):
+    """persona.yaml 부분 수정 + 이력 백업."""
+    try:
+        updates = {k: v for k, v in request.dict().items() if v is not None}
+        if not updates:
+            raise HTTPException(status_code=400, detail="변경할 항목이 없습니다.")
+        new_persona = agent.update_persona(updates)
+        return {"status": "ok", "persona": new_persona}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Persona PATCH Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/dashboard/real-estate/districts")
 def get_districts():
     """config.yaml의 구/시 목록 반환 (이름 검색용)."""
