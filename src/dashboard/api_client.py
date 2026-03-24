@@ -222,6 +222,30 @@ class DashboardClient:
             return []
 
     @staticmethod
+    def get_persona() -> Dict:
+        """현재 persona.yaml 반환."""
+        try:
+            response = requests.get(f"{API_BASE_URL}/dashboard/real-estate/persona")
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching persona: {e}")
+            return {}
+
+    @staticmethod
+    def update_persona(updates: Dict) -> Dict:
+        """persona.yaml 부분 업데이트."""
+        try:
+            response = requests.patch(
+                f"{API_BASE_URL}/dashboard/real-estate/persona",
+                json=updates
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            return {"error": str(e)}
+
+    @staticmethod
     def get_workflows() -> List[Dict]:
         """Fetches list of all n8n workflows."""
         try:

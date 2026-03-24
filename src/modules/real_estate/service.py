@@ -575,3 +575,42 @@ class RealEstateAgent:
         except Exception as e:
             logger.error(f"⚠️ Failed to load persona: {e}")
             return {"user": {}}
+
+    def get_persona(self) -> Dict[str, Any]:
+        """현재 persona.yaml을 dict로 반환."""
+        return self._load_persona()
+
+    def update_persona(self, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """persona.yaml을 부분 업데이트하고 이력을 백업한다."""
+        import yaml
+
+        current = self._load_persona()
+
+        # 이력 백업 (변경 전)
+        history_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "persona_history")
+        os.makedirs(history_dir, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = os.path.join(history_dir, f"{ts}_persona.yaml")
+        with open(backup_path, "w", encoding="utf-8") as f:
+            yaml.dump(current, f, allow_unicode=True, default_flow_style=False)
+
+        # Deep merge
+        merged = self._deep_merge(current, updates)
+
+        # persona.yaml 저장
+        persona_path = os.path.join(os.path.dirname(__file__), "persona.yaml")
+        with open(persona_path, "w", encoding="utf-8") as f:
+            yaml.dump(merged, f, allow_unicode=True, default_flow_style=False)
+
+        logger.info(f"[Persona] Updated and backed up to {backup_path}")
+        return merged
+
+    def _deep_merge(self, base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+        """updates를 base에 재귀적으로 병합한다."""
+        result = dict(base)
+        for k, v in updates.items():
+            if isinstance(v, dict) and isinstance(result.get(k), dict):
+                result[k] = self._deep_merge(result[k], v)
+            else:
+                result[k] = v
+        return result

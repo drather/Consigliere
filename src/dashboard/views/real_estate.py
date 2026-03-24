@@ -64,7 +64,7 @@ def _render_tx_dataframe(df: pd.DataFrame, code_to_name: Dict[str, str] = None):
 def show_real_estate():
     st.title("🏢 Real Estate Insights")
 
-    tab1, tab2, tab3 = st.tabs(["📊 Market Monitor", "💡 Insight", "📋 Report Archive"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Market Monitor", "💡 Insight", "📋 Report Archive", "👤 페르소나"])
 
     # ──────────────────────────────────────────────────────────
     # TAB 1: Market Monitor
@@ -468,3 +468,135 @@ def show_real_estate():
                                 st.caption(_mrkdwn_to_md(elem.get("text", "")))
                         elif btype == "divider":
                             st.markdown("---")
+
+    # ──────────────────────────────────────────────────────────
+    # TAB 4: 페르소나 편집
+    # ──────────────────────────────────────────────────────────
+    with tab4:
+        st.subheader("👤 페르소나 설정")
+        st.caption("여기서 수정한 값은 다음 부동산 리포트 생성 시 즉시 반영됩니다.")
+
+        if "persona" not in st.session_state:
+            with st.spinner("페르소나 로딩 중..."):
+                st.session_state.persona = DashboardClient.get_persona()
+
+        p = st.session_state.persona
+        if not p:
+            st.error("페르소나를 불러올 수 없습니다. API 서버 상태를 확인하세요.")
+        else:
+            user = p.get("user", {})
+            assets = user.get("assets", {})
+            income = user.get("income", {})
+            plans = user.get("plans", {})
+            commute = p.get("commute", {})
+            apt_pref = p.get("apartment_preferences", {})
+
+            # ── 자산 / 소득 ──────────────────────────────────
+            st.markdown("#### 💰 자산 & 소득")
+            col1, col2 = st.columns(2)
+            with col1:
+                asset_self = st.number_input(
+                    "본인 자산 (만원)", value=int(assets.get("self", 0) / 10000),
+                    step=100, min_value=0, key="p_asset_self"
+                )
+                asset_partner = st.number_input(
+                    "파트너 자산 (만원)", value=int(assets.get("partner", 0) / 10000),
+                    step=100, min_value=0, key="p_asset_partner"
+                )
+                asset_total = (asset_self + asset_partner) * 10000
+                st.metric("합산 자산", f"{asset_total / 1e8:.2f}억원")
+            with col2:
+                income_self = st.number_input(
+                    "본인 연소득 (만원)", value=int(income.get("self", 0) / 10000),
+                    step=100, min_value=0, key="p_income_self"
+                )
+                income_partner = st.number_input(
+                    "파트너 연소득 (만원)", value=int(income.get("partner", 0) / 10000),
+                    step=100, min_value=0, key="p_income_partner"
+                )
+                income_total = (income_self + income_partner) * 10000
+                st.metric("합산 연소득", f"{income_total / 1e8:.2f}억원")
+
+            st.markdown("---")
+
+            # ── 관심 지역 ──────────────────────────────────────
+            st.markdown("#### 🗺️ 관심 지역")
+            if not st.session_state.get("districts"):
+                st.session_state.districts = DashboardClient.get_districts()
+            all_district_names = [d["name"] for d in st.session_state.get("districts", [])]
+            current_areas = user.get("interest_areas", [])
+            selected_areas = st.multiselect(
+                "관심 지역 선택 (최대 6개)",
+                options=all_district_names,
+                default=[a for a in current_areas if a in all_district_names],
+                max_selections=6,
+                key="p_interest_areas"
+            )
+
+            st.markdown("---")
+
+            # ── 매수 계획 / 출퇴근 ─────────────────────────────
+            st.markdown("#### 🏠 매수 계획 & 출퇴근")
+            col3, col4 = st.columns(2)
+            with col3:
+                is_first_time = st.checkbox(
+                    "생애최초 주택구입자",
+                    value=plans.get("is_first_time_buyer", True),
+                    key="p_first_time"
+                )
+                wedding_plan = st.text_input(
+                    "결혼 계획",
+                    value=plans.get("wedding", ""),
+                    key="p_wedding"
+                )
+            with col4:
+                max_commute = st.slider(
+                    "최대 출퇴근 시간 (분)",
+                    min_value=20, max_value=90,
+                    value=commute.get("max_door_to_door_minutes", 50),
+                    step=5, key="p_max_commute"
+                )
+                min_area = st.number_input(
+                    "최소 전용면적 (㎡)",
+                    value=apt_pref.get("min_exclusive_area_sqm", 59),
+                    min_value=20, max_value=200, step=1, key="p_min_area"
+                )
+
+            st.markdown("---")
+
+            # ── 저장 버튼 ──────────────────────────────────────
+            if st.button("💾 페르소나 저장", type="primary", use_container_width=True):
+                updates = {
+                    "user": {
+                        "assets": {
+                            "self": asset_self * 10000,
+                            "partner": asset_partner * 10000,
+                            "total": asset_total,
+                        },
+                        "income": {
+                            "self": income_self * 10000,
+                            "partner": income_partner * 10000,
+                            "total": income_total,
+                        },
+                        "interest_areas": selected_areas,
+                        "plans": {
+                            "is_first_time_buyer": is_first_time,
+                            "wedding": wedding_plan,
+                        },
+                    },
+                    "commute": {
+                        "max_door_to_door_minutes": max_commute,
+                    },
+                    "apartment_preferences": {
+                        "min_exclusive_area_sqm": min_area,
+                    },
+                }
+                with st.spinner("저장 중..."):
+                    result = DashboardClient.update_persona(updates)
+
+                if "error" in result:
+                    st.error(f"❌ 저장 실패: {result['error']}")
+                else:
+                    st.success("✅ 페르소나 저장 완료. 다음 리포트 생성 시 반영됩니다.")
+                    st.session_state.persona = result.get("persona", {})
+                    st.rerun()
