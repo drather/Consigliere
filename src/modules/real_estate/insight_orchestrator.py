@@ -34,6 +34,7 @@ class InsightOrchestrator:
         policy_facts: List[Dict[str, Any]],
         budget_dict: Dict[str, Any],
         filtered_tx_count: int = 0,
+        news_summary: str = "",
         fallback_note: str = ""
     ) -> Dict[str, Any]:
 
@@ -43,7 +44,8 @@ class InsightOrchestrator:
             "macro_data": macro_dict,
             "policy_context": policy_context,
             "tx_data": daily_txs,
-            "interest_areas": persona_data.get("interest_areas", [])
+            "interest_areas": persona_data.get("interest_areas", []),
+            "news_summary": news_summary,
         })
         economist_insight = context_result["economist_insight"]
         analyst_insight = context_result["analyst_insight"]
@@ -64,6 +66,7 @@ class InsightOrchestrator:
             "policy_facts": json.dumps(policy_facts, ensure_ascii=False),
             "budget_plan": json.dumps(budget_dict, ensure_ascii=False),
             "budget_constraint_note": budget_constraint_note,
+            "news_summary": news_summary,
             "fallback_note": fallback_note,
             "validator_feedback": "",
         }

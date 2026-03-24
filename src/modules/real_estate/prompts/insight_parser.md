@@ -9,6 +9,7 @@
 4. **금융 정책 컨텍스트 (policy_context):** {{policy_context}}
 5. **정책 팩트 RAG (policy_facts):** {{policy_facts}}
 6. **확정 예산 계획 (budget_plan):** {{budget_plan}}
+7. **오늘의 부동산 뉴스 요약 (news_summary):** {{news_summary}}
 
 ---
 
@@ -61,7 +62,11 @@
 종합 점수: [합계]점/100점
 ```
 
-### 4. 💡 전문가의 제언
+### 4. 📰 오늘의 부동산 뉴스 요약
+`news_summary`에 내용이 있는 경우, 주요 뉴스 이슈 2~3건을 bullet point로 정리하고 시장에 미치는 영향을 한 문장으로 평가하십시오.
+`news_summary`가 비어있는 경우 이 섹션은 생략하십시오.
+
+### 5. 💡 전문가의 제언
 `policy_facts`의 최신 정책 변화(공급 일정, GTX 착공 등)를 인용하여, 향후 1~2년 내 자산 가치 변화를 예측하십시오.
 
 ---

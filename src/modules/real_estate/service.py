@@ -291,6 +291,8 @@ class RealEstateAgent:
 
         # Load macro: prefer stored file, fallback to real-time
         macro_dict = self._load_stored_macro(target_date) or self.macro_service.fetch_latest_macro_data().model_dump()
+        # Phase 3: Load Job2 news summary
+        news_summary = self._load_stored_news(target_date)
 
         # Load persona + policy context
         persona_data = self._load_persona()
@@ -352,6 +354,7 @@ class RealEstateAgent:
             policy_facts=policy_facts,
             budget_dict=budget_plan.model_dump(),
             filtered_tx_count=filtered_tx_count,
+            news_summary=news_summary,
             fallback_note=f"({target_date} 저장 데이터 기준, {len(target_codes)}개 구)"
         )
 
@@ -490,6 +493,21 @@ class RealEstateAgent:
             enriched.append(tx)
 
         return enriched
+
+    def _load_stored_news(self, target_date: date) -> str:
+        """당일 Job2 뉴스 마크다운 파일 로드. 없으면 빈 문자열 반환."""
+        news_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "news")
+        filename = os.path.join(news_dir, f"{target_date.isoformat()}_News.md")
+        if os.path.exists(filename):
+            try:
+                with open(filename, "r", encoding="utf-8") as f:
+                    content = f.read()
+                logger.info(f"[Job4] Loaded news summary: {filename}")
+                return content[:3000]  # 토큰 절약을 위해 앞부분만 전달
+            except Exception as e:
+                logger.error(f"[Job4] Failed to load news file: {e}")
+        logger.warning(f"[Job4] No news file found for {target_date} — skipping news section")
+        return ""
 
     def _load_stored_macro(self, target_date: date) -> Optional[Dict[str, Any]]:
         """Loads today's saved macro JSON if available."""

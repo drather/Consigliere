@@ -13,6 +13,7 @@ class ContextAnalystAgent(BaseAgent):
             "policy_context": json.dumps(context.get("policy_context", {}), ensure_ascii=False),
             "tx_data": json.dumps(context.get("tx_data", []), ensure_ascii=False, default=str),
             "interest_areas": json.dumps(context.get("interest_areas", []), ensure_ascii=False),
+            "news_summary": context.get("news_summary", ""),
         })
         combined = self.llm.generate(prompt)
 
