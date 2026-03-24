@@ -32,18 +32,22 @@ class ContextAnalystAgent(BaseAgent):
 
 class CodeBasedValidator:
     """
-    Rule-based validator replacing StrategyValidatorAgent LLM call (saves 1-2 LLM calls).
-    Scans report text for price mentions that exceed the budget ceiling.
+    Rule-based validator. Weighted scoring across 4 checks (100pts total).
+    Score >= 90 → PASS, 75-89 → WARN, < 75 → FAIL (triggers retry).
+
+    Weights:
+      - Budget compliance       : 40pts
+      - Scorecard 3-complex     : 25pts
+      - commute_minutes citation : 20pts
+      - policy_facts citation   : 15pts
     """
 
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
         budget_dict = context.get("budget_plan", {})
         report_json = context.get("generated_report", {})
+        policy_facts = context.get("policy_facts", [])
 
-        final_max_price = budget_dict.get("final_max_price", 0)
-        max_억 = final_max_price / 100_000_000 if final_max_price else 999
-
-        # Extract all mrkdwn text from report blocks
+        # --- Extract all report text ---
         all_text = ""
         for block in report_json.get("blocks", []):
             btype = block.get("type")
@@ -52,41 +56,82 @@ class CodeBasedValidator:
             elif btype == "header":
                 all_text += block.get("text", {}).get("text", "") + "\n"
 
-        # Find price patterns like "12억", "12.5억"
+        score = 0
+        issues = []
+
+        # 1. Budget compliance (40pts)
+        final_max_price = budget_dict.get("final_max_price", 0)
+        max_억 = final_max_price / 100_000_000 if final_max_price else 999
         price_matches = re.findall(r'(\d+(?:\.\d+)?)\s*억', all_text)
 
-        over_budget = []
+        hard_over, soft_over = [], []
         for p_str in price_matches:
             price_억 = float(p_str)
-            # Only flag property-scale prices (>=3억) that exceed budget by >10%
-            if price_억 >= 3 and max_억 > 0 and price_억 > max_억 * 1.1:
-                over_budget.append(f"{p_str}억")
-
-        # Separate hard violations (>10% over budget) from soft warnings (within 10%)
-        hard_over = []
-        soft_over = []
-        for p_str in price_matches:
-            price_억 = float(p_str)
-            if price_억 >= 3 and max_억 > 0 and price_억 > max_억 * 1.1:
-                hard_over.append(f"{p_str}억")
-            elif price_억 >= 3 and max_억 > 0 and price_억 > max_억:
-                soft_over.append(f"{p_str}억")
+            if price_억 >= 3 and max_억 < 999:
+                if price_억 > max_억 * 1.1:
+                    hard_over.append(f"{p_str}억")
+                elif price_억 > max_억:
+                    soft_over.append(f"{p_str}억")
 
         if hard_over:
-            feedback = (
-                f"예산 한도 10% 초과 단지 발견: {', '.join(sorted(set(hard_over)))} "
-                f"(한도: {max_억:.1f}억). 예산 이하 단지만 추천하십시오."
+            issues.append(
+                f"예산 한도 10% 초과 단지: {', '.join(sorted(set(hard_over)))} (한도: {max_억:.1f}억). 예산 이하 단지만 추천하십시오."
             )
-            return {"status": "FAIL", "score": 50, "feedback": feedback}
-
-        if soft_over:
-            feedback = (
-                f"예산 초과 가격 언급 발견: {', '.join(sorted(set(soft_over)))} "
-                f"(한도: {max_억:.1f}억). 예산 이하 단지만 추천하십시오."
+            # score += 0
+        elif soft_over:
+            issues.append(
+                f"예산 초과 가격 언급: {', '.join(sorted(set(soft_over)))} (한도: {max_억:.1f}억). 예산 이하 단지만 추천하십시오."
             )
-            return {"status": "WARN", "score": 75, "feedback": feedback}
+            score += 20
+        else:
+            score += 40
 
-        return {"status": "PASS", "score": 95, "feedback": ""}
+        # 2. Scorecard completeness — expect 1순위/2순위/3순위 (or 🥇/🥈/🥉)
+        rank_patterns = [
+            (r'(🥇|1순위)', "1순위"),
+            (r'(🥈|2순위)', "2순위"),
+            (r'(🥉|3순위)', "3순위"),
+        ]
+        found_ranks = sum(1 for pattern, _ in rank_patterns if re.search(pattern, all_text))
+        if found_ranks >= 3:
+            score += 25
+        elif found_ranks == 2:
+            score += 15
+            issues.append("스코어카드에 3순위 단지가 누락되었습니다. 1순위/2순위/3순위 3개 단지를 모두 작성하십시오.")
+        else:
+            issues.append("스코어카드 단지가 부족합니다 (최소 3개 필요). 1순위/2순위/3순위를 모두 작성하십시오.")
+
+        # 3. commute_minutes_to_samsung citation (20pts)
+        if re.search(r'출퇴근편의성', all_text) and re.search(r'\d+분', all_text):
+            score += 20
+        else:
+            issues.append("출퇴근편의성 항목에 commute_minutes_to_samsung(분 단위 수치)가 인용되지 않았습니다. 각 단지 스코어카드에 구체적인 출퇴근 시간을 명시하십시오.")
+
+        # 4. policy_facts citation (15pts)
+        if policy_facts:
+            cited = False
+            for fact in policy_facts:
+                content = fact.get("content", "")
+                # Extract meaningful terms: Korean 3+ syllables or alphanumeric 4+ chars
+                terms = re.findall(r'[가-힣]{3,}|[a-zA-Z0-9]{4,}', content)
+                if any(term in all_text for term in terms[:20]):
+                    cited = True
+                    break
+            if cited:
+                score += 15
+            else:
+                issues.append("policy_facts의 정책/개발 정보가 리포트에 인용되지 않았습니다. 전문가의 제언 섹션에 최신 정책 팩트를 반드시 인용하십시오.")
+        else:
+            score += 15  # policy_facts가 없는 경우 해당 항목 면제
+
+        # --- Determine status ---
+        feedback = " | ".join(issues)
+        if score >= 90:
+            return {"status": "PASS", "score": score, "feedback": ""}
+        elif score >= 75:
+            return {"status": "WARN", "score": score, "feedback": feedback}
+        else:
+            return {"status": "FAIL", "score": score, "feedback": feedback}
 
 
 # Legacy agents — no longer used in main pipeline

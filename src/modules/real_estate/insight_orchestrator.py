@@ -83,6 +83,7 @@ class InsightOrchestrator:
             validation_result = self.validator.run({
                 "budget_plan": budget_dict,
                 "generated_report": report_json,
+                "policy_facts": policy_facts,
             })
             score = validation_result.get("score", 0)
             feedback = validation_result.get("feedback", "")
