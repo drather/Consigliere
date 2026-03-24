@@ -438,10 +438,36 @@ class RealEstateAgent:
             logger.error(f"[Job4] Failed to load area_intel.json: {e}")
             return {}
 
+    def _compute_district_average(self, dist_intel: Dict[str, Any]) -> Dict[str, Any]:
+        """구 내 모든 동의 데이터를 평균/집계하여 fallback 데이터 생성."""
+        dongs = list(dist_intel.get("dongs", {}).values())
+        if not dongs:
+            return {}
+
+        commutes = [d["commute_minutes_to_samsung"] for d in dongs if d.get("commute_minutes_to_samsung")]
+        avg_commute = int(sum(commutes) / len(commutes)) if commutes else dist_intel.get("default_commute_minutes", 99)
+
+        seen, all_stations = set(), []
+        for d in dongs:
+            for s in d.get("nearest_stations", []):
+                if s["name"] not in seen:
+                    all_stations.append(s)
+                    seen.add(s["name"])
+
+        school_notes = [d.get("school_zone_notes", "") for d in dongs if d.get("school_zone_notes")]
+
+        return {
+            "commute_minutes_to_samsung": avg_commute,
+            "nearest_stations": all_stations[:4],
+            "school_zone_notes": school_notes[0] if school_notes else f"{dist_intel.get('name', '')} 구 평균 데이터",
+            "elementary_schools": [],
+            "_is_district_average": True,
+        }
+
     def _enrich_transactions(self, txs: List[Dict[str, Any]], area_intel: Dict[str, Any]) -> List[Dict[str, Any]]:
         """각 거래 dict에 commute_minutes, nearest_stations, school_zone, reconstruction 정보 부착.
 
-        매칭 우선순위: apt_name → notable_complexes 포함 여부 → 구 기본값
+        매칭 우선순위: apt_name → notable_complexes 포함 여부 → 구 동 평균 → ChromaDB policy 검색
         """
         if not area_intel:
             return txs
@@ -454,6 +480,7 @@ class RealEstateAgent:
             tx = dict(tx)
             apt_name = tx.get("apt_name", "")
             district_code = str(tx.get("district_code", ""))
+            has_reconstruction = False
 
             # 재건축 정보: apartment_overrides에서 exact match
             for override_key, override_val in apt_overrides.items():
@@ -461,7 +488,23 @@ class RealEstateAgent:
                     tx["reconstruction_status"] = override_val.get("reconstruction_status", "")
                     tx["reconstruction_potential"] = override_val.get("reconstruction_potential", "UNKNOWN")
                     tx["gtx_benefit"] = override_val.get("gtx_benefit", False)
+                    has_reconstruction = True
                     break
+
+            # 재건축 정보가 없는 단지 → ChromaDB policy 검색으로 보완
+            if not has_reconstruction and apt_name:
+                try:
+                    policy_hits = self.repository.search_policy(
+                        query=f"{apt_name} 재건축 리모델링 GTX", n_results=1
+                    )
+                    if policy_hits:
+                        content = policy_hits[0].get("content", "")
+                        if apt_name in content or any(w in content for w in ["재건축", "리모델링", "GTX"]):
+                            tx["reconstruction_status"] = content[:120]
+                            tx["reconstruction_potential"] = "MEDIUM"
+                            tx["gtx_benefit"] = "GTX" in content
+                except Exception:
+                    pass
 
             # 역세권/출퇴근/학군: district → dong 순서로 매칭
             dist_intel = districts_intel.get(district_code, {})
@@ -476,10 +519,11 @@ class RealEstateAgent:
                     matched_dong = dong_data
                     break
 
-            # fallback: 구의 첫 번째 dong 또는 district default
+            # Phase 2 fallback: 구 내 동 평균값 (기존 첫 번째 dong 대신)
             if not matched_dong:
-                dongs = dist_intel.get("dongs", {})
-                matched_dong = next(iter(dongs.values()), None) if dongs else None
+                matched_dong = self._compute_district_average(dist_intel)
+                if matched_dong:
+                    logger.debug(f"[Job4] '{apt_name}': dong 미매칭 → 구 평균 fallback 적용")
 
             if matched_dong:
                 tx["commute_minutes_to_samsung"] = matched_dong.get("commute_minutes_to_samsung",
