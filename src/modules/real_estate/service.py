@@ -362,19 +362,56 @@ class RealEstateAgent:
         self._save_report(report_json, target_date, len(daily_txs))
         return {"success": True, "score": score, "tx_count": len(daily_txs), "date": target_date.isoformat()}
 
+    def _job1_done_flag(self, target_date: date) -> str:
+        """Job1 완료 마커 파일 경로."""
+        data_root = os.getenv("LOCAL_STORAGE_PATH", "./data")
+        return os.path.join(data_root, "real_estate", f"job1_{target_date.isoformat()}.done")
+
     def run_insight_pipeline(self, district_code: Optional[str] = None, target_date: Optional[date] = None, send_slack: bool = True) -> Dict[str, Any]:
         """Pipeline: Job1 → Job2 → Job3 → Job4 → Slack.
 
+        당일 이미 수행된 Job은 스킵한다 (중복 방지):
+          - Job1: data/real_estate/job1_{date}.done 파일 존재 시 스킵
+          - Job2: data/real_estate/news/{date}_News.md 존재 시 스킵
+          - Job3: data/real_estate/macro/{date}_macro.json 존재 시 스킵
         district_code=None → persona.interest_areas 기반 4개 구 동시 수집
         """
         if target_date is None:
             target_date = date.today()
         year_month = target_date.strftime("%Y%m")
+        data_root = os.getenv("LOCAL_STORAGE_PATH", "./data")
 
         results = {}
-        results["job1"] = self.fetch_transactions(district_code, year_month)
-        results["job2"] = self.fetch_news()
-        results["job3"] = self.fetch_macro_data()
+
+        # ── Job 1: 실거래가 수집 ──────────────────────────────────────
+        job1_flag = self._job1_done_flag(target_date)
+        if os.path.exists(job1_flag):
+            logger.info(f"[Pipeline] Job1 스킵 — 당일 완료 마커 존재: {job1_flag}")
+            results["job1"] = {"skipped": True, "reason": "already_done_today"}
+        else:
+            results["job1"] = self.fetch_transactions(district_code, year_month)
+            # 완료 마커 생성
+            os.makedirs(os.path.dirname(job1_flag), exist_ok=True)
+            with open(job1_flag, "w") as f:
+                f.write(datetime.now().isoformat())
+
+        # ── Job 2: 뉴스 수집 ─────────────────────────────────────────
+        news_file = os.path.join(data_root, "real_estate", "news", f"{target_date.isoformat()}_News.md")
+        if os.path.exists(news_file):
+            logger.info(f"[Pipeline] Job2 스킵 — 당일 뉴스 파일 존재: {news_file}")
+            results["job2"] = {"skipped": True, "reason": "already_done_today"}
+        else:
+            results["job2"] = self.fetch_news()
+
+        # ── Job 3: 거시경제 수집 ─────────────────────────────────────
+        macro_file = os.path.join(data_root, "real_estate", "macro", f"{target_date.isoformat()}_macro.json")
+        if os.path.exists(macro_file):
+            logger.info(f"[Pipeline] Job3 스킵 — 당일 매크로 파일 존재: {macro_file}")
+            results["job3"] = {"skipped": True, "reason": "already_done_today"}
+        else:
+            results["job3"] = self.fetch_macro_data()
+
+        # ── Job 4: 리포트 생성 (항상 실행) ───────────────────────────
         results["job4"] = self.generate_report(district_code, target_date)
 
         if send_slack:

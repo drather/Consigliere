@@ -1,10 +1,81 @@
 import os
+import re
 import json
 from typing import Dict, Any, Optional
 from abc import ABC, abstractmethod
 from core.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def _parse_json_robust(raw: str, log, provider: str = "LLM") -> Dict[str, Any]:
+    """
+    LLM 응답에서 JSON을 안정적으로 파싱한다.
+
+    시도 순서:
+    1. 마크다운 펜스 제거 후 json.loads (가장 빠름)
+    2. outermost JSON 경계 추출 후 json.loads
+    3. 문자열 내 제어문자 이스케이프 후 json.loads
+    4. json_repair 라이브러리로 복구 후 json.loads (가장 강력)
+    """
+    # ── 단계 1: 마크다운 펜스 제거 ──────────────────────────────────────
+    cleaned = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
+    cleaned = re.sub(r"```\s*$", "", cleaned, flags=re.MULTILINE).strip()
+
+    # ── 단계 2: outermost {} or [] 추출 ──────────────────────────────
+    obj_start, arr_start = cleaned.find("{"), cleaned.find("[")
+    if obj_start != -1 or arr_start != -1:
+        if arr_start != -1 and (obj_start == -1 or arr_start < obj_start):
+            end = cleaned.rfind("]")
+            if end != -1:
+                cleaned = cleaned[arr_start:end + 1]
+        else:
+            end = cleaned.rfind("}")
+            if end != -1:
+                cleaned = cleaned[obj_start:end + 1]
+
+    # ── 단계 3: 직접 파싱 시도 ──────────────────────────────────────
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    # ── 단계 4: 문자열 내 제어문자 이스케이프 ─────────────────────────
+    fixed, in_string, escape_next = "", False, False
+    for ch in cleaned:
+        if escape_next:
+            fixed += ch; escape_next = False
+        elif ch == "\\":
+            fixed += ch; escape_next = True
+        elif ch == '"':
+            fixed += ch; in_string = not in_string
+        elif in_string and ch == "\n":
+            fixed += "\\n"
+        elif in_string and ch == "\r":
+            fixed += "\\r"
+        elif in_string and ch == "\t":
+            fixed += "\\t"
+        elif in_string and ord(ch) < 0x20:
+            fixed += f"\\u{ord(ch):04x}"
+        else:
+            fixed += ch
+
+    try:
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        pass
+
+    # ── 단계 5: json_repair 로 복구 ─────────────────────────────────
+    try:
+        from json_repair import repair_json
+        repaired = repair_json(cleaned, return_objects=True)
+        if isinstance(repaired, (dict, list)):
+            log.warning(f"{provider} LLM JSON was repaired by json_repair. First 200 chars of raw: {cleaned[:200]!r}")
+            return repaired
+        return json.loads(repair_json(cleaned))
+    except Exception as e:
+        log.error(f"{provider} LLM JSON repair failed: {e}. Raw (first 300): {cleaned[:300]!r}")
+        return {"error": str(e)}
 
 class BaseLLMClient(ABC):
     """
@@ -68,41 +139,7 @@ class GeminiClient(BaseLLMClient):
                 }),
             )
             raw = response.text.strip()
-            # Strip markdown fences that thinking mode may prepend
-            import re
-            raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
-            raw = re.sub(r"```\s*$", "", raw, flags=re.MULTILINE).strip()
-            # Extract outermost JSON object or array
-            obj_start, arr_start = raw.find("{"), raw.find("[")
-            if obj_start == -1 and arr_start == -1:
-                pass  # let json.loads raise
-            elif arr_start != -1 and (obj_start == -1 or arr_start < obj_start):
-                end = raw.rfind("]")
-                if end != -1:
-                    raw = raw[arr_start:end + 1]
-            else:
-                end = raw.rfind("}")
-                if end != -1:
-                    raw = raw[obj_start:end + 1]
-            try:
-                return json.loads(raw)
-            except json.JSONDecodeError:
-                # JSON 문자열 값 내부의 literal 줄바꿈을 \n으로 이스케이프 후 재시도
-                fixed, in_string, escape_next = "", False, False
-                for ch in raw:
-                    if escape_next:
-                        fixed += ch; escape_next = False
-                    elif ch == "\\":
-                        fixed += ch; escape_next = True
-                    elif ch == '"':
-                        fixed += ch; in_string = not in_string
-                    elif in_string and ch == "\n":
-                        fixed += "\\n"
-                    elif in_string and ch == "\r":
-                        fixed += "\\r"
-                    else:
-                        fixed += ch
-                return json.loads(fixed)
+            return _parse_json_robust(raw, logger, "Gemini")
         except Exception as e:
             logger.error(f"Gemini LLM JSON Error: {e}")
             return {"error": str(e)}
@@ -143,28 +180,7 @@ class ClaudeClient(BaseLLMClient):
                 messages=[{"role": "user", "content": full_prompt}]
             )
             raw = message.content[0].text.strip()
-            # Strip potential markdown code fences
-            import re
-            raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
-            raw = re.sub(r"```\s*$", "", raw, flags=re.MULTILINE).strip()
-            # Extract JSON boundaries — handle both object {...} and array [...]
-            obj_start = raw.find('{')
-            arr_start = raw.find('[')
-            # Pick whichever comes first (and exists)
-            if obj_start == -1 and arr_start == -1:
-                pass  # fall through to json.loads which will raise
-            elif arr_start != -1 and (obj_start == -1 or arr_start < obj_start):
-                end = raw.rfind(']')
-                if end != -1:
-                    raw = raw[arr_start:end + 1]
-            else:
-                end = raw.rfind('}')
-                if end != -1:
-                    raw = raw[obj_start:end + 1]
-            return json.loads(raw)
-        except json.JSONDecodeError as e:
-            logger.error(f"Claude LLM JSON Parse Error: {e}. Raw output saved.")
-            return {"error": str(e)}
+            return _parse_json_robust(raw, logger, "Claude")
         except Exception as e:
             logger.error(f"Claude LLM JSON Error: {e}")
             return {"error": str(e)}

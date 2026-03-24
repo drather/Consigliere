@@ -14,11 +14,11 @@ commute:
   workplace_station: 삼성역
 investment_style: 투자우선형
 priority_weights:
-  commute: 26
-  liquidity: 21
-  living_convenience: 11
-  price_potential: 26
-  school: 16
+  commute: 25
+  liquidity: 25
+  living_convenience: 17
+  price_potential: 25
+  school: 8
 user:
   assets:
     partner: 100000000
