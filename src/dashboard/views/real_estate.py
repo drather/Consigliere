@@ -476,11 +476,16 @@ def show_real_estate():
         st.subheader("👤 페르소나 설정")
         st.caption("여기서 수정한 값은 다음 부동산 리포트 생성 시 즉시 반영됩니다.")
 
-        if "persona" not in st.session_state:
+        col_reload, _ = st.columns([1, 4])
+        with col_reload:
+            if st.button("🔄 새로고침", key="persona_reload"):
+                st.session_state.pop("persona", None)
+
+        if not st.session_state.get("persona"):
             with st.spinner("페르소나 로딩 중..."):
                 st.session_state.persona = DashboardClient.get_persona()
 
-        p = st.session_state.persona
+        p = st.session_state.get("persona", {})
         if not p:
             st.error("페르소나를 불러올 수 없습니다. API 서버 상태를 확인하세요.")
         else:
@@ -490,6 +495,10 @@ def show_real_estate():
             plans = user.get("plans", {})
             commute = p.get("commute", {})
             apt_pref = p.get("apartment_preferences", {})
+            pw = p.get("priority_weights", {
+                "commute": 40, "liquidity": 20, "school": 15,
+                "living_convenience": 15, "price_potential": 10,
+            })
 
             # ── 자산 / 소득 ──────────────────────────────────
             st.markdown("#### 💰 자산 & 소득")
@@ -516,6 +525,66 @@ def show_real_estate():
                 )
                 income_total = (income_self + income_partner) * 10000
                 st.metric("합산 연소득", f"{income_total / 1e8:.2f}억원")
+
+            st.markdown("---")
+
+            # ── 선호 기준 가중치 ────────────────────────────────
+            st.markdown("#### ⚖️ 선호 기준 가중치")
+            st.caption("각 항목의 중요도를 설정하세요. 리포트에서 가중치가 높은 항목을 더 상세히 분석합니다.")
+
+            WEIGHT_LABELS = {
+                "commute": "⚡ 출퇴근 편의성",
+                "liquidity": "💰 환금성 (역세권·거래량)",
+                "school": "🎒 학군",
+                "living_convenience": "🛍️ 생활편의 (마트·병원·편의시설)",
+                "price_potential": "📈 가격상승 가능성 (GTX·재건축)",
+            }
+
+            w_commute = st.slider(
+                WEIGHT_LABELS["commute"], 0, 10,
+                value=int(pw.get("commute", 40) / 10), key="pw_commute"
+            )
+            w_liquidity = st.slider(
+                WEIGHT_LABELS["liquidity"], 0, 10,
+                value=int(pw.get("liquidity", 20) / 10), key="pw_liquidity"
+            )
+            w_school = st.slider(
+                WEIGHT_LABELS["school"], 0, 10,
+                value=int(pw.get("school", 15) / 10), key="pw_school"
+            )
+            w_living = st.slider(
+                WEIGHT_LABELS["living_convenience"], 0, 10,
+                value=int(pw.get("living_convenience", 15) / 10), key="pw_living"
+            )
+            w_price = st.slider(
+                WEIGHT_LABELS["price_potential"], 0, 10,
+                value=int(pw.get("price_potential", 10) / 10), key="pw_price"
+            )
+
+            raw_total = w_commute + w_liquidity + w_school + w_living + w_price
+            if raw_total > 0:
+                norm = lambda v: round(v / raw_total * 100)
+                pct_commute = norm(w_commute)
+                pct_liquidity = norm(w_liquidity)
+                pct_school = norm(w_school)
+                pct_living = norm(w_living)
+                pct_price = norm(w_price)
+                ranked_weights = sorted(
+                    [(WEIGHT_LABELS[k], v) for k, v in [
+                        ("commute", pct_commute), ("liquidity", pct_liquidity),
+                        ("school", pct_school), ("living_convenience", pct_living),
+                        ("price_potential", pct_price),
+                    ]],
+                    key=lambda x: x[1], reverse=True
+                )
+                st.markdown("**📊 정규화된 가중치 (리포트 반영 비율):**")
+                bar_cols = st.columns(5)
+                for i, (label, pct) in enumerate(ranked_weights):
+                    with bar_cols[i]:
+                        st.metric(label.split(" ", 1)[-1][:6], f"{pct}%")
+            else:
+                st.warning("최소 하나 이상의 항목에 가중치를 설정하세요.")
+                pct_commute = pct_liquidity = pct_school = pct_living = pct_price = 20
 
             st.markdown("---")
 
@@ -589,6 +658,13 @@ def show_real_estate():
                     },
                     "apartment_preferences": {
                         "min_exclusive_area_sqm": min_area,
+                    },
+                    "priority_weights": {
+                        "commute": pct_commute,
+                        "liquidity": pct_liquidity,
+                        "school": pct_school,
+                        "living_convenience": pct_living,
+                        "price_potential": pct_price,
                     },
                 }
                 with st.spinner("저장 중..."):

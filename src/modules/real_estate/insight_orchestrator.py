@@ -57,6 +57,31 @@ class InsightOrchestrator:
             if filtered_tx_count > 0
             else ""
         )
+
+        # priority_weights → 리포트 분석 강조 지침 생성
+        pw = persona_data.get("priority_weights", {})
+        if pw:
+            total = sum(pw.values()) or 1
+            label_map = {
+                "commute": "출퇴근 편의성",
+                "liquidity": "환금성(역세권)",
+                "school": "학군",
+                "living_convenience": "생활편의",
+                "price_potential": "가격상승 가능성",
+            }
+            ranked = sorted(pw.items(), key=lambda x: x[1], reverse=True)
+            weights_desc = ", ".join(
+                f"{label_map.get(k, k)} {round(v/total*100)}%"
+                for k, v in ranked
+            )
+            priority_note = (
+                f"사용자의 선호 기준 가중치 (높을수록 중요): {weights_desc}. "
+                f"각 추천 단지마다 이 기준 순서대로 분석 섹션을 구성하고, "
+                f"가중치가 높은 항목을 더 상세히 서술하십시오."
+            )
+        else:
+            priority_note = ""
+
         base_variables = {
             "target_date": target_date.strftime("%Y-%m-%d"),
             "economist_insight": economist_insight,
@@ -66,6 +91,7 @@ class InsightOrchestrator:
             "policy_facts": json.dumps(policy_facts, ensure_ascii=False),
             "budget_plan": json.dumps(budget_dict, ensure_ascii=False),
             "budget_constraint_note": budget_constraint_note,
+            "priority_note": priority_note,
             "news_summary": news_summary,
             "fallback_note": fallback_note,
             "validator_feedback": "",

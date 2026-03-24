@@ -307,6 +307,7 @@ class PersonaUpdateRequest(BaseModel):
     investment_style: Optional[str] = None
     commute: Optional[Dict[str, Any]] = None
     apartment_preferences: Optional[Dict[str, Any]] = None
+    priority_weights: Optional[Dict[str, int]] = None
 
 @router.get("/dashboard/real-estate/persona")
 def get_persona(agent: RealEstateAgent = Depends(get_real_estate_agent)):
