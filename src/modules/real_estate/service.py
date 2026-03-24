@@ -335,6 +335,14 @@ class RealEstateAgent:
             policy_facts = []
         budget_plan = self.calculator.calculate_budget(persona_data, policy_context)
 
+        # Phase 1: 예산 이하 단지만 LLM에 전달 (구조적 강제)
+        budget_ceiling = budget_plan.final_max_price
+        pre_filter_count = len(daily_txs)
+        daily_txs = [tx for tx in daily_txs if tx.get("price", 0) <= budget_ceiling]
+        filtered_tx_count = pre_filter_count - len(daily_txs)
+        if filtered_tx_count > 0:
+            logger.info(f"[Job4] Budget filter: {filtered_tx_count}건 제거 (한도: {budget_ceiling/1e8:.1f}억, 잔여: {len(daily_txs)}건)")
+
         report_json = self.insight_orchestrator.generate_strategy(
             target_date=target_date,
             macro_dict=macro_dict,
@@ -343,6 +351,7 @@ class RealEstateAgent:
             persona_data=persona_data.get("user", {}),
             policy_facts=policy_facts,
             budget_dict=budget_plan.model_dump(),
+            filtered_tx_count=filtered_tx_count,
             fallback_note=f"({target_date} 저장 데이터 기준, {len(target_codes)}개 구)"
         )
 

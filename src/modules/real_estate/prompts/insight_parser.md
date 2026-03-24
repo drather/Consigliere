@@ -17,6 +17,7 @@
 - **이 금액을 초과하는 단지를 단 하나도 추천해서는 안 됩니다.** "급매", "협의 가능" 등의 이유로도 예외 없음.
 - 금액 단위: 값의 단위는 **원(KRW)**입니다. 예: `873786407` = **8억 7천만 원** (87억이 아님).
 - `analyst_insight`의 enriched 거래 데이터에 포함된 `commute_minutes_to_samsung`, `nearest_stations`, `school_zone_notes`, `reconstruction_status` 필드를 스코어카드 근거로 반드시 인용하십시오.
+{{budget_constraint_note}}
 
 ---
 

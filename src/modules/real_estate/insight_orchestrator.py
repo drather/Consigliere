@@ -33,6 +33,7 @@ class InsightOrchestrator:
         persona_data: Dict[str, Any],
         policy_facts: List[Dict[str, Any]],
         budget_dict: Dict[str, Any],
+        filtered_tx_count: int = 0,
         fallback_note: str = ""
     ) -> Dict[str, Any]:
 
@@ -47,7 +48,13 @@ class InsightOrchestrator:
         economist_insight = context_result["economist_insight"]
         analyst_insight = context_result["analyst_insight"]
 
-        # 2. Synthesize (최대 3회 재시도)
+        # 2. Synthesize + Validate loop (최대 3회 재시도)
+        budget_constraint_note = (
+            f"⚠️ 예산 필터 적용: {filtered_tx_count}건의 예산 초과 거래가 제거되었습니다. "
+            f"아래 리스트에 포함된 단지만 추천하십시오. 리스트 외 단지 추천은 즉시 기각됩니다."
+            if filtered_tx_count > 0
+            else ""
+        )
         base_variables = {
             "target_date": target_date.strftime("%Y-%m-%d"),
             "economist_insight": economist_insight,
@@ -56,33 +63,37 @@ class InsightOrchestrator:
             "policy_context": json.dumps(policy_context, ensure_ascii=False),
             "policy_facts": json.dumps(policy_facts, ensure_ascii=False),
             "budget_plan": json.dumps(budget_dict, ensure_ascii=False),
+            "budget_constraint_note": budget_constraint_note,
             "fallback_note": fallback_note,
             "validator_feedback": "",
         }
         report_json = {}
+        score = 0
+        feedback = ""
         for attempt in range(1, 4):
             logger.info(f"🧠 [Orchestrator] Synthesizing report (attempt {attempt}/3)...")
             report_json = self.synthesizer.run(base_variables)
-            if "blocks" in report_json:
+            if "blocks" not in report_json:
+                logger.warning(f"⚠️ [Orchestrator] Invalid structure on attempt {attempt}: {str(report_json)[:200]}")
+                continue
+
+            validation_result = self.validator.run({
+                "budget_plan": budget_dict,
+                "generated_report": report_json,
+            })
+            score = validation_result.get("score", 0)
+            feedback = validation_result.get("feedback", "")
+
+            if score >= 75:
+                logger.info(f"✅ [Orchestrator] Validated (Score: {score}) on attempt {attempt}.")
                 break
-            logger.warning(f"⚠️ [Orchestrator] Invalid structure on attempt {attempt}: {str(report_json)[:200]}")
+
+            logger.warning(f"⚠️ [Orchestrator] Score {score} < 75 on attempt {attempt}, retrying with feedback: {feedback}")
+            base_variables["validator_feedback"] = feedback
 
         if "blocks" not in report_json:
             logger.error("❌ [Orchestrator] Synthesizer failed after 3 attempts.")
             return {"blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 리포트 생성 중 오류가 발생했습니다."}}]}
-
-        # 3. Rule-based validation (no LLM call)
-        validation_result = self.validator.run({
-            "budget_plan": budget_dict,
-            "generated_report": report_json,
-        })
-        score = validation_result.get("score", 0)
-        feedback = validation_result.get("feedback", "")
-
-        if score < 90:
-            logger.warning(f"⚠️ [Orchestrator] Validation warning (Score: {score}): {feedback}")
-        else:
-            logger.info(f"✅ [Orchestrator] Validated (Score: {score}).")
 
         # 4. Final Polish
         report_json = self.presenter.inject_validation_warning(report_json, score)

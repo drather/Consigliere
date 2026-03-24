@@ -61,14 +61,31 @@ class CodeBasedValidator:
             if price_억 >= 3 and max_억 > 0 and price_억 > max_억 * 1.1:
                 over_budget.append(f"{p_str}억")
 
-        if over_budget:
+        # Separate hard violations (>10% over budget) from soft warnings (within 10%)
+        hard_over = []
+        soft_over = []
+        for p_str in price_matches:
+            price_억 = float(p_str)
+            if price_억 >= 3 and max_억 > 0 and price_억 > max_억 * 1.1:
+                hard_over.append(f"{p_str}억")
+            elif price_억 >= 3 and max_억 > 0 and price_억 > max_억:
+                soft_over.append(f"{p_str}억")
+
+        if hard_over:
             feedback = (
-                f"예산 초과 가격 언급 발견: {', '.join(sorted(set(over_budget)))} "
+                f"예산 한도 10% 초과 단지 발견: {', '.join(sorted(set(hard_over)))} "
                 f"(한도: {max_억:.1f}억). 예산 이하 단지만 추천하십시오."
             )
-            return {"status": "FAIL", "score": 65, "feedback": feedback}
+            return {"status": "FAIL", "score": 50, "feedback": feedback}
 
-        return {"status": "PASS", "score": 92, "feedback": ""}
+        if soft_over:
+            feedback = (
+                f"예산 초과 가격 언급 발견: {', '.join(sorted(set(soft_over)))} "
+                f"(한도: {max_억:.1f}억). 예산 이하 단지만 추천하십시오."
+            )
+            return {"status": "WARN", "score": 75, "feedback": feedback}
+
+        return {"status": "PASS", "score": 95, "feedback": ""}
 
 
 # Legacy agents — no longer used in main pipeline
