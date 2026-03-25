@@ -22,3 +22,7 @@ server.log
 # Temp
 .DS_Store
 tmp/
+
+# Claude Code local settings (machine-specific permissions)
+.claude/settings.local.json
+.claude/estate-reference/
