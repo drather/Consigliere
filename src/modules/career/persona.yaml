@@ -1,0 +1,38 @@
+user:
+  name: kks
+  domain: 백엔드 엔지니어
+  experience_years: 3
+  current_company_type: 스타트업
+  target_company_types:
+    - 중견 테크 스타트업
+    - B2B SaaS
+  career_goal: 시니어 백엔드 → 아키텍트
+
+skills:
+  current:
+    - Python
+    - FastAPI
+    - PostgreSQL
+    - Redis
+    - Docker
+    - Git
+  learning:
+    - Kubernetes
+    - Go
+  target:
+    - Kubernetes
+    - Go
+    - Terraform
+    - AWS
+
+job_search:
+  active: false
+  preferred_location: [서울, 판교]
+  min_salary: 60000000
+  preferred_employment_type: 정규직
+  remote_preference: 하이브리드
+
+learning:
+  weekly_hours: 10
+  preferred_format: [유튜브 강의, 공식 문서, 사이드 프로젝트]
+  current_focus: Kubernetes CKA

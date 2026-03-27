@@ -1,3 +1,4 @@
+from modules.career.service import CareerAgent
 from modules.finance.service import FinanceAgent
 from modules.real_estate.service import RealEstateAgent
 from modules.real_estate.monitor.service import TransactionMonitorService
@@ -7,6 +8,7 @@ from modules.automation.service import AutomationService
 from core.notify.slack import SlackSender
 
 # Basic global instances for DI
+_career_agent = CareerAgent()
 _finance_agent = FinanceAgent(storage_mode="local")
 _real_estate_agent = RealEstateAgent(storage_mode="local")
 _monitor_service = TransactionMonitorService()
@@ -14,6 +16,9 @@ _news_service = NewsService(storage_mode="local")
 _chroma_repo = ChromaRealEstateRepository()
 _automation_service = AutomationService()
 _slack_sender = SlackSender()
+
+def get_career_agent() -> CareerAgent:
+    return _career_agent
 
 def get_finance_agent() -> FinanceAgent:
     return _finance_agent

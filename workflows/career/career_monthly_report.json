@@ -1,0 +1,80 @@
+{
+  "name": "[Consigliere] 커리어 Monthly Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 20 28-31 * *"
+            }
+          ]
+        }
+      },
+      "name": "Schedule (28~31일 20:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 350],
+      "id": "schedule-trigger"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() }}",
+              "operation": "equal",
+              "value2": "={{ new Date().getDate() }}"
+            }
+          ]
+        }
+      },
+      "name": "말일 체크",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [500, 350],
+      "id": "last-day-check"
+    },
+    {
+      "parameters": {
+        "url": "http://consigliere_api:8000/jobs/career/generate-monthly-report",
+        "method": "POST",
+        "options": { "timeout": 180000 }
+      },
+      "name": "Generate Monthly Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 280],
+      "id": "gen-monthly"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "=📅 *커리어 Monthly Report* 생성 완료\n\n{{ $json.report.substring(0, 2000) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Slack 알림",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 280],
+      "id": "slack-notify"
+    }
+  ],
+  "connections": {
+    "Schedule (28~31일 20:00)": { "main": [[{ "node": "말일 체크", "type": "main", "index": 0 }]] },
+    "말일 체크": { "main": [[{ "node": "Generate Monthly Report", "type": "main", "index": 0 }]] },
+    "Generate Monthly Report": { "main": [[{ "node": "Slack 알림", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

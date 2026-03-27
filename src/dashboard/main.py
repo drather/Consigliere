@@ -15,11 +15,13 @@ if project_root not in sys.path:
 
 # Import Views
 try:
+    from dashboard.views.career import show_career as render_career_page
     from dashboard.views.finance import render_finance_page
     from dashboard.views.real_estate import show_real_estate as render_real_estate_page
     from dashboard.views.automation import show_automation as render_automation_page
 except ImportError:
     try:
+        from views.career import show_career as render_career_page
         from views.finance import render_finance_page
         from views.real_estate import show_real_estate as render_real_estate_page
         from views.automation import show_automation as render_automation_page
@@ -55,13 +57,15 @@ def main():
         st.title("Consigliere 🤖")
         menu = st.radio(
             "Go to",
-            ["🏠 Home", "💰 Finance", "🏢 Real Estate", "⚙️ Automation"]
+            ["🏠 Home", "🚀 Career", "💰 Finance", "🏢 Real Estate", "⚙️ Automation"]
         )
         st.info(f"Current Module: {menu.split()[-1]}")
 
     # 2. Page Routing Logic
     if menu == "🏠 Home":
         show_home()
+    elif menu == "🚀 Career":
+        render_career_page()
     elif menu == "💰 Finance":
         render_finance_page()
     elif menu == "🏢 Real Estate":

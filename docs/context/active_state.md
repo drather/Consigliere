@@ -1,29 +1,33 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-03-24
-**Current Active Feature:** 없음 (Pipeline Optimization & LLM Robustness 완료)
+**Last Updated:** 2026-03-25
+**Current Active Feature:** 커리어 Daily Report 신규 모듈 구현
 
 ## 📍 Current Focus
-- **Branch:** `master`
-- **Status:** ✅ Insight Pipeline 최적화 (Skip logic) 및 LLM 파싱 안정성 강화 완료
+- **Branch:** `feature/career-daily-report`
+- **Status:** 🔧 Phase 1 (기획문서 작성 중)
 
 ## 💡 Recent Context
+- **in_progress:** 커리어 Daily Report 모듈 신규 개발
+  - 데이터 소스: GitHub Trending, Hacker News, Dev.to, Wanted, 점핏
+  - 리포트: 일별(.md) + 주간(매주 금) + 월간(매월 말일) 자동 생성
+  - 딜리버리: 매일 09:00 Slack 자동 발송 (n8n 크론)
+  - 대시보드: Streamlit Career 메뉴 추가 (페르소나 편집 + 리포트 뷰어)
 - **completed:** Job1 aiohttp 비동기 전환 완료
-- **completed:** `json-repair` 도입으로 LLM 출력 파싱 안정성 극대화 (Gemini/Claude 공통)
-- **completed:** Insight Pipeline (Job 1-3) 중복 실행 방지 로직 구현 (`.done` 및 파일 체크)
-- **completed:** 부동산 평가 가중치(`persona.yaml`) 재조정
+- **completed:** `json-repair` 도입으로 LLM 출력 파싱 안정성 극대화
+- **completed:** Insight Pipeline (Job 1-3) 중복 실행 방지 로직 구현
 - **blocked:** 없음
 
 ## 🔜 다음 작업 로드맵
 
-### 1순위 — Job4 부동산 전략 리포트 고도화 (진행 예정)
-- 현재 리포트 품질 개선 (점수 안정화, 예산 준수, 단지 추천 정확도)
-- 페르소나 기반 개인화 강화 (interest_areas 매핑 고도화)
-- 거시경제 + 뉴스 + 실거래 데이터 통합 인사이트 품질 향상
+### 현재 — 커리어 Daily Report (feature/career-daily-report)
+- Phase 1: 기획문서 (spec.md, progress.md) 작성 ← 지금
+- Phase 2: 데이터 수집기 구현 (5개 collector)
+- Phase 3: LLM 처리기 + 리포트 생성기
+- Phase 4: 대시보드 Career 메뉴
+- Phase 5: API + n8n 워크플로우 (일별/주간/월간)
 
-### 2순위 — 커리어 Daily Report (신규 모듈)
-- 개인화된 커리어 관련 일일 리포트 기능
-- 구직 동향, 기술 트렌드, 채용 공고 요약 등 포함 예정
-- 설계 필요 (spec 없음)
+### 다음 — Job4 부동산 전략 리포트 고도화
+- 현재 리포트 품질 개선 (점수 안정화, 예산 준수, 단지 추천 정확도)
 
 ## ✅ Completed Tasks (Recent)
 - [x] **Maintenance: Insight Pipeline Optimization & LLM Robustness** <!-- id: 35 -->
