@@ -1,0 +1,32 @@
+data_dir: data/career
+llm_provider: claude
+
+trend_sources:
+  github_languages: [python, go, typescript, java, rust]
+  hn_min_score: 50
+  devto_tags: [backend, python, go, devops, career, system-design]
+  github_trending_url: "https://github.com/trending/{language}?since=daily"
+  hn_top_stories_url: "https://hacker-news.firebaseio.com/v0/topstories.json"
+  hn_item_url: "https://hacker-news.firebaseio.com/v0/item/{id}.json"
+  devto_api_url: "https://dev.to/api/articles"
+  devto_per_page: 30
+
+job_sources:
+  wanted:
+    api_url: "https://www.wanted.co.kr/api/v4/jobs"
+    job_group_id: 518   # 백엔드 개발자
+    limit: 100
+    tag_ids: []
+  jumpit:
+    api_url: "https://api.jumpit.co.kr/api/positions"
+    job_category: 1     # 서버/백엔드
+    limit: 100
+
+concurrency:
+  collector_semaphore: 3
+  hn_story_semaphore: 5
+  hn_stories_limit: 30  # top stories 중 상위 N개만 수집
+
+report:
+  skill_gap_history_weeks: 4
+  weekly_daily_reports_count: 7

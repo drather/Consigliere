@@ -1,0 +1,74 @@
+{
+  "name": "[Consigliere] 커리어 Daily Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1-5"
+            }
+          ]
+        }
+      },
+      "name": "Schedule (평일 09:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 350],
+      "id": "schedule-trigger"
+    },
+    {
+      "parameters": {
+        "url": "http://consigliere_api:8000/jobs/career/run-pipeline",
+        "method": "POST",
+        "options": { "timeout": 180000 }
+      },
+      "name": "Run Pipeline",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 350],
+      "id": "run-pipeline"
+    },
+    {
+      "parameters": {
+        "url": "http://consigliere_api:8000/dashboard/career/reports/daily/={{ $now.format('yyyy-MM-dd') }}",
+        "method": "GET",
+        "options": {}
+      },
+      "name": "Get Daily Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 350],
+      "id": "get-report"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "=🚀 *커리어 Daily Report* — {{ $now.format('yyyy-MM-dd') }}\n\n{{ $json.report.substring(0, 1500) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Slack 알림",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 350],
+      "id": "slack-notify"
+    }
+  ],
+  "connections": {
+    "Schedule (평일 09:00)": { "main": [[{ "node": "Run Pipeline", "type": "main", "index": 0 }]] },
+    "Run Pipeline": { "main": [[{ "node": "Get Daily Report", "type": "main", "index": 0 }]] },
+    "Get Daily Report": { "main": [[{ "node": "Slack 알림", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

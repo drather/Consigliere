@@ -1,0 +1,61 @@
+{
+  "name": "[Consigliere] 커리어 Weekly Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 18 * * 5"
+            }
+          ]
+        }
+      },
+      "name": "Schedule (금요일 18:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 350],
+      "id": "schedule-trigger"
+    },
+    {
+      "parameters": {
+        "url": "http://consigliere_api:8000/jobs/career/generate-weekly-report",
+        "method": "POST",
+        "options": { "timeout": 120000 }
+      },
+      "name": "Generate Weekly Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 350],
+      "id": "gen-weekly"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "=📋 *커리어 Weekly Report* 생성 완료\n\n{{ $json.report.substring(0, 2000) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Slack 알림",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 350],
+      "id": "slack-notify"
+    }
+  ],
+  "connections": {
+    "Schedule (금요일 18:00)": { "main": [[{ "node": "Generate Weekly Report", "type": "main", "index": 0 }]] },
+    "Generate Weekly Report": { "main": [[{ "node": "Slack 알림", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}
