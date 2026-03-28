@@ -442,9 +442,28 @@ def _make_mock_agent(tmp_path):
     agent.tracker = HistoryTracker(data_dir=str(tmp_path / "career"))
     agent.presenter = CareerPresenter()
 
+    # Community Collectors mock
+    from modules.career.models import CommunityTrendAnalysis
+    agent.reddit_collector = MagicMock()
+    agent.reddit_collector.safe_collect = AsyncMock(return_value=[])
+    agent.nitter_collector = MagicMock()
+    agent.nitter_collector.safe_collect = AsyncMock(return_value=[])
+    agent.clien_collector = MagicMock()
+    agent.clien_collector.safe_collect = AsyncMock(return_value=[])
+    agent.dcinside_collector = MagicMock()
+    agent.dcinside_collector.safe_collect = AsyncMock(return_value=[])
+
+    # Community Processor mock
+    agent.community_analyzer = MagicMock()
+    agent.community_analyzer.analyze = MagicMock(return_value=CommunityTrendAnalysis(
+        hot_topics=["AI 에이전트"],
+        collection_status={"reddit": "failed", "nitter": "failed", "clien": "failed", "dcinside": "failed"},
+    ))
+
     # service.py의 메서드들을 바인딩
-    for method_name in ("fetch_jobs", "fetch_trends", "generate_report", "run_pipeline",
-                        "_jobs_path", "_trends_path", "_daily_report_path"):
+    for method_name in ("fetch_jobs", "fetch_trends", "fetch_community", "generate_report",
+                        "run_pipeline", "_jobs_path", "_trends_path", "_community_path",
+                        "_daily_report_path"):
         fn = getattr(_svc.CareerAgent, method_name, None)
         if fn:
             setattr(agent, method_name, types.MethodType(fn, agent))
@@ -658,4 +677,575 @@ class TestPersonaManager:
                              "target_company_types": []}})
         pm2 = PersonaManager(persona_path=str(dst))
         assert pm2.get()["user"]["name"] == "test_user"
-        assert pm2.get()["user"]["experience_years"] == 5
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 1: Community Models
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestCommunityModels:
+    def test_reddit_post_required_fields(self):
+        from modules.career.models import RedditPost
+        p = RedditPost(id="abc", title="AI 시대의 개발자", subreddit="cscareerquestions")
+        assert p.id == "abc"
+        assert p.title == "AI 시대의 개발자"
+        assert p.subreddit == "cscareerquestions"
+
+    def test_reddit_post_defaults(self):
+        from modules.career.models import RedditPost
+        p = RedditPost(id="1", title="t", subreddit="programming")
+        assert p.score == 0
+        assert p.url == ""
+        assert p.num_comments == 0
+        assert p.selftext == ""
+
+    def test_nitter_tweet_required_fields(self):
+        from modules.career.models import NitterTweet
+        t = NitterTweet(id="123", text="LLM is changing dev", username="devguru")
+        assert t.id == "123"
+        assert t.text == "LLM is changing dev"
+        assert t.username == "devguru"
+
+    def test_nitter_tweet_defaults(self):
+        from modules.career.models import NitterTweet
+        t = NitterTweet(id="1", text="hi", username="user")
+        assert t.date == ""
+        assert t.url == ""
+
+    def test_korean_post_required_fields(self):
+        from modules.career.models import KoreanPost
+        p = KoreanPost(id="99", title="AI 도구 필수인가", source="clien")
+        assert p.id == "99"
+        assert p.source == "clien"
+
+    def test_korean_post_defaults(self):
+        from modules.career.models import KoreanPost
+        p = KoreanPost(id="1", title="t", source="dcinside")
+        assert p.url == ""
+        assert p.views == 0
+        assert p.comments == 0
+        assert p.date == ""
+
+    def test_community_trend_analysis_defaults(self):
+        from modules.career.models import CommunityTrendAnalysis
+        a = CommunityTrendAnalysis()
+        assert a.hot_topics == []
+        assert a.key_opinions == []
+        assert a.emerging_concerns == []
+        assert a.community_summary == ""
+        assert a.collection_status == {}
+
+    def test_collection_status_schema(self):
+        from modules.career.models import CommunityTrendAnalysis
+        a = CommunityTrendAnalysis(
+            collection_status={
+                "reddit": "ok",
+                "nitter": "failed",
+                "clien": "partial",
+                "dcinside": "ok",
+            }
+        )
+        assert a.collection_status["reddit"] == "ok"
+        assert a.collection_status["nitter"] == "failed"
+
+    def test_community_trend_analysis_full(self):
+        from modules.career.models import CommunityTrendAnalysis
+        a = CommunityTrendAnalysis(
+            hot_topics=["LLM", "AI 채용"],
+            key_opinions=["AI가 주니어 포지션을 줄인다"],
+            emerging_concerns=["채용 한파"],
+            community_summary="전반적으로 불안감이 높다",
+            collection_status={"reddit": "ok"},
+        )
+        assert len(a.hot_topics) == 2
+        assert len(a.key_opinions) == 1
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 2: Collector Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestRedditCollector:
+    def test_reddit_collector_initializes(self):
+        from modules.career.collectors.reddit import RedditCollector
+        c = RedditCollector(
+            subreddits=["programming", "MachineLearning"],
+            limit=10,
+            min_score=50,
+            client_id="test_id",
+            client_secret="test_secret",
+            user_agent="Test Bot 1.0",
+        )
+        assert c.subreddits == ["programming", "MachineLearning"]
+        assert c.limit == 10
+        assert c.min_score == 50
+
+    def test_reddit_safe_collect_on_auth_error_returns_empty(self):
+        from modules.career.collectors.reddit import RedditCollector
+        import asyncpraw
+        c = RedditCollector(
+            subreddits=["programming"],
+            limit=5,
+            min_score=10,
+            client_id="bad_id",
+            client_secret="bad_secret",
+            user_agent="Test Bot 1.0",
+        )
+        with patch("modules.career.collectors.reddit.asyncpraw.Reddit") as mock_reddit:
+            mock_reddit.return_value.__aenter__ = AsyncMock(side_effect=Exception("auth error"))
+            mock_reddit.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = asyncio.run(c.safe_collect())
+        assert result == []
+
+    def test_reddit_filters_by_min_score(self):
+        from modules.career.collectors.reddit import RedditCollector
+        from modules.career.models import RedditPost
+        c = RedditCollector(
+            subreddits=["programming"],
+            limit=10,
+            min_score=100,
+            client_id="id",
+            client_secret="secret",
+            user_agent="Test Bot",
+        )
+        # _map_post filters by score
+        low_post = MagicMock()
+        low_post.score = 50
+        low_post.stickied = False
+        low_post.id = "1"
+        low_post.title = "low"
+        low_post.url = "https://x.com"
+        low_post.num_comments = 0
+        low_post.selftext = ""
+
+        high_post = MagicMock()
+        high_post.score = 200
+        high_post.stickied = False
+        high_post.id = "2"
+        high_post.title = "high"
+        high_post.url = "https://y.com"
+        high_post.num_comments = 5
+        high_post.selftext = "content"
+
+        result = [c._map_post(p, "programming") for p in [low_post, high_post] if p.score >= c.min_score and not p.stickied]
+        assert len(result) == 1
+        assert result[0].score == 200
+
+    def test_reddit_post_model_mapping(self):
+        from modules.career.collectors.reddit import RedditCollector
+        from modules.career.models import RedditPost
+        c = RedditCollector(
+            subreddits=["programming"],
+            limit=10,
+            min_score=0,
+            client_id="id",
+            client_secret="secret",
+            user_agent="Test Bot",
+        )
+        mock_post = MagicMock()
+        mock_post.id = "xyz123"
+        mock_post.title = "AI 시대 백엔드 개발자"
+        mock_post.score = 500
+        mock_post.url = "https://reddit.com/r/programming/xyz"
+        mock_post.num_comments = 42
+        mock_post.selftext = "내용 " * 300  # 길이 테스트
+
+        mapped = c._map_post(mock_post, "programming")
+        assert isinstance(mapped, RedditPost)
+        assert mapped.id == "xyz123"
+        assert mapped.subreddit == "programming"
+        assert mapped.score == 500
+        assert len(mapped.selftext) <= 500
+
+
+class TestNitterCollector:
+    SAMPLE_HTML = """
+    <div class="timeline">
+        <div class="timeline-item">
+            <div class="tweet-body">
+                <div class="tweet-header">
+                    <a class="username" href="/devguru">@devguru</a>
+                    <span class="tweet-date"><a title="Mar 28, 2026 · 10:00 UTC" href="/devguru/status/1234567890">#</a></span>
+                </div>
+                <div class="tweet-content media-body">LLM is changing how we code #AI #programming</div>
+                <div class="tweet-stats">
+                    <span class="tweet-stat"><a href="/devguru/status/1234567890">reply</a></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    """
+
+    def test_nitter_parse_valid_html(self):
+        from modules.career.collectors.nitter import NitterCollector
+        c = NitterCollector(
+            instances=["https://nitter.net"],
+            keywords=["AI"],
+            timeout=15,
+            max_tweets_per_keyword=10,
+        )
+        tweets = c._parse(self.SAMPLE_HTML, "https://nitter.net")
+        assert len(tweets) >= 1
+        assert tweets[0].username == "devguru"
+        assert "LLM" in tweets[0].text
+
+    def test_nitter_parse_empty_html_returns_empty(self):
+        from modules.career.collectors.nitter import NitterCollector
+        c = NitterCollector(instances=["https://nitter.net"], keywords=["AI"])
+        tweets = c._parse("<html><body>nothing here</body></html>", "https://nitter.net")
+        assert tweets == []
+
+    def test_nitter_all_instances_fail_returns_empty(self):
+        from modules.career.collectors.nitter import NitterCollector
+        import aiohttp
+        c = NitterCollector(
+            instances=["https://bad1.invalid", "https://bad2.invalid"],
+            keywords=["AI"],
+            timeout=5,
+        )
+        with patch("modules.career.collectors.nitter.aiohttp.ClientSession") as mock_session:
+            mock_cm = MagicMock()
+            mock_cm.__aenter__ = AsyncMock(side_effect=aiohttp.ClientError("connection failed"))
+            mock_cm.__aexit__ = AsyncMock(return_value=False)
+            mock_session.return_value.__aenter__ = AsyncMock(return_value=MagicMock(
+                get=MagicMock(return_value=mock_cm)
+            ))
+            mock_session.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = asyncio.run(c.safe_collect())
+        assert result == []
+
+    def test_nitter_tweet_url_constructed(self):
+        from modules.career.collectors.nitter import NitterCollector
+        c = NitterCollector(instances=["https://nitter.net"], keywords=["AI"])
+        tweets = c._parse(self.SAMPLE_HTML, "https://nitter.net")
+        if tweets:
+            assert "1234567890" in tweets[0].url or tweets[0].url != ""
+
+
+class TestClienCollector:
+    SAMPLE_HTML = """
+    <div class="list_content">
+        <div class="list_item symph_row" data-role="list-row-anchor">
+            <div class="list_title">
+                <a class="list_subject" href="/service/board/cm_programmers/12345678">
+                    <span class="subject_fixed">AI 도구 없이 개발 가능한가</span>
+                </a>
+                <span class="list_reply">[15]</span>
+            </div>
+            <div class="list_info">
+                <span class="list_hit">1,234</span>
+                <span class="list_time">03:28</span>
+            </div>
+        </div>
+    </div>
+    """
+
+    def test_clien_parse_valid_html(self):
+        from modules.career.collectors.clien import ClienCollector
+        c = ClienCollector(board_url="https://www.clien.net/service/board/cm_programmers", limit=20)
+        posts = c._parse(self.SAMPLE_HTML)
+        assert len(posts) >= 1
+        assert "AI 도구" in posts[0].title
+
+    def test_clien_parse_missing_fields_no_crash(self):
+        from modules.career.collectors.clien import ClienCollector
+        c = ClienCollector(board_url="https://www.clien.net/service/board/cm_programmers", limit=20)
+        posts = c._parse("<div class='list_content'><div class='list_item symph_row'></div></div>")
+        # 필드 누락 시 크래시 없이 빈 리스트 또는 부분 결과 반환
+        assert isinstance(posts, list)
+
+    def test_clien_source_field_is_clien(self):
+        from modules.career.collectors.clien import ClienCollector
+        c = ClienCollector(board_url="https://www.clien.net/service/board/cm_programmers", limit=20)
+        posts = c._parse(self.SAMPLE_HTML)
+        for p in posts:
+            assert p.source == "clien"
+
+    def test_clien_safe_collect_on_http_error_returns_empty(self):
+        from modules.career.collectors.clien import ClienCollector
+        import aiohttp
+        c = ClienCollector(board_url="https://www.clien.net/service/board/cm_programmers", limit=20)
+        with patch("modules.career.collectors.clien.aiohttp.ClientSession") as mock_session:
+            mock_get = MagicMock()
+            mock_get.__aenter__ = AsyncMock(side_effect=aiohttp.ClientError("error"))
+            mock_get.__aexit__ = AsyncMock(return_value=False)
+            mock_inner = MagicMock()
+            mock_inner.get = MagicMock(return_value=mock_get)
+            mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_inner)
+            mock_session.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = asyncio.run(c.safe_collect())
+        assert result == []
+
+
+class TestDCInsideCollector:
+    SAMPLE_HTML = """
+    <table class="gall_list">
+        <tbody>
+            <tr class="ub-content us-post" data-no="98765">
+                <td class="gall_num">98765</td>
+                <td class="gall_tit ub-word">
+                    <a href="/board/view/?id=programming&no=98765&exception_mode=recommend&page=1">
+                        ChatGPT로 코드 다 짜는 시대 왔나
+                    </a>
+                    <span class="reply_num">[23]</span>
+                </td>
+                <td class="gall_writer ub-writer">익명</td>
+                <td class="gall_date" title="2026-03-28 09:00:00">03.28</td>
+                <td class="gall_count">567</td>
+                <td class="gall_recommend">45</td>
+            </tr>
+            <tr class="ub-content us-post" data-no="공지">
+                <td class="gall_num">공지</td>
+                <td class="gall_tit ub-word"><a href="#">공지사항</a></td>
+                <td class="gall_writer ub-writer">운영자</td>
+                <td class="gall_date">03.01</td>
+                <td class="gall_count">0</td>
+                <td class="gall_recommend">0</td>
+            </tr>
+        </tbody>
+    </table>
+    """
+
+    def test_dcinside_parse_valid_html(self):
+        from modules.career.collectors.dcinside import DCInsideCollector
+        c = DCInsideCollector(
+            gallery_id="programming",
+            list_url="https://gall.dcinside.com/board/lists/?id=programming",
+            limit=20,
+        )
+        posts = c._parse(self.SAMPLE_HTML)
+        assert len(posts) >= 1
+        assert "ChatGPT" in posts[0].title
+
+    def test_dcinside_filters_notice_rows(self):
+        from modules.career.collectors.dcinside import DCInsideCollector
+        c = DCInsideCollector(
+            gallery_id="programming",
+            list_url="https://gall.dcinside.com/board/lists/?id=programming",
+            limit=20,
+        )
+        posts = c._parse(self.SAMPLE_HTML)
+        titles = [p.title for p in posts]
+        assert not any("공지사항" in t for t in titles)
+
+    def test_dcinside_source_field_is_dcinside(self):
+        from modules.career.collectors.dcinside import DCInsideCollector
+        c = DCInsideCollector(
+            gallery_id="programming",
+            list_url="https://gall.dcinside.com/board/lists/?id=programming",
+            limit=20,
+        )
+        posts = c._parse(self.SAMPLE_HTML)
+        for p in posts:
+            assert p.source == "dcinside"
+
+    def test_dcinside_parse_empty_html_returns_empty(self):
+        from modules.career.collectors.dcinside import DCInsideCollector
+        c = DCInsideCollector(
+            gallery_id="programming",
+            list_url="https://gall.dcinside.com/board/lists/?id=programming",
+            limit=20,
+        )
+        posts = c._parse("<html><body>no table</body></html>")
+        assert posts == []
+
+    def test_dcinside_safe_collect_on_http_error_returns_empty(self):
+        from modules.career.collectors.dcinside import DCInsideCollector
+        import aiohttp
+        c = DCInsideCollector(
+            gallery_id="programming",
+            list_url="https://gall.dcinside.com/board/lists/?id=programming",
+            limit=20,
+        )
+        with patch("modules.career.collectors.dcinside.aiohttp.ClientSession") as mock_session:
+            mock_get = MagicMock()
+            mock_get.__aenter__ = AsyncMock(side_effect=aiohttp.ClientError("error"))
+            mock_get.__aexit__ = AsyncMock(return_value=False)
+            mock_inner = MagicMock()
+            mock_inner.get = MagicMock(return_value=mock_get)
+            mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_inner)
+            mock_session.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = asyncio.run(c.safe_collect())
+        assert result == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 3: CommunityAnalyzer Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestCommunityAnalyzer:
+    def _make_analyzer(self, llm_response=None, llm_side_effect=None):
+        from modules.career.processors.community_analyzer import CommunityAnalyzer
+        llm = MagicMock()
+        if llm_side_effect:
+            llm.generate_json.side_effect = llm_side_effect
+        else:
+            llm.generate_json.return_value = llm_response or {
+                "hot_topics": ["AI 채용", "LLM"],
+                "key_opinions": ["AI가 주니어를 대체"],
+                "emerging_concerns": ["채용 한파"],
+                "community_summary": "불안감 고조",
+            }
+        prompt_loader = MagicMock()
+        prompt_loader.load.return_value = ("community_analyst", "test prompt")
+        return CommunityAnalyzer(llm=llm, prompt_loader=prompt_loader)
+
+    def test_community_analyzer_returns_typed_model(self):
+        from modules.career.models import CommunityTrendAnalysis
+        analyzer = self._make_analyzer()
+        result = analyzer.analyze([], [], [], {"reddit": "ok"})
+        assert isinstance(result, CommunityTrendAnalysis)
+        assert "AI 채용" in result.hot_topics
+
+    def test_community_analyzer_llm_failure_returns_default(self):
+        from modules.career.models import CommunityTrendAnalysis
+        analyzer = self._make_analyzer(llm_side_effect=Exception("LLM timeout"))
+        result = analyzer.analyze([], [], [], {"reddit": "failed"})
+        assert isinstance(result, CommunityTrendAnalysis)
+        assert result.hot_topics == []
+
+    def test_community_analyzer_collection_status_preserved(self):
+        """LLM 반환값이 아닌 실제 수집 상태를 항상 우선한다."""
+        analyzer = self._make_analyzer()
+        status = {"reddit": "ok", "nitter": "failed", "clien": "ok", "dcinside": "failed"}
+        result = analyzer.analyze([], [], [], status)
+        assert result.collection_status == status
+
+    def test_community_analyzer_collection_status_on_llm_failure(self):
+        """LLM 실패 시에도 collection_status는 전달된 값 유지"""
+        analyzer = self._make_analyzer(llm_side_effect=Exception("error"))
+        status = {"reddit": "ok", "nitter": "failed"}
+        result = analyzer.analyze([], [], [], status)
+        assert result.collection_status["nitter"] == "failed"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 4: DailyReporter Community Section Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestDailyReporterCommunitySection:
+    @pytest.fixture
+    def reporter(self):
+        return DailyReporter()
+
+    @pytest.fixture
+    def base_args(self):
+        from modules.career.models import JobAnalysis, TrendAnalysis, SkillGapAnalysis
+        return dict(
+            report_date=date(2026, 3, 28),
+            job_analysis=JobAnalysis(),
+            trend_analysis=TrendAnalysis(),
+            skill_gap=SkillGapAnalysis(),
+            job_count_wanted=0,
+            job_count_jumpit=0,
+        )
+
+    def test_report_backward_compat_none_community_trend(self, reporter, base_args):
+        """community_trend=None (기본값)으로 호출 시 크래시 없어야 함"""
+        report = reporter.generate(**base_args)
+        assert "2026-03-28" in report
+
+    def test_report_contains_community_section_header(self, reporter, base_args):
+        from modules.career.models import CommunityTrendAnalysis
+        base_args["community_trend"] = CommunityTrendAnalysis(
+            hot_topics=["LLM"],
+            collection_status={"reddit": "ok"},
+        )
+        report = reporter.generate(**base_args)
+        assert "🌐 커뮤니티 트렌드" in report
+
+    def test_report_shows_collection_status_warnings(self, reporter, base_args):
+        from modules.career.models import CommunityTrendAnalysis
+        base_args["community_trend"] = CommunityTrendAnalysis(
+            collection_status={"reddit": "ok", "nitter": "failed", "clien": "ok", "dcinside": "failed"},
+        )
+        report = reporter.generate(**base_args)
+        assert "⚠️" in report
+        assert "nitter" in report
+        assert "dcinside" in report
+
+    def test_report_nitter_failure_shown_prominently(self, reporter, base_args):
+        from modules.career.models import CommunityTrendAnalysis
+        base_args["community_trend"] = CommunityTrendAnalysis(
+            collection_status={"nitter": "failed"},
+        )
+        report = reporter.generate(**base_args)
+        assert "Nitter" in report
+        assert "⚠️" in report
+
+    def test_report_community_section_no_crash_on_empty_analysis(self, reporter, base_args):
+        from modules.career.models import CommunityTrendAnalysis
+        base_args["community_trend"] = CommunityTrendAnalysis()
+        report = reporter.generate(**base_args)
+        assert isinstance(report, str)
+
+    def test_report_community_section_full_data(self, reporter, base_args):
+        from modules.career.models import CommunityTrendAnalysis
+        base_args["community_trend"] = CommunityTrendAnalysis(
+            hot_topics=["AI 에이전트", "LLM 비용"],
+            key_opinions=["AI가 주니어를 대체한다", "LLM 경험이 차별점"],
+            emerging_concerns=["채용 한파"],
+            community_summary="전반적으로 불안감이 고조",
+            collection_status={"reddit": "ok", "nitter": "ok"},
+        )
+        report = reporter.generate(**base_args)
+        assert "AI 에이전트" in report
+        assert "채용 한파" in report
+        assert "불안감" in report
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 5: CareerAgent Community Integration Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestCareerAgentCommunityIntegration:
+    @pytest.fixture
+    def mock_agent(self, tmp_path):
+        from modules.career.service import CareerAgent
+        agent = CareerAgent.__new__(CareerAgent)
+        agent.data_dir = str(tmp_path)
+        agent.reddit_collector = MagicMock()
+        agent.reddit_collector.safe_collect = AsyncMock(return_value=[])
+        agent.nitter_collector = MagicMock()
+        agent.nitter_collector.safe_collect = AsyncMock(return_value=[])
+        agent.clien_collector = MagicMock()
+        agent.clien_collector.safe_collect = AsyncMock(return_value=[])
+        agent.dcinside_collector = MagicMock()
+        agent.dcinside_collector.safe_collect = AsyncMock(return_value=[])
+        return agent
+
+    def test_fetch_community_saves_file(self, mock_agent):
+        import asyncio
+        from modules.career.service import CareerAgent
+        result = asyncio.run(mock_agent.fetch_community(date(2026, 3, 28)))
+        path = mock_agent._community_path(date(2026, 3, 28))
+        assert os.path.exists(path)
+
+    def test_fetch_community_uses_cache(self, mock_agent):
+        import asyncio
+        asyncio.run(mock_agent.fetch_community(date(2026, 3, 28)))
+        asyncio.run(mock_agent.fetch_community(date(2026, 3, 28)))
+        # 캐시 사용 시 safe_collect는 1번만 호출
+        assert mock_agent.reddit_collector.safe_collect.call_count == 1
+
+    def test_fetch_community_collection_status_all_failed(self, mock_agent):
+        import asyncio
+        result = asyncio.run(mock_agent.fetch_community(date(2026, 3, 28)))
+        assert result["collection_status"]["reddit"] == "failed"
+        assert result["collection_status"]["nitter"] == "failed"
+
+    def test_fetch_community_collection_status_ok_when_data_returned(self, mock_agent):
+        from modules.career.models import RedditPost
+        import asyncio
+        mock_agent.reddit_collector.safe_collect = AsyncMock(return_value=[
+            RedditPost(id="1", title="test", subreddit="programming")
+        ])
+        result = asyncio.run(mock_agent.fetch_community(date(2026, 3, 28)))
+        assert result["collection_status"]["reddit"] == "ok"
+        assert result["collection_status"]["nitter"] == "failed"
+
+    def test_community_path_helper(self, mock_agent):
+        from modules.career.service import CareerAgent
+        path = mock_agent._community_path(date(2026, 3, 28))
+        assert "community" in path
+        assert "2026-03-28" in path

@@ -12,17 +12,32 @@ from core.logger import get_logger
 from modules.career.config import CareerConfig
 from modules.career.persona_manager import PersonaManager
 from modules.career.models import (
-    JobPosting, TrendingRepo, HNStory, DevToArticle,
-    JobAnalysis, TrendAnalysis, SkillGapAnalysis, SkillGapSnapshot,
+    CommunityTrendAnalysis,
+    DevToArticle,
+    HNStory,
+    JobAnalysis,
+    JobPosting,
+    KoreanPost,
+    NitterTweet,
+    RedditPost,
+    SkillGapAnalysis,
+    SkillGapSnapshot,
+    TrendAnalysis,
+    TrendingRepo,
 )
 from modules.career.collectors.github_trending import GithubTrendingCollector
 from modules.career.collectors.hacker_news import HackerNewsCollector
 from modules.career.collectors.devto import DevToCollector
 from modules.career.collectors.wanted import WantedCollector
 from modules.career.collectors.jumpit import JumpitCollector
+from modules.career.collectors.reddit import RedditCollector
+from modules.career.collectors.nitter import NitterCollector
+from modules.career.collectors.clien import ClienCollector
+from modules.career.collectors.dcinside import DCInsideCollector
 from modules.career.processors.job_analyzer import JobAnalyzer
 from modules.career.processors.trend_analyzer import TrendAnalyzer
 from modules.career.processors.skill_gap_analyzer import SkillGapAnalyzer
+from modules.career.processors.community_analyzer import CommunityAnalyzer
 from modules.career.reporters.daily_reporter import DailyReporter
 from modules.career.reporters.weekly_reporter import WeeklyReporter
 from modules.career.reporters.monthly_reporter import MonthlyReporter
@@ -77,10 +92,41 @@ class CareerAgent:
             limit=jumpit_cfg.get("limit", 100),
         )
 
+        # Community Collectors
+        cs = self.config.get("community_sources", {})
+        reddit_cfg = cs.get("reddit", {})
+        self.reddit_collector = RedditCollector(
+            subreddits=reddit_cfg.get("subreddits", ["programming", "MachineLearning"]),
+            limit=reddit_cfg.get("limit_per_subreddit", 10),
+            min_score=reddit_cfg.get("min_score", 50),
+            client_id=os.getenv("REDDIT_CLIENT_ID", ""),
+            client_secret=os.getenv("REDDIT_CLIENT_SECRET", ""),
+            user_agent=reddit_cfg.get("user_agent", "Consigliere Career Bot 1.0"),
+        )
+        nitter_cfg = cs.get("nitter", {})
+        self.nitter_collector = NitterCollector(
+            instances=nitter_cfg.get("instances", ["https://nitter.net"]),
+            keywords=nitter_cfg.get("keywords", ["AI LLM", "programming"]),
+            timeout=nitter_cfg.get("timeout", 15),
+            max_tweets_per_keyword=nitter_cfg.get("max_tweets_per_keyword", 10),
+        )
+        clien_cfg = cs.get("clien", {})
+        self.clien_collector = ClienCollector(
+            board_url=clien_cfg.get("board_url", "https://www.clien.net/service/board/cm_programmers"),
+            limit=clien_cfg.get("limit", 20),
+        )
+        dcinside_cfg = cs.get("dcinside", {})
+        self.dcinside_collector = DCInsideCollector(
+            gallery_id=dcinside_cfg.get("gallery_id", "programming"),
+            list_url=dcinside_cfg.get("list_url", "https://gall.dcinside.com/board/lists/?id=programming"),
+            limit=dcinside_cfg.get("limit", 20),
+        )
+
         # Processors
         self.job_analyzer = JobAnalyzer(self.llm, self.prompt_loader)
         self.trend_analyzer = TrendAnalyzer(self.llm, self.prompt_loader)
         self.skill_gap_analyzer = SkillGapAnalyzer(self.llm, self.prompt_loader)
+        self.community_analyzer = CommunityAnalyzer(self.llm, self.prompt_loader)
 
         # Reporters
         self.daily_reporter = DailyReporter()
@@ -158,6 +204,48 @@ class CareerAgent:
         logger.info(f"트렌드 저장 → {path}")
         return data
 
+    # ── fetch_community ───────────────────────────────────────────────
+
+    async def fetch_community(self, target_date: Optional[date] = None) -> Dict[str, Any]:
+        if target_date is None:
+            target_date = date.today()
+        path = self._community_path(target_date)
+
+        if os.path.exists(path):
+            try:
+                logger.info(f"커뮤니티 캐시 사용: {path}")
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning(f"커뮤니티 캐시 손상, 재수집: {e}")
+
+        reddit_posts, nitter_tweets, clien_posts, dcinside_posts = await asyncio.gather(
+            self.reddit_collector.safe_collect(),
+            self.nitter_collector.safe_collect(),
+            self.clien_collector.safe_collect(),
+            self.dcinside_collector.safe_collect(),
+        )
+
+        collection_status = {
+            "reddit": "ok" if reddit_posts else "failed",
+            "nitter": "ok" if nitter_tweets else "failed",
+            "clien": "ok" if clien_posts else "failed",
+            "dcinside": "ok" if dcinside_posts else "failed",
+        }
+
+        data = {
+            "reddit": [p.model_dump() for p in reddit_posts],
+            "nitter": [t.model_dump() for t in nitter_tweets],
+            "clien": [p.model_dump() for p in clien_posts],
+            "dcinside": [p.model_dump() for p in dcinside_posts],
+            "collection_status": collection_status,
+        }
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        logger.info(f"커뮤니티 저장 → {path} | status={collection_status}")
+        return data
+
     # ── Job 3: generate_report ────────────────────────────────────────
 
     async def generate_report(self, target_date: Optional[date] = None) -> str:
@@ -172,10 +260,19 @@ class CareerAgent:
 
         postings = await self.fetch_jobs(target_date)
         trend_data = await self.fetch_trends(target_date)
+        community_data = await self.fetch_community(target_date)
 
         repos = [TrendingRepo(**r) for r in trend_data.get("repos", [])]
         stories = [HNStory(**s) for s in trend_data.get("stories", [])]
         articles = [DevToArticle(**a) for a in trend_data.get("articles", [])]
+
+        reddit_posts = [RedditPost(**p) for p in community_data.get("reddit", [])]
+        nitter_tweets = [NitterTweet(**t) for t in community_data.get("nitter", [])]
+        korean_posts = [
+            KoreanPost(**p)
+            for p in community_data.get("clien", []) + community_data.get("dcinside", [])
+        ]
+        collection_status = community_data.get("collection_status", {})
 
         gap_history = self.tracker.load_recent(
             weeks=self.config.get("report", {}).get("skill_gap_history_weeks", 4)
@@ -188,6 +285,9 @@ class CareerAgent:
         skill_gap = self.skill_gap_analyzer.analyze(
             job_analysis, trend_analysis, self.persona, gap_history
         )
+        community_trend = self.community_analyzer.analyze(
+            reddit_posts, nitter_tweets, korean_posts, collection_status
+        )
 
         wanted_count = sum(1 for p in postings if p.source == "wanted")
         jumpit_count = sum(1 for p in postings if p.source == "jumpit")
@@ -199,6 +299,7 @@ class CareerAgent:
             skill_gap=skill_gap,
             job_count_wanted=wanted_count,
             job_count_jumpit=jumpit_count,
+            community_trend=community_trend,
         )
 
         snapshot = SkillGapSnapshot(
@@ -382,6 +483,9 @@ class CareerAgent:
 
     def _trends_path(self, d: date) -> str:
         return os.path.join(self.data_dir, "trends", f"{d}_trends.json")
+
+    def _community_path(self, d: date) -> str:
+        return os.path.join(self.data_dir, "community", f"{d}_community.json")
 
     def _daily_report_path(self, d: date) -> str:
         return os.path.join(self.data_dir, "reports", "daily", f"{d}_CareerReport.md")

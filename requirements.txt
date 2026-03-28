@@ -22,3 +22,4 @@ httpx
 duckduckgo-search>=6.0.0
 json-repair>=0.28.0
 beautifulsoup4>=4.12.0
+asyncpraw>=7.7

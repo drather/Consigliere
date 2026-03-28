@@ -30,3 +30,37 @@ concurrency:
 report:
   skill_gap_history_weeks: 4
   weekly_daily_reports_count: 7
+
+community_sources:
+  reddit:
+    subreddits:
+      - cscareerquestions
+      - ExperiencedDevs
+      - MachineLearning
+      - artificial
+      - LocalLLaMA
+      - devops
+      - programming
+    limit_per_subreddit: 10
+    min_score: 50
+    user_agent: "Consigliere Career Bot 1.0"
+  nitter:
+    instances:
+      - "https://nitter.net"
+      - "https://nitter.privacydev.net"
+      - "https://nitter.poast.org"
+      - "https://nitter.1d4.us"
+    keywords:
+      - "AI LLM"
+      - "programming devops"
+      - "software engineer"
+      - "AI jobs"
+    timeout: 15
+    max_tweets_per_keyword: 10
+  clien:
+    board_url: "https://www.clien.net/service/board/cm_programmers"
+    limit: 20
+  dcinside:
+    gallery_id: "programming"
+    list_url: "https://gall.dcinside.com/board/lists/?id=programming"
+    limit: 20

@@ -1,11 +1,11 @@
 from datetime import date
 from typing import Optional
-from modules.career.models import JobAnalysis, TrendAnalysis, SkillGapAnalysis
+from modules.career.models import CommunityTrendAnalysis, JobAnalysis, SkillGapAnalysis, TrendAnalysis
 
 
 class DailyReporter:
     """
-    3개 분석 결과를 받아 일별 Markdown 리포트를 생성한다.
+    분석 결과를 받아 일별 Markdown 리포트를 생성한다.
     LLM 호출 없이 코드 기반으로 조립한다.
     """
 
@@ -17,6 +17,7 @@ class DailyReporter:
         skill_gap: SkillGapAnalysis,
         job_count_wanted: int,
         job_count_jumpit: int,
+        community_trend: Optional[CommunityTrendAnalysis] = None,
     ) -> str:
         lines = [
             f"# 커리어 Daily Report — {report_date}",
@@ -107,4 +108,44 @@ class DailyReporter:
                 if rec.get("resource"):
                     lines.append(f"     📚 {rec['resource']}")
 
+        lines += self._build_community_section(community_trend)
+
         return "\n".join(lines)
+
+    def _build_community_section(
+        self, community_trend: Optional[CommunityTrendAnalysis]
+    ) -> list:
+        lines = ["", "## 🌐 커뮤니티 트렌드"]
+
+        if community_trend is None:
+            lines.append("- 커뮤니티 데이터 없음")
+            return lines
+
+        status = community_trend.collection_status
+        failed = [s for s, v in status.items() if v == "failed"]
+        partial = [s for s, v in status.items() if v == "partial"]
+
+        if failed:
+            lines.append(f"- ⚠️ **수집 실패 소스:** {', '.join(failed)}")
+            if "nitter" in failed:
+                lines.append("  - **[Nitter 전체 실패]** 모든 인스턴스 응답 없음 — Twitter 트렌드 데이터 없음")
+        if partial:
+            lines.append(f"- ⚠️ **부분 수집 소스:** {', '.join(partial)}")
+
+        if community_trend.hot_topics:
+            lines.append(f"- **핫 토픽:** {', '.join(community_trend.hot_topics)}")
+
+        if community_trend.key_opinions:
+            lines.append("- **커뮤니티 의견:**")
+            for opinion in community_trend.key_opinions[:3]:
+                lines.append(f"  - {opinion}")
+
+        if community_trend.emerging_concerns:
+            lines.append("- **떠오르는 우려사항:**")
+            for concern in community_trend.emerging_concerns[:3]:
+                lines.append(f"  - {concern}")
+
+        if community_trend.community_summary:
+            lines.append(f"- **종합:** {community_trend.community_summary}")
+
+        return lines
