@@ -28,11 +28,10 @@ class DailyReporter:
 
         if job_analysis.top_skills:
             skill_freq = job_analysis.skill_frequency
-            skills_str = ", ".join(
-                f"{s} ({skill_freq.get(s, '')})" if skill_freq.get(s) else s
-                for s in job_analysis.top_skills[:8]
-            )
-            lines.append(f"- **핵심 요구 스킬:** {skills_str}")
+            lines.append("- **핵심 요구 스킬:**")
+            for s in job_analysis.top_skills[:8]:
+                freq = skill_freq.get(s)
+                lines.append(f"  - `{s}`" + (f" ({freq}건)" if freq else ""))
 
         salary = job_analysis.salary_range
         if salary.get("median"):
@@ -60,7 +59,9 @@ class DailyReporter:
         ]
 
         if trend_analysis.hot_topics:
-            lines.append(f"- **핫 토픽:** {', '.join(trend_analysis.hot_topics)}")
+            lines.append("- **핫 토픽:**")
+            for topic in trend_analysis.hot_topics:
+                lines.append(f"  - `{topic}`")
 
         if trend_analysis.github_top:
             lines.append("- **GitHub 주목 레포:**")
@@ -78,7 +79,17 @@ class DailyReporter:
                 lines.append(f"  - [{a.get('title')}]({a.get('url')})")
 
         if trend_analysis.backend_relevance_comment:
-            lines.append(f"- **백엔드 시사점:** {trend_analysis.backend_relevance_comment}")
+            comment_lines = [
+                l.strip()
+                for l in trend_analysis.backend_relevance_comment.split("\n")
+                if l.strip()
+            ]
+            if len(comment_lines) <= 1:
+                lines.append(f"- **백엔드 시사점:** {trend_analysis.backend_relevance_comment}")
+            else:
+                lines.append("- **백엔드 시사점:**")
+                for cl in comment_lines:
+                    lines.append(f"  - {cl}")
 
         lines += [
             "",
@@ -91,20 +102,21 @@ class DailyReporter:
             "",
             "## 🎯 스킬 갭 & 학습 추천",
             f"- **갭 점수:** {skill_gap.gap_score}/100"
-            + (f" ({skill_gap.gap_trend})" if skill_gap.gap_trend else ""),
+            + (f" — {skill_gap.gap_trend}" if skill_gap.gap_trend else ""),
         ]
 
         if skill_gap.missing_skills:
-            missing_str = ", ".join(
-                f"{s.get('skill')} ({s.get('urgency', '').upper()})"
-                for s in skill_gap.missing_skills[:5]
-            )
-            lines.append(f"- **핵심 부족 스킬:** {missing_str}")
+            lines.append("- **핵심 부족 스킬:**")
+            for s in skill_gap.missing_skills[:5]:
+                urgency = s.get("urgency", "").upper()
+                lines.append(f"  - `{s.get('skill')}` ({urgency})")
 
         if skill_gap.study_recommendations:
             lines.append("- **오늘의 학습 추천:**")
             for i, rec in enumerate(skill_gap.study_recommendations[:3], 1):
-                lines.append(f"  {i}. **{rec.get('topic')}** — {rec.get('why', '')}")
+                lines.append(f"  {i}. **{rec.get('topic')}**")
+                if rec.get("why"):
+                    lines.append(f"     → {rec['why']}")
                 if rec.get("resource"):
                     lines.append(f"     📚 {rec['resource']}")
 
@@ -127,13 +139,13 @@ class DailyReporter:
 
         if failed:
             lines.append(f"- ⚠️ **수집 실패 소스:** {', '.join(failed)}")
-            if "nitter" in failed:
-                lines.append("  - **[Nitter 전체 실패]** 모든 인스턴스 응답 없음 — Twitter 트렌드 데이터 없음")
         if partial:
             lines.append(f"- ⚠️ **부분 수집 소스:** {', '.join(partial)}")
 
         if community_trend.hot_topics:
-            lines.append(f"- **핫 토픽:** {', '.join(community_trend.hot_topics)}")
+            lines.append("- **핫 토픽:**")
+            for topic in community_trend.hot_topics:
+                lines.append(f"  - `{topic}`")
 
         if community_trend.key_opinions:
             lines.append("- **커뮤니티 의견:**")
@@ -146,6 +158,12 @@ class DailyReporter:
                 lines.append(f"  - {concern}")
 
         if community_trend.community_summary:
-            lines.append(f"- **종합:** {community_trend.community_summary}")
+            summary_lines = [l.strip() for l in community_trend.community_summary.split("\n") if l.strip()]
+            if len(summary_lines) <= 1:
+                lines.append(f"- **종합:** {community_trend.community_summary}")
+            else:
+                lines.append("- **종합:**")
+                for sl in summary_lines:
+                    lines.append(f"  - {sl}")
 
         return lines

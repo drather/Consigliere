@@ -44,6 +44,25 @@ async def fetch_trends(target_date: Optional[str] = None, agent: CareerAgent = D
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/jobs/career/fetch-community")
+async def fetch_community(target_date: Optional[str] = None, agent: CareerAgent = Depends(get_career_agent)):
+    try:
+        d = date.fromisoformat(target_date) if target_date else date.today()
+        data = await agent.fetch_community(d)
+        status = data.get("collection_status", {})
+        return {
+            "date": str(d),
+            "reddit": len(data.get("reddit", [])),
+            "nitter": len(data.get("nitter", [])),
+            "clien": len(data.get("clien", [])),
+            "dcinside": len(data.get("dcinside", [])),
+            "collection_status": status,
+        }
+    except Exception as e:
+        logger.error(f"fetch_community error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/jobs/career/generate-report")
 async def generate_report(target_date: Optional[str] = None, agent: CareerAgent = Depends(get_career_agent)):
     try:

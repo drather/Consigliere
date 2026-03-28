@@ -42,7 +42,7 @@ class RedditCollector(BaseCollector):
 
     async def collect(self) -> List[RedditPost]:
         semaphore = asyncio.Semaphore(3)
-        async with aiohttp.ClientSession(headers=self.headers) as session:
+        async with aiohttp.ClientSession(headers=self.headers, connector=self.make_connector()) as session:
             tasks = [
                 self._fetch_subreddit(session, semaphore, name)
                 for name in self.subreddits

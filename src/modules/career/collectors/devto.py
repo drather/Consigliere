@@ -18,7 +18,7 @@ class DevToCollector(BaseCollector):
 
     async def collect(self) -> List[DevToArticle]:
         semaphore = asyncio.Semaphore(3)
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(connector=self.make_connector()) as session:
             tasks = [self._fetch_tag(session, semaphore, tag) for tag in self.tags]
             results = await asyncio.gather(*tasks)
 

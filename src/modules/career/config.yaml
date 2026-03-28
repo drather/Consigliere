@@ -46,21 +46,23 @@ community_sources:
     user_agent: "Consigliere Career Bot 1.0 (by /u/consigliere_bot)"
     timeout: 20
     # 인증 불필요: Reddit 공개 JSON API (/r/{sub}/top.json) 사용
-  nitter:
+  mastodon:
     instances:
-      - "https://nitter.net"
-      - "https://nitter.privacydev.net"
-      - "https://nitter.poast.org"
-      - "https://nitter.1d4.us"
-    keywords:
-      - "AI LLM"
-      - "programming devops"
-      - "software engineer"
-      - "AI jobs"
+      - "fosstodon.org"
+      - "hachyderm.io"
+      - "mastodon.social"
+    hashtags:
+      - "programming"
+      - "llm"
+      - "ai"
+      - "devops"
+      - "backend"
+      - "python"
+      - "rust"
+    limit_per_hashtag: 10
     timeout: 15
-    max_tweets_per_keyword: 10
   clien:
-    board_url: "https://www.clien.net/service/board/cm_programmers"
+    board_url: "https://www.clien.net/service/board/cm_app"   # 개발한당 (구 cm_programmers 삭제됨)
     limit: 20
   dcinside:
     gallery_id: "programming"

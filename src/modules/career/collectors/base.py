@@ -1,5 +1,9 @@
+import ssl
 from abc import ABC, abstractmethod
 from typing import List, Any
+
+import aiohttp
+import certifi
 from core.logger import get_logger
 
 
@@ -11,6 +15,12 @@ class BaseCollector(ABC):
     """
     def __init__(self):
         self.logger = get_logger(self.__class__.__name__)
+
+    @staticmethod
+    def make_connector() -> aiohttp.TCPConnector:
+        """certifi CA 번들을 사용하는 SSL connector를 반환한다."""
+        ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+        return aiohttp.TCPConnector(ssl=ssl_ctx)
 
     @abstractmethod
     async def collect(self) -> List[Any]:

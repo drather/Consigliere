@@ -31,7 +31,7 @@ class JumpitCollector(BaseCollector):
         all_postings: List[JobPosting] = []
         page = 1
 
-        async with aiohttp.ClientSession(headers=headers) as session:
+        async with aiohttp.ClientSession(headers=headers, connector=self.make_connector()) as session:
             while len(all_postings) < self.limit:
                 params["page"] = page
                 try:

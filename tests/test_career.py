@@ -447,8 +447,8 @@ def _make_mock_agent(tmp_path):
     from modules.career.models import CommunityTrendAnalysis
     agent.reddit_collector = MagicMock()
     agent.reddit_collector.safe_collect = AsyncMock(return_value=[])
-    agent.nitter_collector = MagicMock()
-    agent.nitter_collector.safe_collect = AsyncMock(return_value=[])
+    agent.mastodon_collector = MagicMock()
+    agent.mastodon_collector.safe_collect = AsyncMock(return_value=[])
     agent.clien_collector = MagicMock()
     agent.clien_collector.safe_collect = AsyncMock(return_value=[])
     agent.dcinside_collector = MagicMock()
@@ -458,7 +458,7 @@ def _make_mock_agent(tmp_path):
     agent.community_analyzer = MagicMock()
     agent.community_analyzer.analyze = MagicMock(return_value=CommunityTrendAnalysis(
         hot_topics=["AI 에이전트"],
-        collection_status={"reddit": "failed", "nitter": "failed", "clien": "failed", "dcinside": "failed"},
+        collection_status={"reddit": "failed", "mastodon": "failed", "clien": "failed", "dcinside": "failed"},
     ))
 
     # service.py의 메서드들을 바인딩
@@ -877,68 +877,85 @@ class TestRedditCollector:
         assert c._parse({"data": {"children": []}}, "programming") == []
 
 
-class TestNitterCollector:
-    SAMPLE_HTML = """
-    <div class="timeline">
-        <div class="timeline-item">
-            <div class="tweet-body">
-                <div class="tweet-header">
-                    <a class="username" href="/devguru">@devguru</a>
-                    <span class="tweet-date"><a title="Mar 28, 2026 · 10:00 UTC" href="/devguru/status/1234567890">#</a></span>
-                </div>
-                <div class="tweet-content media-body">LLM is changing how we code #AI #programming</div>
-                <div class="tweet-stats">
-                    <span class="tweet-stat"><a href="/devguru/status/1234567890">reply</a></span>
-                </div>
-            </div>
-        </div>
-    </div>
-    """
+class TestMastodonCollector:
+    SAMPLE_API_RESPONSE = [
+        {
+            "id": "1234567890",
+            "content": "<p>LLM is changing how we code <a href='#AI'>#AI</a> <a href='#programming'>#programming</a></p>",
+            "account": {"username": "devguru", "acct": "devguru@fosstodon.org"},
+            "created_at": "2026-03-28T10:00:00.000Z",
+            "url": "https://fosstodon.org/@devguru/1234567890",
+        },
+        {
+            "id": "9876543210",
+            "content": "<p>Rust adoption growing fast in backend services</p>",
+            "account": {"username": "rustlover", "acct": "rustlover@hachyderm.io"},
+            "created_at": "2026-03-28T09:00:00.000Z",
+            "url": "https://hachyderm.io/@rustlover/9876543210",
+        },
+    ]
 
-    def test_nitter_parse_valid_html(self):
-        from modules.career.collectors.nitter import NitterCollector
-        c = NitterCollector(
-            instances=["https://nitter.net"],
-            keywords=["AI"],
-            timeout=15,
-            max_tweets_per_keyword=10,
+    def _make_collector(self, **kwargs):
+        from modules.career.collectors.mastodon import MastodonCollector
+        defaults = dict(
+            instances=["fosstodon.org", "hachyderm.io"],
+            hashtags=["programming", "llm"],
+            limit_per_hashtag=10,
         )
-        tweets = c._parse(self.SAMPLE_HTML, "https://nitter.net")
-        assert len(tweets) >= 1
-        assert tweets[0].username == "devguru"
-        assert "LLM" in tweets[0].text
+        defaults.update(kwargs)
+        return MastodonCollector(**defaults)
 
-    def test_nitter_parse_empty_html_returns_empty(self):
-        from modules.career.collectors.nitter import NitterCollector
-        c = NitterCollector(instances=["https://nitter.net"], keywords=["AI"])
-        tweets = c._parse("<html><body>nothing here</body></html>", "https://nitter.net")
-        assert tweets == []
+    def test_mastodon_collector_initializes(self):
+        c = self._make_collector()
+        assert "fosstodon.org" in c.instances
+        assert "programming" in c.hashtags
 
-    def test_nitter_all_instances_fail_returns_empty(self):
-        from modules.career.collectors.nitter import NitterCollector
-        import aiohttp
-        c = NitterCollector(
-            instances=["https://bad1.invalid", "https://bad2.invalid"],
-            keywords=["AI"],
-            timeout=5,
-        )
-        with patch("modules.career.collectors.nitter.aiohttp.ClientSession") as mock_session:
-            mock_cm = MagicMock()
-            mock_cm.__aenter__ = AsyncMock(side_effect=aiohttp.ClientError("connection failed"))
-            mock_cm.__aexit__ = AsyncMock(return_value=False)
+    def test_mastodon_parse_valid_response(self):
+        c = self._make_collector()
+        posts = c._parse(self.SAMPLE_API_RESPONSE)
+        assert len(posts) == 2
+        assert posts[0].id == "1234567890"
+        assert posts[0].username == "devguru@fosstodon.org"
+        assert "LLM" in posts[0].text
+
+    def test_mastodon_parse_strips_html(self):
+        c = self._make_collector()
+        posts = c._parse(self.SAMPLE_API_RESPONSE)
+        assert "<p>" not in posts[0].text
+        assert "<a" not in posts[0].text
+
+    def test_mastodon_parse_url_preserved(self):
+        c = self._make_collector()
+        posts = c._parse(self.SAMPLE_API_RESPONSE)
+        assert "fosstodon.org" in posts[0].url
+
+    def test_mastodon_parse_empty_response_returns_empty(self):
+        c = self._make_collector()
+        posts = c._parse([])
+        assert posts == []
+
+    def test_mastodon_http_error_returns_empty(self):
+        c = self._make_collector()
+        with patch("modules.career.collectors.mastodon.aiohttp.ClientSession") as mock_session:
+            mock_resp = MagicMock()
+            mock_resp.__aenter__ = AsyncMock(return_value=MagicMock(status=503))
+            mock_resp.__aexit__ = AsyncMock(return_value=False)
             mock_session.return_value.__aenter__ = AsyncMock(return_value=MagicMock(
-                get=MagicMock(return_value=mock_cm)
+                get=MagicMock(return_value=mock_resp)
             ))
             mock_session.return_value.__aexit__ = AsyncMock(return_value=False)
             result = asyncio.run(c.safe_collect())
         assert result == []
 
-    def test_nitter_tweet_url_constructed(self):
-        from modules.career.collectors.nitter import NitterCollector
-        c = NitterCollector(instances=["https://nitter.net"], keywords=["AI"])
-        tweets = c._parse(self.SAMPLE_HTML, "https://nitter.net")
-        if tweets:
-            assert "1234567890" in tweets[0].url or tweets[0].url != ""
+    def test_mastodon_client_error_returns_empty(self):
+        c = self._make_collector()
+        with patch("modules.career.collectors.mastodon.aiohttp.ClientSession") as mock_session:
+            mock_session.return_value.__aenter__ = AsyncMock(
+                side_effect=aiohttp.ClientError("connection failed")
+            )
+            mock_session.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = asyncio.run(c.safe_collect())
+        assert result == []
 
 
 class TestClienCollector:
@@ -1126,16 +1143,16 @@ class TestCommunityAnalyzer:
     def test_community_analyzer_collection_status_preserved(self):
         """LLM 반환값이 아닌 실제 수집 상태를 항상 우선한다."""
         analyzer = self._make_analyzer()
-        status = {"reddit": "ok", "nitter": "failed", "clien": "ok", "dcinside": "failed"}
+        status = {"reddit": "ok", "mastodon": "failed", "clien": "ok", "dcinside": "failed"}
         result = analyzer.analyze([], [], [], status)
         assert result.collection_status == status
 
     def test_community_analyzer_collection_status_on_llm_failure(self):
         """LLM 실패 시에도 collection_status는 전달된 값 유지"""
         analyzer = self._make_analyzer(llm_side_effect=Exception("error"))
-        status = {"reddit": "ok", "nitter": "failed"}
+        status = {"reddit": "ok", "mastodon": "failed"}
         result = analyzer.analyze([], [], [], status)
-        assert result.collection_status["nitter"] == "failed"
+        assert result.collection_status["mastodon"] == "failed"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1176,20 +1193,20 @@ class TestDailyReporterCommunitySection:
     def test_report_shows_collection_status_warnings(self, reporter, base_args):
         from modules.career.models import CommunityTrendAnalysis
         base_args["community_trend"] = CommunityTrendAnalysis(
-            collection_status={"reddit": "ok", "nitter": "failed", "clien": "ok", "dcinside": "failed"},
+            collection_status={"reddit": "ok", "mastodon": "failed", "clien": "ok", "dcinside": "failed"},
         )
         report = reporter.generate(**base_args)
         assert "⚠️" in report
-        assert "nitter" in report
+        assert "mastodon" in report
         assert "dcinside" in report
 
-    def test_report_nitter_failure_shown_prominently(self, reporter, base_args):
+    def test_report_mastodon_failure_shown_prominently(self, reporter, base_args):
         from modules.career.models import CommunityTrendAnalysis
         base_args["community_trend"] = CommunityTrendAnalysis(
-            collection_status={"nitter": "failed"},
+            collection_status={"mastodon": "failed"},
         )
         report = reporter.generate(**base_args)
-        assert "Nitter" in report
+        assert "mastodon" in report
         assert "⚠️" in report
 
     def test_report_community_section_no_crash_on_empty_analysis(self, reporter, base_args):
@@ -1205,7 +1222,7 @@ class TestDailyReporterCommunitySection:
             key_opinions=["AI가 주니어를 대체한다", "LLM 경험이 차별점"],
             emerging_concerns=["채용 한파"],
             community_summary="전반적으로 불안감이 고조",
-            collection_status={"reddit": "ok", "nitter": "ok"},
+            collection_status={"reddit": "ok", "mastodon": "ok"},
         )
         report = reporter.generate(**base_args)
         assert "AI 에이전트" in report
@@ -1225,8 +1242,8 @@ class TestCareerAgentCommunityIntegration:
         agent.data_dir = str(tmp_path)
         agent.reddit_collector = MagicMock()
         agent.reddit_collector.safe_collect = AsyncMock(return_value=[])
-        agent.nitter_collector = MagicMock()
-        agent.nitter_collector.safe_collect = AsyncMock(return_value=[])
+        agent.mastodon_collector = MagicMock()
+        agent.mastodon_collector.safe_collect = AsyncMock(return_value=[])
         agent.clien_collector = MagicMock()
         agent.clien_collector.safe_collect = AsyncMock(return_value=[])
         agent.dcinside_collector = MagicMock()
@@ -1251,7 +1268,7 @@ class TestCareerAgentCommunityIntegration:
         import asyncio
         result = asyncio.run(mock_agent.fetch_community(date(2026, 3, 28)))
         assert result["collection_status"]["reddit"] == "failed"
-        assert result["collection_status"]["nitter"] == "failed"
+        assert result["collection_status"]["mastodon"] == "failed"
 
     def test_fetch_community_collection_status_ok_when_data_returned(self, mock_agent):
         from modules.career.models import RedditPost
@@ -1261,7 +1278,7 @@ class TestCareerAgentCommunityIntegration:
         ])
         result = asyncio.run(mock_agent.fetch_community(date(2026, 3, 28)))
         assert result["collection_status"]["reddit"] == "ok"
-        assert result["collection_status"]["nitter"] == "failed"
+        assert result["collection_status"]["mastodon"] == "failed"
 
     def test_community_path_helper(self, mock_agent):
         from modules.career.service import CareerAgent

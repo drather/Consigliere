@@ -27,7 +27,7 @@ class ClienCollector(BaseCollector):
         self.limit = limit
 
     async def collect(self) -> List[KoreanPost]:
-        async with aiohttp.ClientSession(headers=_HEADERS) as session:
+        async with aiohttp.ClientSession(headers=_HEADERS, connector=self.make_connector()) as session:
             async with session.get(
                 self.board_url,
                 timeout=aiohttp.ClientTimeout(total=20),

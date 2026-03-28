@@ -24,6 +24,11 @@
 - [x] Phase 5: service.py fetch_community() + 초기화 + generate_report() 수정
 - [x] config.yaml community_sources 섹션 추가
 - [x] requirements.txt asyncpraw>=7.7 추가
-- [x] 전체 테스트 실행 (83개 green — 기존 42개 + 신규 41개)
-- [ ] Smoke test (라이브 collector 개별 확인) — 선택적, 실제 API 키 필요
+- [x] 전체 테스트 실행 (86개 green — 기존 42개 + 신규 44개)
+- [x] Reddit 공개 JSON API 전환 (asyncpraw 제거, 인증 불필요)
+- [x] 개조식 포맷 적용 — community_analyst.md 프롬프트 + daily_reporter 멀티라인 렌더링
+- [x] Twitter API v2 시도 → Free 티어 검색 불가(402) 확인
+- [x] MastodonCollector 구현 — fosstodon.org/hachyderm.io/mastodon.social 해시태그 타임라인 API
+- [x] NitterCollector → MastodonCollector 교체 (service.py, config.yaml, tests 전체)
+- [ ] Smoke test (라이브 collector 개별 확인) — 선택적
 - [ ] Nitter 장애 시나리오 테스트 — 선택적

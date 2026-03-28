@@ -31,7 +31,7 @@ from modules.career.collectors.devto import DevToCollector
 from modules.career.collectors.wanted import WantedCollector
 from modules.career.collectors.jumpit import JumpitCollector
 from modules.career.collectors.reddit import RedditCollector
-from modules.career.collectors.nitter import NitterCollector
+from modules.career.collectors.mastodon import MastodonCollector
 from modules.career.collectors.clien import ClienCollector
 from modules.career.collectors.dcinside import DCInsideCollector
 from modules.career.processors.job_analyzer import JobAnalyzer
@@ -102,12 +102,12 @@ class CareerAgent:
             user_agent=reddit_cfg.get("user_agent", "Consigliere Career Bot 1.0"),
             timeout=reddit_cfg.get("timeout", 20),
         )
-        nitter_cfg = cs.get("nitter", {})
-        self.nitter_collector = NitterCollector(
-            instances=nitter_cfg.get("instances", ["https://nitter.net"]),
-            keywords=nitter_cfg.get("keywords", ["AI LLM", "programming"]),
-            timeout=nitter_cfg.get("timeout", 15),
-            max_tweets_per_keyword=nitter_cfg.get("max_tweets_per_keyword", 10),
+        mastodon_cfg = cs.get("mastodon", {})
+        self.mastodon_collector = MastodonCollector(
+            instances=mastodon_cfg.get("instances", ["fosstodon.org", "hachyderm.io", "mastodon.social"]),
+            hashtags=mastodon_cfg.get("hashtags", ["programming", "llm", "ai", "devops"]),
+            limit_per_hashtag=mastodon_cfg.get("limit_per_hashtag", 10),
+            timeout=mastodon_cfg.get("timeout", 15),
         )
         clien_cfg = cs.get("clien", {})
         self.clien_collector = ClienCollector(
@@ -218,23 +218,23 @@ class CareerAgent:
             except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"커뮤니티 캐시 손상, 재수집: {e}")
 
-        reddit_posts, nitter_tweets, clien_posts, dcinside_posts = await asyncio.gather(
+        reddit_posts, mastodon_posts, clien_posts, dcinside_posts = await asyncio.gather(
             self.reddit_collector.safe_collect(),
-            self.nitter_collector.safe_collect(),
+            self.mastodon_collector.safe_collect(),
             self.clien_collector.safe_collect(),
             self.dcinside_collector.safe_collect(),
         )
 
         collection_status = {
             "reddit": "ok" if reddit_posts else "failed",
-            "nitter": "ok" if nitter_tweets else "failed",
+            "mastodon": "ok" if mastodon_posts else "failed",
             "clien": "ok" if clien_posts else "failed",
             "dcinside": "ok" if dcinside_posts else "failed",
         }
 
         data = {
             "reddit": [p.model_dump() for p in reddit_posts],
-            "nitter": [t.model_dump() for t in nitter_tweets],
+            "mastodon": [t.model_dump() for t in mastodon_posts],
             "clien": [p.model_dump() for p in clien_posts],
             "dcinside": [p.model_dump() for p in dcinside_posts],
             "collection_status": collection_status,
@@ -266,7 +266,7 @@ class CareerAgent:
         articles = [DevToArticle(**a) for a in trend_data.get("articles", [])]
 
         reddit_posts = [RedditPost(**p) for p in community_data.get("reddit", [])]
-        nitter_tweets = [NitterTweet(**t) for t in community_data.get("nitter", [])]
+        mastodon_posts = [NitterTweet(**t) for t in community_data.get("mastodon", [])]
         korean_posts = [
             KoreanPost(**p)
             for p in community_data.get("clien", []) + community_data.get("dcinside", [])
@@ -285,7 +285,7 @@ class CareerAgent:
             job_analysis, trend_analysis, self.persona, gap_history
         )
         community_trend = self.community_analyzer.analyze(
-            reddit_posts, nitter_tweets, korean_posts, collection_status
+            reddit_posts, mastodon_posts, korean_posts, collection_status
         )
 
         wanted_count = sum(1 for p in postings if p.source == "wanted")
