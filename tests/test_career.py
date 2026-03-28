@@ -562,6 +562,88 @@ class TestProcessorErrorHandling:
         assert result.gap_score == 0
 
 
+class TestBaseAnalyzer:
+    """BaseAnalyzer: 공통 LLM 호출 패턴 추상화 (DIP/DRY 개선)"""
+
+    def _make_analyzer(self, llm=None, prompt_loader=None):
+        from modules.career.processors.base import BaseAnalyzer
+        from modules.career.processors.job_analyzer import JobAnalyzer
+
+        if llm is None:
+            llm = MagicMock()
+        if prompt_loader is None:
+            prompt_loader = MagicMock()
+            prompt_loader.load.return_value = ({}, "prompt text")
+        return JobAnalyzer(llm=llm, prompt_loader=prompt_loader)
+
+    def test_base_analyzer_stores_deps(self):
+        """BaseAnalyzer.__init__ 시 llm, prompt_loader가 저장된다."""
+        from modules.career.processors.base import BaseAnalyzer
+
+        llm = MagicMock()
+        prompt_loader = MagicMock()
+        # JobAnalyzer는 BaseAnalyzer 서브클래스이므로 그대로 사용
+        analyzer = self._make_analyzer(llm=llm, prompt_loader=prompt_loader)
+        assert analyzer.llm is llm
+        assert analyzer.prompt_loader is prompt_loader
+
+    def test_call_llm_calls_prompt_loader_and_llm(self):
+        """_call_llm이 prompt_loader.load → llm.generate_json 순서로 호출한다."""
+        llm = MagicMock()
+        llm.generate_json.return_value = {"top_skills": [], "market_summary": ""}
+        prompt_loader = MagicMock()
+        prompt_loader.load.return_value = ({}, "rendered prompt")
+
+        analyzer = self._make_analyzer(llm=llm, prompt_loader=prompt_loader)
+        analyzer._call_llm("career/job_analyst", {"key": "val"}, JobAnalysis)
+
+        prompt_loader.load.assert_called_once_with("career/job_analyst", variables={"key": "val"})
+        llm.generate_json.assert_called_once_with("rendered prompt")
+
+    def test_call_llm_parses_response_into_model(self):
+        """_call_llm 반환값이 지정된 model_class 인스턴스다."""
+        llm = MagicMock()
+        llm.generate_json.return_value = {"top_skills": ["Python"], "market_summary": "ok"}
+        prompt_loader = MagicMock()
+        prompt_loader.load.return_value = ({}, "prompt")
+
+        analyzer = self._make_analyzer(llm=llm, prompt_loader=prompt_loader)
+        result = analyzer._call_llm("career/job_analyst", {}, JobAnalysis)
+
+        assert isinstance(result, JobAnalysis)
+        assert result.top_skills == ["Python"]
+
+    def test_call_llm_propagates_exception_on_llm_failure(self):
+        """LLM 실패 시 _call_llm이 예외를 전파한다 (caller가 핸들링)."""
+        llm = MagicMock()
+        llm.generate_json.side_effect = RuntimeError("LLM down")
+        prompt_loader = MagicMock()
+        prompt_loader.load.return_value = ({}, "prompt")
+
+        analyzer = self._make_analyzer(llm=llm, prompt_loader=prompt_loader)
+        with pytest.raises(RuntimeError, match="LLM down"):
+            analyzer._call_llm("career/job_analyst", {}, JobAnalysis)
+
+    def test_all_analyzers_are_base_analyzer_subclasses(self):
+        """4개 Analyzer 모두 BaseAnalyzer를 상속한다."""
+        from modules.career.processors.base import BaseAnalyzer
+        from modules.career.processors.job_analyzer import JobAnalyzer
+        from modules.career.processors.trend_analyzer import TrendAnalyzer
+        from modules.career.processors.skill_gap_analyzer import SkillGapAnalyzer
+        from modules.career.processors.community_analyzer import CommunityAnalyzer
+
+        assert issubclass(JobAnalyzer, BaseAnalyzer)
+        assert issubclass(TrendAnalyzer, BaseAnalyzer)
+        assert issubclass(SkillGapAnalyzer, BaseAnalyzer)
+        assert issubclass(CommunityAnalyzer, BaseAnalyzer)
+
+    def test_base_analyzer_provides_logger(self):
+        """BaseAnalyzer 서브클래스는 self.logger를 사용할 수 있다."""
+        analyzer = self._make_analyzer()
+        assert hasattr(analyzer, "logger")
+        assert analyzer.logger is not None
+
+
 class TestCollectorErrorHandling:
     """Collector 예외 발생 시 빈 리스트 반환"""
 
