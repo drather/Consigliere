@@ -333,6 +333,38 @@ def update_persona(request: PersonaUpdateRequest, agent: RealEstateAgent = Depen
         logger.error(f"Persona PATCH Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+class PreferenceRuleItem(BaseModel):
+    id: str
+    enabled: bool
+    description: str
+    constraint: str
+
+class PreferenceRulesUpdateRequest(BaseModel):
+    rules: List[PreferenceRuleItem]
+
+@router.get("/dashboard/real-estate/preference-rules")
+def get_preference_rules(agent: RealEstateAgent = Depends(get_real_estate_agent)):
+    """preference_rules.yaml 전체 목록 반환."""
+    try:
+        return {"rules": agent.get_preference_rules()}
+    except Exception as e:
+        logger.error(f"PreferenceRules GET Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/dashboard/real-estate/preference-rules")
+def update_preference_rules(
+    request: PreferenceRulesUpdateRequest,
+    agent: RealEstateAgent = Depends(get_real_estate_agent)
+):
+    """preference_rules.yaml 전체 목록을 교체 저장."""
+    try:
+        rules = [r.dict() for r in request.rules]
+        saved = agent.update_preference_rules(rules)
+        return {"status": "ok", "rules": saved}
+    except Exception as e:
+        logger.error(f"PreferenceRules PUT Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/dashboard/real-estate/districts")
 def get_districts():
     """config.yaml의 구/시 목록 반환 (이름 검색용)."""

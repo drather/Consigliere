@@ -676,3 +676,90 @@ def show_real_estate():
                     st.success("✅ 페르소나 저장 완료. 다음 리포트 생성 시 반영됩니다.")
                     st.session_state.persona = result.get("persona", {})
                     st.rerun()
+
+            st.markdown("---")
+
+            # ── 추천 필터 규칙 ─────────────────────────────────
+            st.markdown("#### 🔧 추천 필터 규칙")
+            st.caption(
+                "활성화(ON)된 규칙만 리포트 생성 시 LLM에 전달됩니다. "
+                "조건 문장을 직접 편집하거나, 새 규칙을 추가/삭제할 수 있습니다."
+            )
+
+            col_rules_reload, _ = st.columns([1, 5])
+            with col_rules_reload:
+                if st.button("🔄 새로고침", key="rules_reload"):
+                    st.session_state.pop("preference_rules", None)
+
+            if "preference_rules" not in st.session_state:
+                with st.spinner("규칙 로딩 중..."):
+                    st.session_state.preference_rules = DashboardClient.get_preference_rules()
+
+            rules = st.session_state.get("preference_rules", [])
+
+            # 기존 규칙 목록
+            for i, rule in enumerate(rules):
+                col_toggle, col_del = st.columns([11, 1])
+                with col_toggle:
+                    st.toggle(
+                        f"**{rule.get('description', rule.get('id', f'규칙 {i+1}'))}**",
+                        value=rule.get("enabled", True),
+                        key=f"rule_enabled_{i}",
+                    )
+                with col_del:
+                    if st.button("🗑️", key=f"rule_del_{i}", help="이 규칙 삭제"):
+                        st.session_state.preference_rules = [r for j, r in enumerate(rules) if j != i]
+                        st.rerun()
+
+                with st.expander(f"📝 조건 편집  `{rule.get('id', '')}`", expanded=False):
+                    st.text_input("설명", value=rule.get("description", ""), key=f"rule_desc_{i}")
+                    st.text_area(
+                        "LLM에 전달되는 조건 문장",
+                        value=rule.get("constraint", "").strip(),
+                        key=f"rule_constraint_{i}",
+                        height=90,
+                    )
+
+            # 새 규칙 추가
+            with st.expander("➕ 새 규칙 추가", expanded=False):
+                new_id = st.text_input("규칙 ID (영문, 예: no_old_buildings)", key="new_rule_id")
+                new_desc = st.text_input("설명 (한 줄)", key="new_rule_desc")
+                new_constraint = st.text_area(
+                    "LLM에 전달할 조건 문장",
+                    key="new_rule_constraint",
+                    height=90,
+                    placeholder="예: 준공 후 30년 이상 된 단지는 추천하지 마십시오.",
+                )
+                if st.button("➕ 목록에 추가", key="add_rule_btn"):
+                    if new_id and new_desc and new_constraint:
+                        st.session_state.preference_rules = rules + [{
+                            "id": new_id,
+                            "enabled": True,
+                            "description": new_desc,
+                            "constraint": new_constraint.strip(),
+                        }]
+                        st.success(f"규칙 '{new_desc}' 추가됨. 저장 버튼을 눌러 반영하세요.")
+                        st.rerun()
+                    else:
+                        st.warning("ID, 설명, 조건 문장을 모두 입력하세요.")
+
+            # 필터 규칙 저장
+            if st.button("💾 필터 규칙 저장", key="save_rules_btn", use_container_width=True):
+                current_rules = st.session_state.get("preference_rules", [])
+                updated_rules = [
+                    {
+                        "id": r.get("id", f"rule_{i}"),
+                        "enabled": st.session_state.get(f"rule_enabled_{i}", r.get("enabled", True)),
+                        "description": st.session_state.get(f"rule_desc_{i}", r.get("description", "")).strip(),
+                        "constraint": st.session_state.get(f"rule_constraint_{i}", r.get("constraint", "")).strip(),
+                    }
+                    for i, r in enumerate(current_rules)
+                ]
+                with st.spinner("저장 중..."):
+                    result = DashboardClient.update_preference_rules(updated_rules)
+                if "error" in result:
+                    st.error(f"❌ 저장 실패: {result['error']}")
+                else:
+                    st.success(f"✅ {len(updated_rules)}개 규칙 저장 완료. 다음 리포트 생성 시 반영됩니다.")
+                    st.session_state.preference_rules = result.get("rules", updated_rules)
+                    st.rerun()

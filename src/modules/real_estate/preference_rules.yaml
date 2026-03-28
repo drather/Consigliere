@@ -1,0 +1,54 @@
+# 부동산 리포트 추천 필터 규칙 체인
+#
+# 사용법:
+#   - enabled: true  → 해당 규칙을 LLM에 전달해 추천 시 반영
+#   - enabled: false → 규칙 비활성화 (코드·프롬프트 수정 불필요)
+#
+# 규칙 추가: 새 항목을 작성하고 enabled: true 설정
+# 규칙 제거: enabled: false 로 변경 (항목 삭제 없이 보존 가능)
+
+rules:
+  - id: apartment_only
+    enabled: true
+    description: 순수 아파트만 추천 (주상복합·오피스텔 제외)
+    constraint: >
+      추천 단지는 순수 아파트(단독 주거용 공동주택)만 포함하십시오.
+      저층부에 상가·업무시설이 있는 주상복합, 오피스텔은 절대 추천하지 마십시오.
+      화이트리스트에 포함된 단지라도 주상복합·오피스텔로 판단되면 제외하고 다음 후보를 선택하십시오.
+
+  - id: min_exclusive_area
+    enabled: true
+    description: 전용면적 59㎡ 이상만 추천
+    constraint: >
+      전용면적 59㎡ 미만 단지는 추천하지 마십시오.
+      실거래가 데이터의 exclusive_area 필드가 59 미만인 경우 해당 단지는 제외하십시오.
+
+  - id: min_household_count
+    enabled: true
+    description: 500세대 이상 대단지만 추천 (환금성 확보)
+    constraint: >
+      500세대 미만 소규모 단지는 추천하지 마십시오.
+      대단지일수록 환금성이 높으므로 세대수가 많은 단지를 우선 선정하십시오.
+
+  # 아래는 비활성화된 예시 규칙입니다 (필요 시 enabled: true 로 변경)
+
+  - id: reconstruction_candidate_only
+    enabled: false
+    description: 재건축 추진 단지만 추천
+    constraint: >
+      재건축 추진 중이거나 안전진단을 통과한 단지만 추천하십시오.
+      reconstruction_status 필드가 비어있거나 '해당없음'인 단지는 제외하십시오.
+
+  - id: within_30min_commute
+    enabled: false
+    description: 삼성역 기준 출퇴근 30분 이내 단지만 추천
+    constraint: >
+      commute_minutes_to_samsung 값이 30분을 초과하는 단지는 추천하지 마십시오.
+      직주근접을 최우선으로 고려하십시오.
+
+  - id: gtx_benefit_required
+    enabled: false
+    description: GTX 수혜 단지만 추천
+    constraint: >
+      GTX 노선 수혜가 예상되는 단지만 추천하십시오.
+      gtx_benefit 필드가 비어있는 단지는 제외하십시오.

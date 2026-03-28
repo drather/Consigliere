@@ -17,6 +17,7 @@ from .presenter import RealEstatePresenter
 from .macro.bok_service import MacroService
 from .news.service import NewsService
 from .calculator import FinancialCalculator
+from .persona_manager import PersonaManager, PreferenceRulesManager
 
 logger = get_logger(__name__)
 
@@ -107,7 +108,8 @@ class RealEstateAgent:
         try:
             area = persona_data.get("user", {}).get("interest_areas", ["수도권"])[0]
             policy_facts = self.repository.search_policy(query=f"{area} 부동산 정책 공급 개발", n_results=3)
-        except:
+        except Exception as e:
+            logger.warning(f"[Job4] Policy RAG search failed: {e}")
             policy_facts = []
 
         # 3. Dynamic Budget
@@ -333,7 +335,8 @@ class RealEstateAgent:
         try:
             area = persona_data.get("user", {}).get("interest_areas", ["수도권"])[0]
             policy_facts = self.repository.search_policy(query=f"{area} 부동산 정책 공급 개발", n_results=3)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"[Job4] Policy RAG search failed: {e}")
             policy_facts = []
         budget_plan = self.calculator.calculate_budget(persona_data, policy_context)
 
@@ -345,6 +348,10 @@ class RealEstateAgent:
         if filtered_tx_count > 0:
             logger.info(f"[Job4] Budget filter: {filtered_tx_count}건 제거 (한도: {budget_ceiling/1e8:.1f}억, 잔여: {len(daily_txs)}건)")
 
+        # 예산 내 단지명 화이트리스트 (Synthesizer에 전달해 범위 외 추천 방지)
+        budget_complex_names = sorted({tx.get("apt_name", "") for tx in daily_txs if tx.get("apt_name")})
+        logger.info(f"[Job4] 화이트리스트 단지 {len(budget_complex_names)}개: {budget_complex_names}")
+
         report_json = self.insight_orchestrator.generate_strategy(
             target_date=target_date,
             macro_dict=macro_dict,
@@ -355,7 +362,8 @@ class RealEstateAgent:
             budget_dict=budget_plan.model_dump(),
             filtered_tx_count=filtered_tx_count,
             news_summary=news_summary,
-            fallback_note=f"({target_date} 저장 데이터 기준, {len(target_codes)}개 구)"
+            fallback_note=f"({target_date} 저장 데이터 기준, {len(target_codes)}개 구)",
+            budget_complex_names=budget_complex_names,
         )
 
         score = report_json.get("_score", 0)
@@ -367,6 +375,11 @@ class RealEstateAgent:
         data_root = os.getenv("LOCAL_STORAGE_PATH", "./data")
         return os.path.join(data_root, "real_estate", f"job1_{target_date.isoformat()}.done")
 
+    def _pipeline_lock_path(self) -> str:
+        """파이프라인 중복 실행 방지용 락 파일 경로."""
+        data_root = os.getenv("LOCAL_STORAGE_PATH", "./data")
+        return os.path.join(data_root, "real_estate", "pipeline_running.lock")
+
     def run_insight_pipeline(self, district_code: Optional[str] = None, target_date: Optional[date] = None, send_slack: bool = True) -> Dict[str, Any]:
         """Pipeline: Job1 → Job2 → Job3 → Job4 → Slack.
 
@@ -376,11 +389,30 @@ class RealEstateAgent:
           - Job3: data/real_estate/macro/{date}_macro.json 존재 시 스킵
         district_code=None → persona.interest_areas 기반 4개 구 동시 수집
         """
+        lock_path = self._pipeline_lock_path()
+        if os.path.exists(lock_path):
+            logger.warning(f"[Pipeline] Already running — lock file exists: {lock_path}. Aborting.")
+            return {"skipped": True, "reason": "pipeline_already_running"}
+
         if target_date is None:
             target_date = date.today()
         year_month = target_date.strftime("%Y%m")
         data_root = os.getenv("LOCAL_STORAGE_PATH", "./data")
 
+        os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+        try:
+            with open(lock_path, "w") as f:
+                f.write(datetime.now().isoformat())
+
+            results = self._run_pipeline_jobs(district_code, target_date, year_month, data_root, send_slack)
+        finally:
+            if os.path.exists(lock_path):
+                os.remove(lock_path)
+
+        return results
+
+    def _run_pipeline_jobs(self, district_code, target_date, year_month, data_root, send_slack) -> Dict[str, Any]:
+        """파이프라인 내부 실행 로직 (lock 내부에서 호출)."""
         results = {}
 
         # ── Job 1: 실거래가 수집 ──────────────────────────────────────
@@ -540,8 +572,8 @@ class RealEstateAgent:
                             tx["reconstruction_status"] = content[:120]
                             tx["reconstruction_potential"] = "MEDIUM"
                             tx["gtx_benefit"] = "GTX" in content
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"[Job4] ChromaDB policy search for '{apt_name}' failed: {e}")
 
             # 역세권/출퇴근/학군: district → dong 순서로 매칭
             dist_intel = districts_intel.get(district_code, {})
@@ -599,55 +631,25 @@ class RealEstateAgent:
                 with open(filename, "r", encoding="utf-8") as f:
                     logger.info(f"[Job4] Using stored macro: {filename}")
                     return json.load(f)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"[Job4] Failed to parse macro JSON {filename}: {e}")
         return None
 
     def _load_persona(self) -> Dict[str, Any]:
-        try:
-            import yaml
-            persona_path = os.path.join(os.path.dirname(__file__), "persona.yaml")
-            with open(persona_path, "r", encoding="utf-8") as f:
-                return yaml.safe_load(f)
-        except Exception as e:
-            logger.error(f"⚠️ Failed to load persona: {e}")
-            return {"user": {}}
+        return PersonaManager().load()
 
     def get_persona(self) -> Dict[str, Any]:
         """현재 persona.yaml을 dict로 반환."""
-        return self._load_persona()
+        return PersonaManager().load()
 
     def update_persona(self, updates: Dict[str, Any]) -> Dict[str, Any]:
         """persona.yaml을 부분 업데이트하고 이력을 백업한다."""
-        import yaml
+        return PersonaManager().update(updates)
 
-        current = self._load_persona()
+    def get_preference_rules(self) -> List[Dict[str, Any]]:
+        """preference_rules.yaml의 rules 목록을 반환."""
+        return PreferenceRulesManager().get()
 
-        # 이력 백업 (변경 전)
-        history_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "persona_history")
-        os.makedirs(history_dir, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = os.path.join(history_dir, f"{ts}_persona.yaml")
-        with open(backup_path, "w", encoding="utf-8") as f:
-            yaml.dump(current, f, allow_unicode=True, default_flow_style=False)
-
-        # Deep merge
-        merged = self._deep_merge(current, updates)
-
-        # persona.yaml 저장
-        persona_path = os.path.join(os.path.dirname(__file__), "persona.yaml")
-        with open(persona_path, "w", encoding="utf-8") as f:
-            yaml.dump(merged, f, allow_unicode=True, default_flow_style=False)
-
-        logger.info(f"[Persona] Updated and backed up to {backup_path}")
-        return merged
-
-    def _deep_merge(self, base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
-        """updates를 base에 재귀적으로 병합한다."""
-        result = dict(base)
-        for k, v in updates.items():
-            if isinstance(v, dict) and isinstance(result.get(k), dict):
-                result[k] = self._deep_merge(result[k], v)
-            else:
-                result[k] = v
-        return result
+    def update_preference_rules(self, rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """preference_rules.yaml의 rules 목록을 교체 저장."""
+        return PreferenceRulesManager().update(rules)

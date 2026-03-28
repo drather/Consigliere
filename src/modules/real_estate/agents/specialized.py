@@ -30,7 +30,7 @@ class ContextAnalystAgent(BaseAgent):
         return {"economist_insight": economist_insight, "analyst_insight": analyst_insight}
 
 
-class CodeBasedValidator:
+class ReportValidator:
     """
     Rule-based validator. Weighted scoring across 4 checks (100pts total).
     Score >= 90 → PASS, 75-89 → WARN, < 75 → FAIL (triggers retry).
@@ -86,20 +86,23 @@ class CodeBasedValidator:
         else:
             score += 40
 
-        # 2. Scorecard completeness — expect 1순위/2순위/3순위 (or 🥇/🥈/🥉)
+        # 2. Scorecard completeness — require min(3, available_complex_count) ranks
+        available_count = context.get("available_complex_count", 3)
+        required_ranks = min(3, max(1, available_count))
+
         rank_patterns = [
             (r'(🥇|1순위)', "1순위"),
             (r'(🥈|2순위)', "2순위"),
             (r'(🥉|3순위)', "3순위"),
         ]
         found_ranks = sum(1 for pattern, _ in rank_patterns if re.search(pattern, all_text))
-        if found_ranks >= 3:
+        if found_ranks >= required_ranks:
             score += 25
-        elif found_ranks == 2:
+        elif found_ranks >= required_ranks - 1 and required_ranks > 1:
             score += 15
-            issues.append("스코어카드에 3순위 단지가 누락되었습니다. 1순위/2순위/3순위 3개 단지를 모두 작성하십시오.")
+            issues.append(f"스코어카드에 {required_ranks}순위 단지가 누락되었습니다. {'/'.join(f'{i}순위' for i in range(1, required_ranks + 1))} {required_ranks}개 단지를 모두 작성하십시오.")
         else:
-            issues.append("스코어카드 단지가 부족합니다 (최소 3개 필요). 1순위/2순위/3순위를 모두 작성하십시오.")
+            issues.append(f"스코어카드 단지가 부족합니다 (최소 {required_ranks}개 필요). {'/'.join(f'{i}순위' for i in range(1, required_ranks + 1))}를 모두 작성하십시오.")
 
         # 3. commute_minutes_to_samsung citation (20pts)
         if re.search(r'출퇴근편의성', all_text) and re.search(r'\d+분', all_text):
@@ -132,6 +135,9 @@ class CodeBasedValidator:
             return {"status": "WARN", "score": score, "feedback": feedback}
         else:
             return {"status": "FAIL", "score": score, "feedback": feedback}
+
+
+CodeBasedValidator = ReportValidator  # backward-compat alias
 
 
 # Legacy agents — no longer used in main pipeline

@@ -246,6 +246,30 @@ class DashboardClient:
             return {"error": str(e)}
 
     @staticmethod
+    def get_preference_rules() -> List[Dict]:
+        """preference_rules.yaml 목록 반환."""
+        try:
+            response = requests.get(f"{API_BASE_URL}/dashboard/real-estate/preference-rules")
+            response.raise_for_status()
+            return response.json().get("rules", [])
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching preference rules: {e}")
+            return []
+
+    @staticmethod
+    def update_preference_rules(rules: List[Dict]) -> Dict:
+        """preference_rules.yaml 전체 교체 저장."""
+        try:
+            response = requests.put(
+                f"{API_BASE_URL}/dashboard/real-estate/preference-rules",
+                json={"rules": rules}
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            return {"error": str(e)}
+
+    @staticmethod
     def get_workflows() -> List[Dict]:
         """Fetches list of all n8n workflows."""
         try:
