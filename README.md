@@ -3,23 +3,24 @@
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109.2-green.svg)](https://fastapi.tiangolo.com/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.42.0-red.svg)](https://streamlit.io/)
-[![n8n](https://img.shields.io/badge/n8n-1.72.0-orange.svg)](https://n8n.io/)
+[![n8n](https://img.shields.io/badge/n8n-v2.9.4-orange.svg)](https://n8n.io/)
+[![Tests](https://img.shields.io/badge/Tests-101%20green-brightgreen.svg)]()
 
-**Project Consigliere** is a personalized LLM-based assistant platform designed to manage your knowledge, finances, real estate monitoring, and daily automated actions through natural language processing and scheduled workflows.
+**Project Consigliere** is a personalized LLM-based assistant platform designed to manage your knowledge, finances, real estate monitoring, career intelligence, and daily automated actions through natural language processing and scheduled workflows.
 
-**Project Consigliere**는 사용자의 다방면(부동산, 금융 등)에 걸친 기억, 지식, 행동을 관리해 주는 개인화된 LLM 기반 비서 플랫폼입니다. 단순 챗봇을 넘어 적극적으로 정보를 수집하고 사용자에게 보고하는 자동화 비서를 지향합니다.
+**Project Consigliere**는 사용자의 다방면(부동산, 금융, 커리어 등)에 걸친 기억, 지식, 행동을 관리해 주는 개인화된 LLM 기반 비서 플랫폼입니다. 단순 챗봇을 넘어 적극적으로 정보를 수집하고 사용자에게 보고하는 자동화 비서를 지향합니다.
 
 ---
 
 ## 1. System Overview (시스템 개요)
 
 ### ❓ WHAT: What is Consigliere?
-Consigliere is your personal AI operations center. It combines a user-friendly **Streamlit Dashboard**, a **FastAPI backend** powered by Gemini LLMs, an **n8n Automation Engine** for scheduling integrations, and a **ChromaDB Vector Store** to act as its long-term memory. It also features a **Slack Integration** for proactive notifications.
+Consigliere is your personal AI operations center. It combines a user-friendly **Streamlit Dashboard**, a **FastAPI backend** powered by Claude LLMs, an **n8n Automation Engine** for scheduling, and a **ChromaDB Vector Store** for long-term memory. It features **Slack/Telegram integration** for proactive notifications and a **Career Intelligence** module for daily developer trend & job market reports.
 
-Consigliere는 개인의 AI 오퍼레이션 센터입니다. 사용하기 쉬운 **Streamlit 대시보드**, Gemini LLM으로 구동되는 **FastAPI 백엔드**, 자동화 및 스케줄링을 위한 **n8n 엔진**, 그리고 장기 기억 장치로 쓰이는 **ChromaDB**를 하나의 유기체처럼 통합한 시스템입니다. 또한 실시간 알림을 위해 **Slack 연동** 기능을 갖추고 있습니다.
+Consigliere는 개인의 AI 오퍼레이션 센터입니다. **Streamlit 대시보드**, Claude LLM 기반의 **FastAPI 백엔드**, 자동화 및 스케줄링을 위한 **n8n 엔진**, 장기 기억 장치로 쓰이는 **ChromaDB**를 통합한 시스템입니다. **Slack/Telegram 알림** 및 매일 개발자 트렌드·채용 시장을 분석하는 **커리어 인텔리전스** 기능을 갖추고 있습니다.
 
 ### 🎯 WHY: Why was this built?
-To allow users to build and run complex, repeating background tasks (like scraping real-estate transactions every morning, or classifying credit card spending) using simple natural language, without writing ad-hoc scripts every time.
+To allow users to build and run complex, repeating background tasks (like scraping real-estate transactions every morning, or receiving a daily developer career digest) using simple natural language, without writing ad-hoc scripts every time.
 
 사용자가 복잡한 코딩이나 인프라 설정 없이, "매일 아침 8시에 관심 지역 부동산 실거래가 알려줘"와 같은 자연어 명령만으로 지식 수집과 스케줄링 등의 백그라운드 작업을 손쉽게 자동화하기 위해 만들어졌습니다.
 
@@ -39,66 +40,200 @@ The system relies on a Microservices architecture orchestrated by Docker Compose
 ```mermaid
 graph TD
     User((User))
-    
+
     subgraph Host["macOS / Local Machine"]
         StreamlitApp["🖥️ Streamlit Dashboard\n(:8501)"]
-        
+
         subgraph Docker["Docker Compose Network: consigliere_net"]
             API["🧠 FastAPI Backend\n(consigliere_api:8000)"]
             N8N["⚙️ n8n Automation Engine\n(consigliere_n8n:5678)"]
             Chroma["🗂️ ChromaDB Vector Store\n(consigliere_chromadb:8000)"]
-            
+
             API -- "Store/Retrieve Embeddings (REST)" --> Chroma
             N8N -- "Trigger Analysis/Webhooks" --> API
             API -- "Deploy Workflows (REST/MCP)" --> N8N
         end
-        
+
         User -- "Interacts With" --> StreamlitApp
         User -- "Manage Workflows" --> N8N
         StreamlitApp -- "Consumes API" --> API
-        API -- "Outgoing Notifications" --> Slack((Workspace: Slack))
+        API -- "Outgoing Notifications" --> Slack((Slack))
+        API -- "Outgoing Notifications" --> Telegram((Telegram))
     end
 ```
 
 ### Component Details (컨테이너 역할)
 1. **`consigliere_api` (FastAPI / Python 3.12)**
-   - **Role:** The brain of the operation. It houses the LLM orchestration (`google-genai`), API endpoints for the dashboard, and MCP capabilities to communicate with n8n.
+   - **Role:** The brain of the operation. Houses LLM orchestration (`Claude claude-sonnet-4-6`), API endpoints for the dashboard, and MCP capabilities to communicate with n8n.
    - **역할:** 시스템의 두뇌. LLM 에이전트 논리를 품고 있으며, 대시보드에서 들어오는 요청을 처리하고, n8n 워크플로우를 주입/관리합니다.
 
-2. **`consigliere_n8n` (n8n)**
+2. **`consigliere_n8n` (n8n v2.9.4)**
    - **Role:** The heartbeat of the automation. Runs scheduled nodes (Cron jobs), HTTP requests, and triggers without locking up the Python thread.
    - **역할:** 자동화의 심장. Python 스레드를 점유하지 않고, 정해진 스케줄이나 이벤트에 따라 트리거되어 외부 API나 데이터를 긁어옵니다.
 
 3. **`consigliere_chromadb` (ChromaDB)**
-   - **Role:** The memory manager. Stores vector embeddings of crawled data (e.g., Real Estate transactions) for RAG (Retrieval-Augmented Generation) based context answering.
-   - **역할:** 기억 장치 매니저. 크롤링된 데이터나 문서들을 임베딩 및 벡터 형태로 저장하여, 나중에 LLM이 컨텍스트를 기반(RAG)으로 정확한 답을 내놓게 도와줍니다.
+   - **Role:** The memory manager. Stores vector embeddings of crawled data for RAG (Retrieval-Augmented Generation) based context answering.
+   - **역할:** 기억 장치 매니저. 크롤링된 데이터나 문서들을 임베딩 및 벡터 형태로 저장하여, LLM이 컨텍스트를 기반(RAG)으로 정확한 답을 내놓게 도와줍니다.
 
 ---
 
-## 3. Dashboard Menu Guide (메뉴 설명)
+## 3. Active Modules (활성 모듈)
 
-The **Streamlit Dashboard** is the primary UI for interacting with the system. It now runs as a managed Docker container. You can access it at [http://localhost:8501](http://localhost:8501).
+### 🏢 Real Estate (부동산)
+| 기능 | 설명 |
+|------|------|
+| 실거래가 수집 | 국토부 API, 수도권 71개 지구, 비동기 aiohttp 병렬 수집 |
+| 뉴스 분석 | 네이버 뉴스 + LLM 인사이트 요약 |
+| 인사이트 리포트 | 실거래가 + 뉴스 + 거시경제 통합 분석, 페르소나 기반 액션 플랜 |
+| 자동 전송 | n8n 스케줄 → Slack 일일 리포트 (07:00 KST) |
 
-사용자의 메인 진입점인 **Streamlit 대시보드**는 이제 Docker 컨테이너로 관리됩니다. 별도의 터미널 실행 없이 `docker-compose up`만으로 [http://localhost:8501](http://localhost:8501)에서 바로 확인하실 수 있습니다.
+### 📊 Career Intelligence (커리어) ← 2026-03-28 추가
+| 기능 | 설명 |
+|------|------|
+| 채용 공고 수집 | Wanted + Jumpit API 자동 수집 (백엔드 포지션) |
+| 기술 트렌드 수집 | GitHub Trending + Hacker News + Dev.to |
+| 커뮤니티 트렌드 수집 | Reddit (7개 subreddit) + Mastodon (해시태그 타임라인) + 클리앙 + DCInside |
+| 스킬갭 분석 | 채용 요구 스킬 vs 현재 스킬 LLM 분석, 학습 추천 |
+| 커뮤니티 분석 | 개발자 커뮤니티 여론·핫 토픽·우려사항 LLM 추출 |
+| Daily Report | 채용 동향 + 기술 트렌드 + 스킬갭 + 커뮤니티 트렌드 통합 마크다운 리포트 |
+| Weekly/Monthly | 주간·월간 누적 분석 리포트 |
+
+### 💰 Finance (금융)
+| 기능 | 설명 |
+|------|------|
+| 가계부 | 마크다운 기반 지출 관리, LLM 분류 |
+
+### ⚙️ Automation (자동화)
+| 기능 | 설명 |
+|------|------|
+| n8n 워크플로우 관리 | FastAPI → n8n API 배포/조회 |
+| 스케줄링 | 부동산 리포트 07:00 KST, 커리어 리포트 (설정 가능) |
+
+---
+
+## 4. API Endpoints (주요 엔드포인트)
+
+### Career
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| `POST` | `/jobs/career/fetch-jobs` | 채용 공고 수집 (캐시 지원) |
+| `POST` | `/jobs/career/fetch-trends` | 기술 트렌드 수집 |
+| `POST` | `/jobs/career/fetch-community` | 커뮤니티 트렌드 수집 |
+| `POST` | `/jobs/career/generate-report` | 일별 통합 리포트 생성 |
+| `GET`  | `/jobs/career/reports/daily` | 리포트 목록 조회 |
+| `GET`  | `/jobs/career/reports/daily/{date}` | 특정 날짜 리포트 조회 |
+
+### Real Estate
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| `POST` | `/jobs/real-estate/fetch-transactions` | 실거래가 수집 |
+| `POST` | `/jobs/real-estate/fetch-news` | 뉴스 수집 |
+| `POST` | `/jobs/real-estate/generate-report` | 인사이트 리포트 생성 |
+| `POST` | `/jobs/real-estate/run-pipeline` | 전체 파이프라인 실행 |
+
+---
+
+## 5. Dashboard Menu Guide (대시보드 메뉴)
+
+The **Streamlit Dashboard** is the primary UI for interacting with the system, accessible at [http://localhost:8501](http://localhost:8501).
 
 ### 🏠 Home
-- **EN:** The main landing page providing a highly summarized status of your active modules (e.g., Finance, Real Estate).
-- **KR:** 메인 대시보드. 금융 지출 요약이나 부동산 모니터링 알림 등 각 모듈의 핵심 상태를 한눈에 볼 수 있는 요약 페이지입니다.
+- 메인 대시보드. 활성 모듈 상태 요약.
 
 ### 💰 Finance
-- **EN:** A personal finance ledger manager. Allows you to select specific months, view structured LLM-analyzed transaction grids, and manually modify rows.
-- **KR:** 개인 가계부 관리 메뉴. 특정 연월별 지출 내역을 그리드(Grid) 뷰로 조회하고, 항목별 통계를 확인하거나 내역을 수정할 수 있습니다.
+- 개인 가계부 관리. 연월별 지출 내역 그리드 조회, LLM 분석 통계.
 
 ### 🏢 Real Estate
-- **EN:** Split into two tabs: 
-    - **Market Monitor**: Fetches and displays property transaction data via the MOLIT public API. 
-    - **News Insights**: Displays LLM-generated daily news summaries analyzing real-estate market sentiments.
-- **KR:** 2개의 탭으로 나뉩니다:
-    - **마켓 모니터**: 국토부 API를 통해 수집된 특정 지역의 최신 실거래가 데이터를 표 형태로 조회합니다.
-    - **뉴스 인사이트**: 네이버 뉴스 API 등을 활용해 매일 주요 부동산 기사를 스크랩하고, LLM이 분석한 인사이트 리포트를 볼 수 있습니다.
+- **마켓 모니터**: 수도권 71개 지구 실거래가 데이터 조회, 아파트명 검색, 금액 범위 필터.
+- **뉴스 인사이트**: 부동산 뉴스 LLM 분석 리포트.
+- **리포트 아카이브**: 과거 인사이트 리포트 목록 및 상세 열람.
 
 ### ⚙️ Automation
-- **EN:** The command center for n8n integrations. Lists all deployed automation workflows (Status, ID). Includes direct links to jump into the native n8n visual editor to test and tweak logic.
-- **KR:** n8n 자동화 워크플로우 관리 메뉴. 현재 백그라운드에서 동작 중이거나 연결된 전체 워크플로우 리스트, 상태 등을 보여줍니다. 워크플로우를 수동 테스트하거나 수정하려면 제공된 `Open in n8n Editor` 버튼을 통해 비주얼 기반의 에디터로 즉시 진입할 수 있습니다.
-- 이후 slack 을 이용한 양방향 통신 기능이 개발 예정입니다.
-- telegram 을 통한 양방향 통신이 가능해졌습니다.
+- n8n 워크플로우 목록 및 상태 조회. `Open in n8n Editor` 버튼으로 비주얼 에디터 즉시 진입.
+- Telegram을 통한 양방향 통신 지원.
+
+---
+
+## 6. Career Module Architecture (커리어 모듈 구조)
+
+```
+src/modules/career/
+├── collectors/          # 데이터 수집
+│   ├── base.py          # BaseCollector (SSL 공통화, safe_collect)
+│   ├── factory.py       # CollectorFactory (카테고리별 Collector 생성, OCP/DIP)
+│   ├── github_trending.py / hacker_news.py / devto.py   # 기술 트렌드
+│   ├── wanted.py / jumpit.py                            # 채용 공고
+│   └── reddit.py / mastodon.py / clien.py / dcinside.py # 커뮤니티
+├── processors/          # LLM 분석
+│   ├── base.py          # BaseAnalyzer (_call_llm 공통 헬퍼, DRY)
+│   ├── job_analyzer.py / trend_analyzer.py / skill_gap_analyzer.py
+│   └── community_analyzer.py
+├── reporters/           # 리포트 생성
+│   ├── daily_reporter.py / weekly_reporter.py / monthly_reporter.py
+├── service.py           # CareerAgent (파사드 오케스트레이터)
+├── models.py            # Pydantic 모델 12종
+├── config.yaml          # 수집 소스·파라미터 설정
+└── persona.yaml         # 사용자 스킬·목표 페르소나
+```
+
+**새 커뮤니티 소스 추가 방법:**
+1. `collectors/<new>.py` 구현 (BaseCollector 상속)
+2. `collectors/factory.py` `build_community_collectors()` 에 키-값 1줄 추가
+3. `service.py` 의 `_REDDIT_SOURCES` / `_MASTODON_SOURCES` / `_KOREAN_SOURCES` 중 해당 집합에 키 추가
+
+---
+
+## 7. Getting Started (시작하기)
+
+### Prerequisites
+- Docker & Docker Compose
+- Python 3.12 (로컬 개발 시)
+- `.env` 파일 설정 (`.env.example` 참조)
+
+### Quick Start
+```bash
+# 1. 환경 변수 설정
+cp .env.example .env
+# ANTHROPIC_API_KEY, SLACK_BOT_TOKEN 등 설정
+
+# 2. 컨테이너 실행
+docker-compose up -d
+
+# 3. 대시보드 접속
+open http://localhost:8501
+```
+
+### Local Development
+```bash
+# 의존성 설치
+arch -arm64 python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 테스트 실행
+arch -arm64 .venv/bin/python3.12 -m pytest tests/ -v
+# → 101 tests passed
+
+# 커리어 리포트 생성 (로컬)
+arch -arm64 .venv/bin/python3.12 -c "
+import asyncio; from src.modules.career.service import CareerAgent
+agent = CareerAgent()
+print(asyncio.run(agent.generate_report()))
+"
+```
+
+---
+
+## 8. Tech Stack
+
+| Category | Tech |
+|----------|------|
+| Backend | Python 3.12, FastAPI, aiohttp |
+| LLM | Claude claude-sonnet-4-6 (Anthropic) |
+| Automation | n8n v2.9.4 |
+| Vector DB | ChromaDB |
+| Dashboard | Streamlit |
+| Notification | Slack Bot API, Telegram Bot API |
+| Data | Pydantic v2, BeautifulSoup4 |
+| Infra | Docker Compose, Cloudflare Tunnel |
+| Testing | pytest, asyncio, MagicMock (101 tests) |
