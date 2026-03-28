@@ -14,6 +14,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 import types as _types
 from modules.real_estate.agents.specialized import CodeBasedValidator
 from modules.real_estate import service as _service_mod
+from modules.real_estate import persona_manager as _persona_manager_mod
+from modules.real_estate.persona_manager import PersonaManager
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -37,7 +39,7 @@ def _make_agent_self():
     agent.repository = MagicMock()
     agent.repository.search_policy.return_value = []
     # service.py의 인스턴스 메서드를 더미 self에 바인딩
-    for method_name in ("_compute_district_average", "_deep_merge", "_enrich_transactions",
+    for method_name in ("_compute_district_average", "_enrich_transactions",
                         "_load_stored_news", "update_persona", "get_persona", "_load_persona"):
         fn = getattr(_service_mod.RealEstateAgent, method_name, None)
         if fn:
@@ -363,37 +365,33 @@ class TestLoadStoredNews:
 class TestDeepMerge:
     def test_partial_nested_update(self):
         """지정한 필드만 변경, 나머지 보존"""
-        agent = _make_agent_self()
         base = {"user": {"assets": {"self": 200_000_000, "partner": 100_000_000, "total": 300_000_000}}}
         updates = {"user": {"assets": {"total": 500_000_000}}}
-        result = agent._deep_merge(base, updates)
+        result = PersonaManager._deep_merge(base, updates)
         assert result["user"]["assets"]["total"] == 500_000_000
         assert result["user"]["assets"]["self"] == 200_000_000
         assert result["user"]["assets"]["partner"] == 100_000_000
 
     def test_list_replaced_not_merged(self):
         """list 값은 merge가 아닌 replace"""
-        agent = _make_agent_self()
         base = {"user": {"interest_areas": ["강남구", "서초구"]}}
         updates = {"user": {"interest_areas": ["강남구", "서초구", "송파구"]}}
-        result = agent._deep_merge(base, updates)
+        result = PersonaManager._deep_merge(base, updates)
         assert result["user"]["interest_areas"] == ["강남구", "서초구", "송파구"]
 
     def test_sibling_keys_preserved(self):
         """업데이트하지 않은 형제 키 보존"""
-        agent = _make_agent_self()
         base = {"commute": {"max_door_to_door_minutes": 50, "preferred_lines": [2, 9]}}
         updates = {"commute": {"max_door_to_door_minutes": 40}}
-        result = agent._deep_merge(base, updates)
+        result = PersonaManager._deep_merge(base, updates)
         assert result["commute"]["max_door_to_door_minutes"] == 40
         assert result["commute"]["preferred_lines"] == [2, 9]
 
     def test_new_key_added(self):
         """기존에 없던 키 추가"""
-        agent = _make_agent_self()
         base = {"user": {"name": "kks"}}
         updates = {"investment_style": "투자우선형"}
-        result = agent._deep_merge(base, updates)
+        result = PersonaManager._deep_merge(base, updates)
         assert result["investment_style"] == "투자우선형"
         assert result["user"]["name"] == "kks"
 
@@ -404,13 +402,13 @@ class TestUpdatePersona:
         import yaml
 
         monkeypatch.setenv("LOCAL_STORAGE_PATH", str(tmp_path))
-        monkeypatch.setattr(_service_mod, "__file__", str(tmp_path / "service.py"))
+        persona_path = tmp_path / "persona.yaml"
+        monkeypatch.setattr(_persona_manager_mod, "_PERSONA_PATH", str(persona_path))
 
         persona_data = {
             "user": {"name": "kks", "assets": {"total": 300_000_000}, "interest_areas": ["강남구"]},
             "commute": {"max_door_to_door_minutes": 50},
         }
-        persona_path = tmp_path / "persona.yaml"
         persona_path.write_text(yaml.dump(persona_data, allow_unicode=True))
 
         agent = _make_agent_self()
@@ -425,13 +423,13 @@ class TestUpdatePersona:
         import yaml
 
         monkeypatch.setenv("LOCAL_STORAGE_PATH", str(tmp_path))
-        monkeypatch.setattr(_service_mod, "__file__", str(tmp_path / "service.py"))
+        persona_path = tmp_path / "persona.yaml"
+        monkeypatch.setattr(_persona_manager_mod, "_PERSONA_PATH", str(persona_path))
 
         persona_data = {
             "user": {"name": "kks", "interest_areas": ["강남구"]},
             "commute": {"max_door_to_door_minutes": 50, "preferred_lines": [2, 9]},
         }
-        persona_path = tmp_path / "persona.yaml"
         persona_path.write_text(yaml.dump(persona_data, allow_unicode=True))
 
         agent = _make_agent_self()
@@ -446,13 +444,13 @@ class TestUpdatePersona:
         import yaml
 
         monkeypatch.setenv("LOCAL_STORAGE_PATH", str(tmp_path))
-        monkeypatch.setattr(_service_mod, "__file__", str(tmp_path / "service.py"))
+        persona_path = tmp_path / "persona.yaml"
+        monkeypatch.setattr(_persona_manager_mod, "_PERSONA_PATH", str(persona_path))
 
         persona_data = {
             "user": {"name": "kks", "interest_areas": ["강남구"]},
             "commute": {"max_door_to_door_minutes": 50},
         }
-        persona_path = tmp_path / "persona.yaml"
         persona_path.write_text(yaml.dump(persona_data, allow_unicode=True))
 
         agent = _make_agent_self()
@@ -461,3 +459,199 @@ class TestUpdatePersona:
         saved = yaml.safe_load(persona_path.read_text())
         assert saved["commute"]["max_door_to_door_minutes"] == 40
         assert saved["user"]["interest_areas"] == ["강남구"]  # 보존
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job4 토큰 최적화: Validator 적응형 스코어카드 (available_complex_count)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _run_adaptive(text: str, budget_억: float = 9.0, available_count: int = 3,
+                  policy_facts: list = None):
+    """available_complex_count를 Validator에 전달하는 헬퍼."""
+    budget = {"final_max_price": int(budget_억 * 1e8)}
+    return CodeBasedValidator().run({
+        "budget_plan": budget,
+        "generated_report": _make_report(text),
+        "policy_facts": policy_facts or [],
+        "available_complex_count": available_count,
+    })
+
+
+class TestAdaptiveScorecardValidator:
+    """available_complex_count에 따른 required_ranks 적응형 로직 테스트."""
+
+    def test_three_complexes_requires_three_ranks(self):
+        """가용 단지 3개 → 3순위 모두 필요, 3개 충족 시 25점."""
+        r = _run_adaptive("🥇 1순위\n🥈 2순위\n🥉 3순위\n출퇴근편의성 — 20분",
+                          available_count=3)
+        assert r["score"] == 100
+        assert r["status"] == "PASS"
+
+    def test_two_complexes_only_requires_two_ranks(self):
+        """가용 단지 2개 → 2순위까지만 요구, 2개 충족 시 25점 만점."""
+        r = _run_adaptive("🥇 1순위\n🥈 2순위\n출퇴근편의성 — 20분",
+                          available_count=2)
+        # 예산 40 + 스코어카드 25 + commute 20 + policy면제 15 = 100
+        assert r["score"] == 100
+        assert r["status"] == "PASS"
+
+    def test_one_complex_only_requires_one_rank(self):
+        """가용 단지 1개 → 1순위만 요구, 1개 충족 시 25점 만점."""
+        r = _run_adaptive("🥇 1순위\n출퇴근편의성 — 20분",
+                          available_count=1)
+        assert r["score"] == 100
+        assert r["status"] == "PASS"
+
+    def test_two_complexes_one_rank_gives_partial_score(self):
+        """가용 단지 2개인데 1순위만 있으면 부분 점수(15점)."""
+        r = _run_adaptive("🥇 1순위\n출퇴근편의성 — 20분",
+                          available_count=2)
+        # required=2, found=1 → 15점 (25점 아님)
+        # 예산 40 + 스코어카드 15 + commute 20 + policy면제 15 = 90 → PASS지만 최대 미달
+        assert r["score"] == 90
+        assert r["status"] == "PASS"
+
+    def test_three_complexes_two_ranks_gives_partial_score(self):
+        """가용 단지 3개인데 2순위만 있으면 부분 점수(15점)."""
+        r = _run_adaptive("🥇 1순위\n🥈 2순위\n출퇴근편의성 — 20분",
+                          available_count=3)
+        # required=3, found=2 → 15점
+        assert r["score"] == 90
+
+    def test_zero_available_count_defaults_safely(self):
+        """가용 단지 0개 → required_ranks=1로 최소화, 1순위 있으면 25점."""
+        r = _run_adaptive("🥇 1순위\n출퇴근편의성 — 20분",
+                          available_count=0)
+        assert r["score"] == 100
+
+    def test_default_available_count_three_when_omitted(self):
+        """available_complex_count 미전달 시 기존 동작(3 요구) 유지."""
+        budget = {"final_max_price": int(9.0 * 1e8)}
+        r = CodeBasedValidator().run({
+            "budget_plan": budget,
+            "generated_report": _make_report("🥇 1순위\n🥈 2순위\n출퇴근편의성 — 20분"),
+            "policy_facts": [],
+            # available_complex_count 미전달
+        })
+        # required=3, found=2 → 15점 (기존 동작)
+        assert r["score"] == 90
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PromptTokenOptimizer
+# ─────────────────────────────────────────────────────────────────────────────
+
+from modules.real_estate.prompt_optimizer import PromptTokenOptimizer
+
+
+class TestPromptTokenOptimizer:
+
+    # compact_json ─────────────────────────────────────────────────────────────
+
+    def test_compact_json_no_whitespace(self):
+        """key/value 사이 공백 없이 직렬화."""
+        result = PromptTokenOptimizer.compact_json({"key": "value", "num": 1})
+        assert " " not in result
+        assert result == '{"key":"value","num":1}'
+
+    def test_compact_json_shorter_than_default(self):
+        """동일 데이터를 기본 json.dumps보다 짧게 직렬화."""
+        import json
+        data = {"a": 1, "b": [1, 2, 3], "c": {"d": 4}}
+        assert len(PromptTokenOptimizer.compact_json(data)) < len(json.dumps(data, ensure_ascii=False))
+
+    def test_compact_json_preserves_korean(self):
+        """ensure_ascii=False — 한글 이스케이프 없이 유지."""
+        result = PromptTokenOptimizer.compact_json({"name": "강남구"})
+        assert "강남구" in result
+        assert "\\u" not in result
+
+    # drop_empty ───────────────────────────────────────────────────────────────
+
+    def test_drop_empty_removes_none(self):
+        result = PromptTokenOptimizer.drop_empty({"a": 1, "b": None})
+        assert result == {"a": 1}
+
+    def test_drop_empty_removes_empty_string(self):
+        result = PromptTokenOptimizer.drop_empty({"a": "x", "b": ""})
+        assert result == {"a": "x"}
+
+    def test_drop_empty_removes_empty_list_and_dict(self):
+        result = PromptTokenOptimizer.drop_empty({"a": 1, "b": [], "c": {}})
+        assert result == {"a": 1}
+
+    def test_drop_empty_keeps_zero_and_false(self):
+        """0과 False는 의미 있는 값이므로 제거하지 않는다."""
+        result = PromptTokenOptimizer.drop_empty({"zero": 0, "flag": False, "empty": None})
+        assert result == {"zero": 0, "flag": False}
+
+    # slim_list ────────────────────────────────────────────────────────────────
+
+    def test_slim_list_keeps_only_specified_fields(self):
+        items = [{"a": 1, "b": 2, "c": 3}]
+        result = PromptTokenOptimizer.slim_list(items, {"a", "b"})
+        assert result == [{"a": 1, "b": 2}]
+
+    def test_slim_list_removes_null_values(self):
+        items = [{"a": 1, "b": None, "c": ""}]
+        result = PromptTokenOptimizer.slim_list(items, {"a", "b", "c"})
+        assert result == [{"a": 1}]
+
+    def test_slim_list_handles_empty_input(self):
+        assert PromptTokenOptimizer.slim_list([], {"a"}) == []
+
+    # slim_budget ──────────────────────────────────────────────────────────────
+
+    def test_slim_budget_keeps_key_fields(self):
+        budget = {
+            "available_cash": 300_000_000,
+            "max_price_ltv": 800_000_000,
+            "max_price_dsr": 700_000_000,
+            "final_max_price": 750_000_000,
+            "estimated_loan": 450_000_000,
+            "estimated_taxes": 22_500_000,
+            "reasoning": "LTV 60% 기준",
+        }
+        result = PromptTokenOptimizer.slim_budget(budget)
+        assert "final_max_price" in result
+        assert "estimated_loan" in result
+        assert "reasoning" in result
+        # 불필요 중간값 제거
+        assert "max_price_ltv" not in result
+        assert "max_price_dsr" not in result
+        assert "available_cash" not in result
+
+    def test_slim_budget_drops_none_fields(self):
+        budget = {"final_max_price": 700_000_000, "estimated_loan": None, "reasoning": "x"}
+        result = PromptTokenOptimizer.slim_budget(budget)
+        assert "estimated_loan" not in result
+
+    # slim_policy_context ──────────────────────────────────────────────────────
+
+    def test_slim_policy_context_keeps_key_fields(self):
+        policy = {
+            "standard_year": "2026년 03월",
+            "ltv": {"first_time_buyer": "80%"},
+            "dsr": {"limit": "40%"},
+            "news_summary": "요약",
+            "extra_noise": "불필요 데이터",
+        }
+        result = PromptTokenOptimizer.slim_policy_context(policy)
+        assert "ltv" in result
+        assert "dsr" in result
+        assert "standard_year" in result
+        assert "extra_noise" not in result
+
+    # truncate ─────────────────────────────────────────────────────────────────
+
+    def test_truncate_cuts_at_max_chars(self):
+        result = PromptTokenOptimizer.truncate("a" * 200, 100)
+        assert len(result) == 100
+
+    def test_truncate_no_op_when_within_limit(self):
+        result = PromptTokenOptimizer.truncate("short text", 100)
+        assert result == "short text"
+
+    def test_truncate_exact_boundary(self):
+        result = PromptTokenOptimizer.truncate("x" * 50, 50)
+        assert len(result) == 50
