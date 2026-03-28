@@ -25,15 +25,7 @@ from modules.career.models import (
     TrendAnalysis,
     TrendingRepo,
 )
-from modules.career.collectors.github_trending import GithubTrendingCollector
-from modules.career.collectors.hacker_news import HackerNewsCollector
-from modules.career.collectors.devto import DevToCollector
-from modules.career.collectors.wanted import WantedCollector
-from modules.career.collectors.jumpit import JumpitCollector
-from modules.career.collectors.reddit import RedditCollector
-from modules.career.collectors.mastodon import MastodonCollector
-from modules.career.collectors.clien import ClienCollector
-from modules.career.collectors.dcinside import DCInsideCollector
+from modules.career.collectors.factory import CollectorFactory
 from modules.career.processors.job_analyzer import JobAnalyzer
 from modules.career.processors.trend_analyzer import TrendAnalyzer
 from modules.career.processors.skill_gap_analyzer import SkillGapAnalyzer
@@ -45,6 +37,12 @@ from modules.career.history.tracker import HistoryTracker
 from modules.career.presenter import CareerPresenter
 
 logger = get_logger(__name__)
+
+# 커뮤니티 소스 카테고리 매핑 — 새 소스 추가 시 여기에만 키를 추가한다
+# (factory.py에 Collector 추가 후 아래 집합 중 해당 카테고리에 키 포함)
+_REDDIT_SOURCES = frozenset({"reddit"})
+_MASTODON_SOURCES = frozenset({"mastodon"})
+_KOREAN_SOURCES = frozenset({"clien", "dcinside"})
 
 
 class CareerAgent:
@@ -61,65 +59,10 @@ class CareerAgent:
         self._persona_manager = PersonaManager()
         self.persona = self._persona_manager.get()
 
-        # Collectors
-        ts = self.config.get("trend_sources", {})
-        js = self.config.get("job_sources", {})
-        self.github_collector = GithubTrendingCollector(
-            languages=self.config.get_github_languages(),
-            trending_url_template=ts.get("github_trending_url", "https://github.com/trending/{language}?since=daily"),
-        )
-        self.hn_collector = HackerNewsCollector(
-            top_stories_url=ts.get("hn_top_stories_url", "https://hacker-news.firebaseio.com/v0/topstories.json"),
-            item_url_template=ts.get("hn_item_url", "https://hacker-news.firebaseio.com/v0/item/{id}.json"),
-            min_score=self.config.get_hn_min_score(),
-            stories_limit=self.config.get("concurrency", {}).get("hn_stories_limit", 30),
-        )
-        self.devto_collector = DevToCollector(
-            api_url=ts.get("devto_api_url", "https://dev.to/api/articles"),
-            tags=self.config.get_devto_tags(),
-            per_page=ts.get("devto_per_page", 30),
-        )
-        wanted_cfg = js.get("wanted", {})
-        self.wanted_collector = WantedCollector(
-            api_url=wanted_cfg.get("api_url", "https://www.wanted.co.kr/api/v4/jobs"),
-            job_group_id=wanted_cfg.get("job_group_id", 518),
-            limit=wanted_cfg.get("limit", 100),
-        )
-        jumpit_cfg = js.get("jumpit", {})
-        self.jumpit_collector = JumpitCollector(
-            api_url=jumpit_cfg.get("api_url", "https://api.jumpit.co.kr/api/positions"),
-            job_category=jumpit_cfg.get("job_category", 1),
-            limit=jumpit_cfg.get("limit", 100),
-        )
-
-        # Community Collectors
-        cs = self.config.get("community_sources", {})
-        reddit_cfg = cs.get("reddit", {})
-        self.reddit_collector = RedditCollector(
-            subreddits=reddit_cfg.get("subreddits", ["programming", "MachineLearning"]),
-            limit=reddit_cfg.get("limit_per_subreddit", 10),
-            min_score=reddit_cfg.get("min_score", 50),
-            user_agent=reddit_cfg.get("user_agent", "Consigliere Career Bot 1.0"),
-            timeout=reddit_cfg.get("timeout", 20),
-        )
-        mastodon_cfg = cs.get("mastodon", {})
-        self.mastodon_collector = MastodonCollector(
-            instances=mastodon_cfg.get("instances", ["fosstodon.org", "hachyderm.io", "mastodon.social"]),
-            hashtags=mastodon_cfg.get("hashtags", ["programming", "llm", "ai", "devops"]),
-            limit_per_hashtag=mastodon_cfg.get("limit_per_hashtag", 10),
-            timeout=mastodon_cfg.get("timeout", 15),
-        )
-        clien_cfg = cs.get("clien", {})
-        self.clien_collector = ClienCollector(
-            board_url=clien_cfg.get("board_url", "https://www.clien.net/service/board/cm_programmers"),
-            limit=clien_cfg.get("limit", 20),
-        )
-        dcinside_cfg = cs.get("dcinside", {})
-        self.dcinside_collector = DCInsideCollector(
-            gallery_id=dcinside_cfg.get("gallery_id", "programming"),
-            list_url=dcinside_cfg.get("list_url", "https://gall.dcinside.com/board/lists/?id=programming"),
-            limit=dcinside_cfg.get("limit", 20),
-        )
+        # Collectors — 카테고리별 딕셔너리 (새 소스 추가: collectors/factory.py만 수정)
+        self.trend_collectors = CollectorFactory.build_trend_collectors(self.config)
+        self.job_collectors = CollectorFactory.build_job_collectors(self.config)
+        self.community_collectors = CollectorFactory.build_community_collectors(self.config)
 
         # Processors
         self.job_analyzer = JobAnalyzer(self.llm, self.prompt_loader)
@@ -162,8 +105,8 @@ class CareerAgent:
                 logger.warning(f"캐시 파일 손상, 재수집: {e}")
 
         wanted, jumpit = await asyncio.gather(
-            self.wanted_collector.safe_collect(),
-            self.jumpit_collector.safe_collect(),
+            self.job_collectors["wanted"].safe_collect(),
+            self.job_collectors["jumpit"].safe_collect(),
         )
         postings = wanted + jumpit
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -188,9 +131,9 @@ class CareerAgent:
                 logger.warning(f"트렌드 캐시 손상, 재수집: {e}")
 
         repos, stories, articles = await asyncio.gather(
-            self.github_collector.safe_collect(),
-            self.hn_collector.safe_collect(),
-            self.devto_collector.safe_collect(),
+            self.trend_collectors["github"].safe_collect(),
+            self.trend_collectors["hn"].safe_collect(),
+            self.trend_collectors["devto"].safe_collect(),
         )
         data = {
             "repos": [r.model_dump() for r in repos],
@@ -218,27 +161,20 @@ class CareerAgent:
             except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"커뮤니티 캐시 손상, 재수집: {e}")
 
-        reddit_posts, mastodon_posts, clien_posts, dcinside_posts = await asyncio.gather(
-            self.reddit_collector.safe_collect(),
-            self.mastodon_collector.safe_collect(),
-            self.clien_collector.safe_collect(),
-            self.dcinside_collector.safe_collect(),
-        )
+        names = list(self.community_collectors.keys())
+        results = await asyncio.gather(*[
+            c.safe_collect() for c in self.community_collectors.values()
+        ])
 
         collection_status = {
-            "reddit": "ok" if reddit_posts else "failed",
-            "mastodon": "ok" if mastodon_posts else "failed",
-            "clien": "ok" if clien_posts else "failed",
-            "dcinside": "ok" if dcinside_posts else "failed",
+            name: "ok" if posts else "failed"
+            for name, posts in zip(names, results)
         }
-
         data = {
-            "reddit": [p.model_dump() for p in reddit_posts],
-            "mastodon": [t.model_dump() for t in mastodon_posts],
-            "clien": [p.model_dump() for p in clien_posts],
-            "dcinside": [p.model_dump() for p in dcinside_posts],
-            "collection_status": collection_status,
+            name: [p.model_dump() for p in posts]
+            for name, posts in zip(names, results)
         }
+        data["collection_status"] = collection_status
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -265,11 +201,17 @@ class CareerAgent:
         stories = [HNStory(**s) for s in trend_data.get("stories", [])]
         articles = [DevToArticle(**a) for a in trend_data.get("articles", [])]
 
-        reddit_posts = [RedditPost(**p) for p in community_data.get("reddit", [])]
-        mastodon_posts = [NitterTweet(**t) for t in community_data.get("mastodon", [])]
+        reddit_posts = [
+            RedditPost(**p)
+            for key in _REDDIT_SOURCES for p in community_data.get(key, [])
+        ]
+        mastodon_posts = [
+            NitterTweet(**t)
+            for key in _MASTODON_SOURCES for t in community_data.get(key, [])
+        ]
         korean_posts = [
             KoreanPost(**p)
-            for p in community_data.get("clien", []) + community_data.get("dcinside", [])
+            for key in _KOREAN_SOURCES for p in community_data.get(key, [])
         ]
         collection_status = community_data.get("collection_status", {})
 

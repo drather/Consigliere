@@ -409,19 +409,18 @@ def _make_mock_agent(tmp_path):
         "learning": {"current_focus": "Kubernetes CKA"},
     }
 
-    # Collectors mock
-    agent.wanted_collector = MagicMock()
-    agent.wanted_collector.safe_collect = AsyncMock(return_value=[
-        JobPosting(id="1", company="A사", position="백엔드", skills=["Python"], url="https://x.com", source="wanted"),
-    ])
-    agent.jumpit_collector = MagicMock()
-    agent.jumpit_collector.safe_collect = AsyncMock(return_value=[])
-    agent.github_collector = MagicMock()
-    agent.github_collector.safe_collect = AsyncMock(return_value=[])
-    agent.hn_collector = MagicMock()
-    agent.hn_collector.safe_collect = AsyncMock(return_value=[])
-    agent.devto_collector = MagicMock()
-    agent.devto_collector.safe_collect = AsyncMock(return_value=[])
+    # Collectors mock (카테고리별 딕셔너리)
+    agent.job_collectors = {
+        "wanted": MagicMock(safe_collect=AsyncMock(return_value=[
+            JobPosting(id="1", company="A사", position="백엔드", skills=["Python"], url="https://x.com", source="wanted"),
+        ])),
+        "jumpit": MagicMock(safe_collect=AsyncMock(return_value=[])),
+    }
+    agent.trend_collectors = {
+        "github": MagicMock(safe_collect=AsyncMock(return_value=[])),
+        "hn": MagicMock(safe_collect=AsyncMock(return_value=[])),
+        "devto": MagicMock(safe_collect=AsyncMock(return_value=[])),
+    }
 
     # Processors mock
     agent.job_analyzer = MagicMock()
@@ -445,14 +444,12 @@ def _make_mock_agent(tmp_path):
 
     # Community Collectors mock
     from modules.career.models import CommunityTrendAnalysis
-    agent.reddit_collector = MagicMock()
-    agent.reddit_collector.safe_collect = AsyncMock(return_value=[])
-    agent.mastodon_collector = MagicMock()
-    agent.mastodon_collector.safe_collect = AsyncMock(return_value=[])
-    agent.clien_collector = MagicMock()
-    agent.clien_collector.safe_collect = AsyncMock(return_value=[])
-    agent.dcinside_collector = MagicMock()
-    agent.dcinside_collector.safe_collect = AsyncMock(return_value=[])
+    agent.community_collectors = {
+        "reddit": MagicMock(safe_collect=AsyncMock(return_value=[])),
+        "mastodon": MagicMock(safe_collect=AsyncMock(return_value=[])),
+        "clien": MagicMock(safe_collect=AsyncMock(return_value=[])),
+        "dcinside": MagicMock(safe_collect=AsyncMock(return_value=[])),
+    }
 
     # Community Processor mock
     agent.community_analyzer = MagicMock()
@@ -486,7 +483,7 @@ class TestCareerAgentPipeline:
         asyncio.run(mock_agent.fetch_jobs(date(2026, 3, 27)))
         # 두 번째 호출은 캐시 사용 → collector 호출 횟수 여전히 1
         asyncio.run(mock_agent.fetch_jobs(date(2026, 3, 27)))
-        assert mock_agent.wanted_collector.safe_collect.call_count == 1
+        assert mock_agent.job_collectors["wanted"].safe_collect.call_count == 1
 
     def test_fetch_trends_saves_file(self, mock_agent):
         asyncio.run(mock_agent.fetch_trends(date(2026, 3, 27)))
@@ -642,6 +639,62 @@ class TestBaseAnalyzer:
         analyzer = self._make_analyzer()
         assert hasattr(analyzer, "logger")
         assert analyzer.logger is not None
+
+
+class TestCollectorFactory:
+    """CollectorFactory: config 기반 Collector 생성 책임 분리 (OCP/DIP 개선)"""
+
+    def _get_factory(self):
+        from modules.career.collectors.factory import CollectorFactory
+        return CollectorFactory
+
+    def test_build_trend_collectors_returns_expected_keys(self):
+        """trend_collectors 딕셔너리에 github/hn/devto 키가 있다."""
+        factory = self._get_factory()
+        config = CareerConfig(config_path="src/modules/career/config.yaml")
+        collectors = factory.build_trend_collectors(config)
+        assert set(collectors.keys()) == {"github", "hn", "devto"}
+
+    def test_build_job_collectors_returns_expected_keys(self):
+        """job_collectors 딕셔너리에 wanted/jumpit 키가 있다."""
+        factory = self._get_factory()
+        config = CareerConfig(config_path="src/modules/career/config.yaml")
+        collectors = factory.build_job_collectors(config)
+        assert set(collectors.keys()) == {"wanted", "jumpit"}
+
+    def test_build_community_collectors_returns_expected_keys(self):
+        """community_collectors 딕셔너리에 4개 소스 키가 있다."""
+        factory = self._get_factory()
+        config = CareerConfig(config_path="src/modules/career/config.yaml")
+        collectors = factory.build_community_collectors(config)
+        assert set(collectors.keys()) == {"reddit", "mastodon", "clien", "dcinside"}
+
+    def test_all_trend_collectors_are_base_collector_subclasses(self):
+        """build_trend_collectors 결과의 모든 값이 BaseCollector 서브클래스 인스턴스다."""
+        from modules.career.collectors.base import BaseCollector
+        factory = self._get_factory()
+        config = CareerConfig(config_path="src/modules/career/config.yaml")
+        collectors = factory.build_trend_collectors(config)
+        for name, collector in collectors.items():
+            assert isinstance(collector, BaseCollector), f"{name} is not a BaseCollector"
+
+    def test_all_community_collectors_are_base_collector_subclasses(self):
+        """build_community_collectors 결과의 모든 값이 BaseCollector 서브클래스 인스턴스다."""
+        from modules.career.collectors.base import BaseCollector
+        factory = self._get_factory()
+        config = CareerConfig(config_path="src/modules/career/config.yaml")
+        collectors = factory.build_community_collectors(config)
+        for name, collector in collectors.items():
+            assert isinstance(collector, BaseCollector), f"{name} is not a BaseCollector"
+
+    def test_all_job_collectors_are_base_collector_subclasses(self):
+        """build_job_collectors 결과의 모든 값이 BaseCollector 서브클래스 인스턴스다."""
+        from modules.career.collectors.base import BaseCollector
+        factory = self._get_factory()
+        config = CareerConfig(config_path="src/modules/career/config.yaml")
+        collectors = factory.build_job_collectors(config)
+        for name, collector in collectors.items():
+            assert isinstance(collector, BaseCollector), f"{name} is not a BaseCollector"
 
 
 class TestCollectorErrorHandling:
@@ -1322,14 +1375,12 @@ class TestCareerAgentCommunityIntegration:
         from modules.career.service import CareerAgent
         agent = CareerAgent.__new__(CareerAgent)
         agent.data_dir = str(tmp_path)
-        agent.reddit_collector = MagicMock()
-        agent.reddit_collector.safe_collect = AsyncMock(return_value=[])
-        agent.mastodon_collector = MagicMock()
-        agent.mastodon_collector.safe_collect = AsyncMock(return_value=[])
-        agent.clien_collector = MagicMock()
-        agent.clien_collector.safe_collect = AsyncMock(return_value=[])
-        agent.dcinside_collector = MagicMock()
-        agent.dcinside_collector.safe_collect = AsyncMock(return_value=[])
+        agent.community_collectors = {
+            "reddit": MagicMock(safe_collect=AsyncMock(return_value=[])),
+            "mastodon": MagicMock(safe_collect=AsyncMock(return_value=[])),
+            "clien": MagicMock(safe_collect=AsyncMock(return_value=[])),
+            "dcinside": MagicMock(safe_collect=AsyncMock(return_value=[])),
+        }
         return agent
 
     def test_fetch_community_saves_file(self, mock_agent):
@@ -1344,7 +1395,7 @@ class TestCareerAgentCommunityIntegration:
         asyncio.run(mock_agent.fetch_community(date(2026, 3, 28)))
         asyncio.run(mock_agent.fetch_community(date(2026, 3, 28)))
         # 캐시 사용 시 safe_collect는 1번만 호출
-        assert mock_agent.reddit_collector.safe_collect.call_count == 1
+        assert mock_agent.community_collectors["reddit"].safe_collect.call_count == 1
 
     def test_fetch_community_collection_status_all_failed(self, mock_agent):
         import asyncio
@@ -1355,7 +1406,7 @@ class TestCareerAgentCommunityIntegration:
     def test_fetch_community_collection_status_ok_when_data_returned(self, mock_agent):
         from modules.career.models import RedditPost
         import asyncio
-        mock_agent.reddit_collector.safe_collect = AsyncMock(return_value=[
+        mock_agent.community_collectors["reddit"].safe_collect = AsyncMock(return_value=[
             RedditPost(id="1", title="test", subreddit="programming")
         ])
         result = asyncio.run(mock_agent.fetch_community(date(2026, 3, 28)))
