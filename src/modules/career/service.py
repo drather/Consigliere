@@ -12,17 +12,24 @@ from core.logger import get_logger
 from modules.career.config import CareerConfig
 from modules.career.persona_manager import PersonaManager
 from modules.career.models import (
-    JobPosting, TrendingRepo, HNStory, DevToArticle,
-    JobAnalysis, TrendAnalysis, SkillGapAnalysis, SkillGapSnapshot,
+    CommunityTrendAnalysis,
+    DevToArticle,
+    HNStory,
+    JobAnalysis,
+    JobPosting,
+    KoreanPost,
+    NitterTweet,
+    RedditPost,
+    SkillGapAnalysis,
+    SkillGapSnapshot,
+    TrendAnalysis,
+    TrendingRepo,
 )
-from modules.career.collectors.github_trending import GithubTrendingCollector
-from modules.career.collectors.hacker_news import HackerNewsCollector
-from modules.career.collectors.devto import DevToCollector
-from modules.career.collectors.wanted import WantedCollector
-from modules.career.collectors.jumpit import JumpitCollector
+from modules.career.collectors.factory import CollectorFactory
 from modules.career.processors.job_analyzer import JobAnalyzer
 from modules.career.processors.trend_analyzer import TrendAnalyzer
 from modules.career.processors.skill_gap_analyzer import SkillGapAnalyzer
+from modules.career.processors.community_analyzer import CommunityAnalyzer
 from modules.career.reporters.daily_reporter import DailyReporter
 from modules.career.reporters.weekly_reporter import WeeklyReporter
 from modules.career.reporters.monthly_reporter import MonthlyReporter
@@ -30,6 +37,12 @@ from modules.career.history.tracker import HistoryTracker
 from modules.career.presenter import CareerPresenter
 
 logger = get_logger(__name__)
+
+# 커뮤니티 소스 카테고리 매핑 — 새 소스 추가 시 여기에만 키를 추가한다
+# (factory.py에 Collector 추가 후 아래 집합 중 해당 카테고리에 키 포함)
+_REDDIT_SOURCES = frozenset({"reddit"})
+_MASTODON_SOURCES = frozenset({"mastodon"})
+_KOREAN_SOURCES = frozenset({"clien", "dcinside"})
 
 
 class CareerAgent:
@@ -46,41 +59,16 @@ class CareerAgent:
         self._persona_manager = PersonaManager()
         self.persona = self._persona_manager.get()
 
-        # Collectors
-        ts = self.config.get("trend_sources", {})
-        js = self.config.get("job_sources", {})
-        self.github_collector = GithubTrendingCollector(
-            languages=self.config.get_github_languages(),
-            trending_url_template=ts.get("github_trending_url", "https://github.com/trending/{language}?since=daily"),
-        )
-        self.hn_collector = HackerNewsCollector(
-            top_stories_url=ts.get("hn_top_stories_url", "https://hacker-news.firebaseio.com/v0/topstories.json"),
-            item_url_template=ts.get("hn_item_url", "https://hacker-news.firebaseio.com/v0/item/{id}.json"),
-            min_score=self.config.get_hn_min_score(),
-            stories_limit=self.config.get("concurrency", {}).get("hn_stories_limit", 30),
-        )
-        self.devto_collector = DevToCollector(
-            api_url=ts.get("devto_api_url", "https://dev.to/api/articles"),
-            tags=self.config.get_devto_tags(),
-            per_page=ts.get("devto_per_page", 30),
-        )
-        wanted_cfg = js.get("wanted", {})
-        self.wanted_collector = WantedCollector(
-            api_url=wanted_cfg.get("api_url", "https://www.wanted.co.kr/api/v4/jobs"),
-            job_group_id=wanted_cfg.get("job_group_id", 518),
-            limit=wanted_cfg.get("limit", 100),
-        )
-        jumpit_cfg = js.get("jumpit", {})
-        self.jumpit_collector = JumpitCollector(
-            api_url=jumpit_cfg.get("api_url", "https://api.jumpit.co.kr/api/positions"),
-            job_category=jumpit_cfg.get("job_category", 1),
-            limit=jumpit_cfg.get("limit", 100),
-        )
+        # Collectors — 카테고리별 딕셔너리 (새 소스 추가: collectors/factory.py만 수정)
+        self.trend_collectors = CollectorFactory.build_trend_collectors(self.config)
+        self.job_collectors = CollectorFactory.build_job_collectors(self.config)
+        self.community_collectors = CollectorFactory.build_community_collectors(self.config)
 
         # Processors
         self.job_analyzer = JobAnalyzer(self.llm, self.prompt_loader)
         self.trend_analyzer = TrendAnalyzer(self.llm, self.prompt_loader)
         self.skill_gap_analyzer = SkillGapAnalyzer(self.llm, self.prompt_loader)
+        self.community_analyzer = CommunityAnalyzer(self.llm, self.prompt_loader)
 
         # Reporters
         self.daily_reporter = DailyReporter()
@@ -117,8 +105,8 @@ class CareerAgent:
                 logger.warning(f"캐시 파일 손상, 재수집: {e}")
 
         wanted, jumpit = await asyncio.gather(
-            self.wanted_collector.safe_collect(),
-            self.jumpit_collector.safe_collect(),
+            self.job_collectors["wanted"].safe_collect(),
+            self.job_collectors["jumpit"].safe_collect(),
         )
         postings = wanted + jumpit
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -143,9 +131,9 @@ class CareerAgent:
                 logger.warning(f"트렌드 캐시 손상, 재수집: {e}")
 
         repos, stories, articles = await asyncio.gather(
-            self.github_collector.safe_collect(),
-            self.hn_collector.safe_collect(),
-            self.devto_collector.safe_collect(),
+            self.trend_collectors["github"].safe_collect(),
+            self.trend_collectors["hn"].safe_collect(),
+            self.trend_collectors["devto"].safe_collect(),
         )
         data = {
             "repos": [r.model_dump() for r in repos],
@@ -156,6 +144,41 @@ class CareerAgent:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         logger.info(f"트렌드 저장 → {path}")
+        return data
+
+    # ── fetch_community ───────────────────────────────────────────────
+
+    async def fetch_community(self, target_date: Optional[date] = None) -> Dict[str, Any]:
+        if target_date is None:
+            target_date = date.today()
+        path = self._community_path(target_date)
+
+        if os.path.exists(path):
+            try:
+                logger.info(f"커뮤니티 캐시 사용: {path}")
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning(f"커뮤니티 캐시 손상, 재수집: {e}")
+
+        names = list(self.community_collectors.keys())
+        results = await asyncio.gather(*[
+            c.safe_collect() for c in self.community_collectors.values()
+        ])
+
+        collection_status = {
+            name: "ok" if posts else "failed"
+            for name, posts in zip(names, results)
+        }
+        data = {
+            name: [p.model_dump() for p in posts]
+            for name, posts in zip(names, results)
+        }
+        data["collection_status"] = collection_status
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        logger.info(f"커뮤니티 저장 → {path} | status={collection_status}")
         return data
 
     # ── Job 3: generate_report ────────────────────────────────────────
@@ -172,10 +195,25 @@ class CareerAgent:
 
         postings = await self.fetch_jobs(target_date)
         trend_data = await self.fetch_trends(target_date)
+        community_data = await self.fetch_community(target_date)
 
         repos = [TrendingRepo(**r) for r in trend_data.get("repos", [])]
         stories = [HNStory(**s) for s in trend_data.get("stories", [])]
         articles = [DevToArticle(**a) for a in trend_data.get("articles", [])]
+
+        reddit_posts = [
+            RedditPost(**p)
+            for key in _REDDIT_SOURCES for p in community_data.get(key, [])
+        ]
+        mastodon_posts = [
+            NitterTweet(**t)
+            for key in _MASTODON_SOURCES for t in community_data.get(key, [])
+        ]
+        korean_posts = [
+            KoreanPost(**p)
+            for key in _KOREAN_SOURCES for p in community_data.get(key, [])
+        ]
+        collection_status = community_data.get("collection_status", {})
 
         gap_history = self.tracker.load_recent(
             weeks=self.config.get("report", {}).get("skill_gap_history_weeks", 4)
@@ -188,6 +226,9 @@ class CareerAgent:
         skill_gap = self.skill_gap_analyzer.analyze(
             job_analysis, trend_analysis, self.persona, gap_history
         )
+        community_trend = self.community_analyzer.analyze(
+            reddit_posts, mastodon_posts, korean_posts, collection_status
+        )
 
         wanted_count = sum(1 for p in postings if p.source == "wanted")
         jumpit_count = sum(1 for p in postings if p.source == "jumpit")
@@ -199,6 +240,7 @@ class CareerAgent:
             skill_gap=skill_gap,
             job_count_wanted=wanted_count,
             job_count_jumpit=jumpit_count,
+            community_trend=community_trend,
         )
 
         snapshot = SkillGapSnapshot(
@@ -382,6 +424,9 @@ class CareerAgent:
 
     def _trends_path(self, d: date) -> str:
         return os.path.join(self.data_dir, "trends", f"{d}_trends.json")
+
+    def _community_path(self, d: date) -> str:
+        return os.path.join(self.data_dir, "community", f"{d}_community.json")
 
     def _daily_report_path(self, d: date) -> str:
         return os.path.join(self.data_dir, "reports", "daily", f"{d}_CareerReport.md")

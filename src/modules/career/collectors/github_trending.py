@@ -19,7 +19,7 @@ class GithubTrendingCollector(BaseCollector):
 
     async def collect(self) -> List[TrendingRepo]:
         semaphore = asyncio.Semaphore(3)
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(connector=self.make_connector()) as session:
             tasks = [
                 self._fetch_language(session, semaphore, lang)
                 for lang in self.languages

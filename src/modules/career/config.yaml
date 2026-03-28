@@ -30,3 +30,41 @@ concurrency:
 report:
   skill_gap_history_weeks: 4
   weekly_daily_reports_count: 7
+
+community_sources:
+  reddit:
+    subreddits:
+      - cscareerquestions
+      - ExperiencedDevs
+      - MachineLearning
+      - artificial
+      - LocalLLaMA
+      - devops
+      - programming
+    limit_per_subreddit: 10
+    min_score: 50
+    user_agent: "Consigliere Career Bot 1.0 (by /u/consigliere_bot)"
+    timeout: 20
+    # 인증 불필요: Reddit 공개 JSON API (/r/{sub}/top.json) 사용
+  mastodon:
+    instances:
+      - "fosstodon.org"
+      - "hachyderm.io"
+      - "mastodon.social"
+    hashtags:
+      - "programming"
+      - "llm"
+      - "ai"
+      - "devops"
+      - "backend"
+      - "python"
+      - "rust"
+    limit_per_hashtag: 10
+    timeout: 15
+  clien:
+    board_url: "https://www.clien.net/service/board/cm_app"   # 개발한당 (구 cm_programmers 삭제됨)
+    limit: 20
+  dcinside:
+    gallery_id: "programming"
+    list_url: "https://gall.dcinside.com/board/lists/?id=programming"
+    limit: 20

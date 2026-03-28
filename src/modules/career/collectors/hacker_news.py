@@ -19,7 +19,7 @@ class HackerNewsCollector(BaseCollector):
         self.stories_limit = stories_limit
 
     async def collect(self) -> List[HNStory]:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(connector=self.make_connector()) as session:
             ids = await self._fetch_ids(session)
             ids = ids[: self.stories_limit]
 

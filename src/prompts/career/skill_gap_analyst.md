@@ -20,8 +20,16 @@ description: 채용공고 분석 + 트렌드 분석 + 페르소나로 스킬 갭
 1. 채용공고 top_skills 기준으로 사용자가 보유하지 않은 스킬을 식별한다
 2. 트렌드 hot_topics와도 교차 분석하여 urgency를 high/medium/low로 분류한다
 3. gap_score(0~100): 높을수록 갭이 큼. 채용 요구 스킬 중 보유 비율로 역산정한다
-4. 갭 트렌드: 지난주 대비 증가/감소/유지 여부를 서술한다
+4. 갭 트렌드: 지난주 대비 증가/감소/유지를 짧게 표기한다
 5. 학습 추천은 현재 포커스({{ current_focus }})를 1순위로, 나머지는 urgency 순으로 정렬한다
+
+## ⚠️ 출력 스타일: 개조식 필수
+- **줄글(산문) 금지** — 키워드 + 한줄 설명 형식으로 작성
+- `gap_trend`: 한 줄, 20자 이내. 예: `"지난주 대비 -2점 (Claude 학습 효과)"`, `"전주 유지 (미착수 스킬 잔존)"`
+- `study_recommendations[].why`: 개조식 한 줄 (30자 이내). 기술 용어는 백틱으로 감싼다
+  - 좋음: `` "`Kubernetes` 요구 JD 28건, 목표 스킬 미착수" ``
+  - 나쁨: `"현재 채용공고 분석 결과 Kubernetes가 28개의 직무기술서에 요구되고 있으며 아직 학습을 시작하지 않아 시급합니다"`
+- `study_recommendations[].resource`: URL 1~2개 또는 강의명, 한 줄 이내
 
 ## 출력 형식 (JSON만 반환)
 ```json
@@ -33,12 +41,12 @@ description: 채용공고 분석 + 트렌드 분석 + 페르소나로 스킬 갭
   ],
   "study_recommendations": [
     {
-      "topic": "Kubernetes CKA 준비",
-      "why": "채용공고 28건 요구, 현재 학습 포커스와 일치",
-      "resource": "Kodekloud CKA 강의 + killer.sh 모의고사"
+      "topic": "Kubernetes 기초",
+      "why": "`Kubernetes` JD 28건, 목표 스킬 미착수",
+      "resource": "Kodekloud CKA 강의 + killer.sh"
     }
   ],
-  "gap_trend": "지난주 대비 +2점 상승 (Kubernetes 요구 증가)"
+  "gap_trend": "지난주 대비 -2점 (Claude 학습 효과)"
 }
 ```
 JSON 외 다른 텍스트를 절대 포함하지 마십시오.

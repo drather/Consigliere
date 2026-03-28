@@ -27,7 +27,7 @@ class WantedCollector(BaseCollector):
             "offset": 0,
         }
 
-        async with aiohttp.ClientSession(headers=headers) as session:
+        async with aiohttp.ClientSession(headers=headers, connector=self.make_connector()) as session:
             try:
                 async with session.get(
                     self.api_url,

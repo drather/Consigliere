@@ -65,3 +65,43 @@ class SkillGapSnapshot(BaseModel):
     gap_score: int
     missing_skills: List[str] = Field(default_factory=list)
     study_recommendations: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+# ── Community Trend Models ────────────────────────────────────────────────────
+
+class RedditPost(BaseModel):
+    id: str
+    title: str
+    subreddit: str
+    score: int = 0
+    url: str = ""
+    num_comments: int = 0
+    selftext: str = ""  # 500자 truncate
+
+
+class NitterTweet(BaseModel):
+    id: str
+    text: str
+    username: str
+    date: str = ""
+    url: str = ""
+
+
+class KoreanPost(BaseModel):
+    id: str
+    title: str
+    source: str  # "clien" | "dcinside"
+    url: str = ""
+    views: int = 0
+    comments: int = 0
+    date: str = ""
+
+
+class CommunityTrendAnalysis(BaseModel):
+    hot_topics: List[str] = Field(default_factory=list)
+    key_opinions: List[str] = Field(default_factory=list)
+    emerging_concerns: List[str] = Field(default_factory=list)
+    community_summary: str = ""
+    collection_status: Dict[str, str] = Field(default_factory=dict)
+    # collection_status keys: "reddit" | "nitter" | "clien" | "dcinside"
+    # values: "ok" | "failed" | "partial"
