@@ -43,7 +43,9 @@ community_sources:
       - programming
     limit_per_subreddit: 10
     min_score: 50
-    user_agent: "Consigliere Career Bot 1.0"
+    user_agent: "Consigliere Career Bot 1.0 (by /u/consigliere_bot)"
+    timeout: 20
+    # 인증 불필요: Reddit 공개 JSON API (/r/{sub}/top.json) 사용
   nitter:
     instances:
       - "https://nitter.net"

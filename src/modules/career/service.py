@@ -99,9 +99,8 @@ class CareerAgent:
             subreddits=reddit_cfg.get("subreddits", ["programming", "MachineLearning"]),
             limit=reddit_cfg.get("limit_per_subreddit", 10),
             min_score=reddit_cfg.get("min_score", 50),
-            client_id=os.getenv("REDDIT_CLIENT_ID", ""),
-            client_secret=os.getenv("REDDIT_CLIENT_SECRET", ""),
             user_agent=reddit_cfg.get("user_agent", "Consigliere Career Bot 1.0"),
+            timeout=reddit_cfg.get("timeout", 20),
         )
         nitter_cfg = cs.get("nitter", {})
         self.nitter_collector = NitterCollector(

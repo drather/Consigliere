@@ -7,6 +7,7 @@ import sys
 import json
 import pytest
 import asyncio
+import aiohttp
 from datetime import date
 from unittest.mock import MagicMock, AsyncMock, patch
 
@@ -766,96 +767,114 @@ class TestCommunityModels:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestRedditCollector:
+    SAMPLE_RESPONSE = {
+        "data": {
+            "children": [
+                {
+                    "data": {
+                        "id": "abc123",
+                        "title": "AI 시대 백엔드 개발자의 생존법",
+                        "score": 500,
+                        "url": "https://reddit.com/r/programming/abc123",
+                        "num_comments": 42,
+                        "selftext": "내용 내용 내용",
+                        "stickied": False,
+                    }
+                },
+                {
+                    "data": {
+                        "id": "low999",
+                        "title": "점수 낮은 글",
+                        "score": 5,
+                        "url": "https://reddit.com/r/programming/low999",
+                        "num_comments": 0,
+                        "selftext": "",
+                        "stickied": False,
+                    }
+                },
+                {
+                    "data": {
+                        "id": "sticky1",
+                        "title": "공지사항",
+                        "score": 9999,
+                        "url": "https://reddit.com/r/programming/sticky1",
+                        "num_comments": 0,
+                        "selftext": "",
+                        "stickied": True,
+                    }
+                },
+            ]
+        }
+    }
+
     def test_reddit_collector_initializes(self):
         from modules.career.collectors.reddit import RedditCollector
         c = RedditCollector(
             subreddits=["programming", "MachineLearning"],
             limit=10,
             min_score=50,
-            client_id="test_id",
-            client_secret="test_secret",
             user_agent="Test Bot 1.0",
         )
         assert c.subreddits == ["programming", "MachineLearning"]
         assert c.limit == 10
         assert c.min_score == 50
 
-    def test_reddit_safe_collect_on_auth_error_returns_empty(self):
+    def test_reddit_parse_valid_response(self):
         from modules.career.collectors.reddit import RedditCollector
-        import asyncpraw
-        c = RedditCollector(
-            subreddits=["programming"],
-            limit=5,
-            min_score=10,
-            client_id="bad_id",
-            client_secret="bad_secret",
-            user_agent="Test Bot 1.0",
-        )
-        with patch("modules.career.collectors.reddit.asyncpraw.Reddit") as mock_reddit:
-            mock_reddit.return_value.__aenter__ = AsyncMock(side_effect=Exception("auth error"))
-            mock_reddit.return_value.__aexit__ = AsyncMock(return_value=False)
+        from modules.career.models import RedditPost
+        c = RedditCollector(subreddits=["programming"], limit=10, min_score=50)
+        posts = c._parse(self.SAMPLE_RESPONSE, "programming")
+        assert len(posts) == 1  # score<50, stickied 제외
+        assert posts[0].id == "abc123"
+        assert posts[0].title == "AI 시대 백엔드 개발자의 생존법"
+        assert posts[0].subreddit == "programming"
+        assert posts[0].score == 500
+        assert posts[0].num_comments == 42
+
+    def test_reddit_parse_filters_low_score(self):
+        from modules.career.collectors.reddit import RedditCollector
+        c = RedditCollector(subreddits=["programming"], limit=10, min_score=100)
+        posts = c._parse(self.SAMPLE_RESPONSE, "programming")
+        assert all(p.score >= 100 for p in posts)
+
+    def test_reddit_parse_filters_stickied(self):
+        from modules.career.collectors.reddit import RedditCollector
+        c = RedditCollector(subreddits=["programming"], limit=10, min_score=0)
+        posts = c._parse(self.SAMPLE_RESPONSE, "programming")
+        assert not any(p.id == "sticky1" for p in posts)
+
+    def test_reddit_selftext_truncated(self):
+        from modules.career.collectors.reddit import RedditCollector
+        c = RedditCollector(subreddits=["programming"], limit=10, min_score=0)
+        long_response = {
+            "data": {"children": [{"data": {
+                "id": "x", "title": "t", "score": 100,
+                "url": "u", "num_comments": 0,
+                "selftext": "a" * 1000, "stickied": False,
+            }}]}
+        }
+        posts = c._parse(long_response, "programming")
+        assert len(posts[0].selftext) <= 500
+
+    def test_reddit_safe_collect_on_http_error_returns_empty(self):
+        from modules.career.collectors.reddit import RedditCollector
+        c = RedditCollector(subreddits=["programming"], limit=5, min_score=10)
+        with patch("modules.career.collectors.reddit.aiohttp.ClientSession") as mock_session:
+            mock_get = MagicMock()
+            mock_get.__aenter__ = AsyncMock(side_effect=aiohttp.ClientError("error"))
+            mock_get.__aexit__ = AsyncMock(return_value=False)
+            mock_inner = MagicMock()
+            mock_inner.get = MagicMock(return_value=mock_get)
+            mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_inner)
+            mock_session.return_value.__aexit__ = AsyncMock(return_value=False)
             result = asyncio.run(c.safe_collect())
         assert result == []
 
-    def test_reddit_filters_by_min_score(self):
+    def test_reddit_parse_empty_response(self):
         from modules.career.collectors.reddit import RedditCollector
-        from modules.career.models import RedditPost
-        c = RedditCollector(
-            subreddits=["programming"],
-            limit=10,
-            min_score=100,
-            client_id="id",
-            client_secret="secret",
-            user_agent="Test Bot",
-        )
-        # _map_post filters by score
-        low_post = MagicMock()
-        low_post.score = 50
-        low_post.stickied = False
-        low_post.id = "1"
-        low_post.title = "low"
-        low_post.url = "https://x.com"
-        low_post.num_comments = 0
-        low_post.selftext = ""
-
-        high_post = MagicMock()
-        high_post.score = 200
-        high_post.stickied = False
-        high_post.id = "2"
-        high_post.title = "high"
-        high_post.url = "https://y.com"
-        high_post.num_comments = 5
-        high_post.selftext = "content"
-
-        result = [c._map_post(p, "programming") for p in [low_post, high_post] if p.score >= c.min_score and not p.stickied]
-        assert len(result) == 1
-        assert result[0].score == 200
-
-    def test_reddit_post_model_mapping(self):
-        from modules.career.collectors.reddit import RedditCollector
-        from modules.career.models import RedditPost
-        c = RedditCollector(
-            subreddits=["programming"],
-            limit=10,
-            min_score=0,
-            client_id="id",
-            client_secret="secret",
-            user_agent="Test Bot",
-        )
-        mock_post = MagicMock()
-        mock_post.id = "xyz123"
-        mock_post.title = "AI 시대 백엔드 개발자"
-        mock_post.score = 500
-        mock_post.url = "https://reddit.com/r/programming/xyz"
-        mock_post.num_comments = 42
-        mock_post.selftext = "내용 " * 300  # 길이 테스트
-
-        mapped = c._map_post(mock_post, "programming")
-        assert isinstance(mapped, RedditPost)
-        assert mapped.id == "xyz123"
-        assert mapped.subreddit == "programming"
-        assert mapped.score == 500
-        assert len(mapped.selftext) <= 500
+        c = RedditCollector(subreddits=["programming"], limit=10, min_score=0)
+        assert c._parse({}, "programming") == []
+        assert c._parse({"data": {"children": []}}, "programming") == []
 
 
 class TestNitterCollector:
