@@ -1,7 +1,7 @@
 # Software Architecture Snapshot
 
 **Status:** Active
-**Last Updated:** 2026-02-18
+**Last Updated:** 2026-03-28
 
 ## 1. Architectural Pattern
 The Consigliere codebase follows a **Modular Layered Architecture**. It emphasizes separation of concerns by isolating domain logic into distinct modules, which interact via defined interfaces (Services/Repositories).
@@ -88,6 +88,19 @@ graph TD
     - `news/`: Sub-module for news analysis (Naver API + LLM).
 - **Automation (`src/modules/automation/`):**
     - `service.py`: `AutomationService` (n8n API Integration).
+
+- **Career (`src/modules/career/`):** ← 2026-03-28 추가
+    - `service.py`: `CareerAgent` (파사드 오케스트레이터)
+    - `collectors/`: 9종 Collector — GitHub Trending, HackerNews, DevTo, Wanted, Jumpit, Reddit, Mastodon, Clien, DCInside
+      - `base.py`: `BaseCollector` (make_connector 공통 SSL, safe_collect 패턴)
+      - `factory.py`: `CollectorFactory` — config 기반 카테고리별 Collector 딕셔너리 생성 (OCP/DIP)
+    - `processors/`: 4종 Analyzer — JobAnalyzer, TrendAnalyzer, SkillGapAnalyzer, CommunityAnalyzer
+      - `base.py`: `BaseAnalyzer` — `_call_llm(prompt_key, variables, model_class)` 공통 헬퍼 (DRY)
+    - `reporters/`: DailyReporter, WeeklyReporter, MonthlyReporter
+    - `models.py`: JobPosting, TrendAnalysis, SkillGapAnalysis, CommunityTrendAnalysis 등 12종
+    - `config.yaml`: trend_sources, job_sources, community_sources 설정
+    - `persona.yaml`: 사용자 스킬/목표 페르소나
+    - `history/`: SkillGapSnapshot 이력 추적
 
 ## 3. Data Flow
 1. **User Action:** User interacts with Dashboard or API.

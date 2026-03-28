@@ -1,4 +1,21 @@
 # Project Consigliere: History
+**Last Updated:** 2026-03-28
+
+## 2026-03-28: 커뮤니티 트렌드 조사 모듈 + SOLID 리팩토링
+- **Feature (community-trend-collector):** 커리어 Daily Report에 개발자 커뮤니티 여론·트렌드 섹션 추가.
+- **수집 소스:** Reddit (공개 JSON API, 7개 subreddit), Mastodon (fosstodon.org/hachyderm.io/mastodon.social, 7개 해시태그), 클리앙 (cm_app 개발한당), DCInside (프로그래밍 갤러리)
+- **분석:** CommunityAnalyzer (LLM) → CommunityTrendAnalysis (hot_topics, key_opinions, emerging_concerns, community_summary)
+- **리포트:** Daily Report에 🌐 커뮤니티 트렌드 섹션 추가. 개조식·백틱·줄바꿈 렌더링
+- **이슈 해결:**
+  - Twitter 대안 탐색: Nitter(종료) → twscrape(Cloudflare 차단) → Twitter API v2 Free(402 CreditsDepleted) → Mastodon 해시태그 타임라인 API(✅)
+  - SSL: macOS Python `SSLCertVerificationError` → `BaseCollector.make_connector()` certifi 공통화 (10개 Collector)
+  - 클리앙 URL: cm_programmers(404) → cm_app(✅)
+- **SOLID 리팩토링:**
+  - `processors/base.py` BaseAnalyzer: Processor 4개 LLM 호출 패턴 공통화 (DRY/SRP)
+  - `collectors/factory.py` CollectorFactory: Collector 생성 책임 분리 (OCP/DIP). `fetch_community()` 제네릭 루프 전환
+- **테스트:** 101 tests all green (기존 42개 + 신규 59개)
+- **변경 파일:** collectors/{reddit,mastodon,clien,dcinside,factory}.py, processors/{base,community_analyzer}.py, service.py, daily_reporter.py, models.py, config.yaml, prompts/career/community_analyst.md
+
 **Last Updated:** 2026-03-22
 
 ## 2026-03-22: Job1 aiohttp 비동기 전환 + 데이터 라이프사이클

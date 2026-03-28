@@ -30,5 +30,8 @@
 - [x] Twitter API v2 시도 → Free 티어 검색 불가(402) 확인
 - [x] MastodonCollector 구현 — fosstodon.org/hachyderm.io/mastodon.social 해시태그 타임라인 API
 - [x] NitterCollector → MastodonCollector 교체 (service.py, config.yaml, tests 전체)
-- [ ] Smoke test (라이브 collector 개별 확인) — 선택적
-- [ ] Nitter 장애 시나리오 테스트 — 선택적
+- [x] SOLID 단기: BaseAnalyzer 추출 — Processor 4개 LLM 호출 패턴 공통화 (DRY/SRP)
+- [x] SOLID 중기: CollectorFactory 추출 — Collector 생성 책임 분리, fetch_community 제네릭 루프
+- [x] 전체 테스트 101개 all green
+- [x] feature/community-trend-collector → master 머지 완료
+- [x] SOP 문서 일괄 업데이트

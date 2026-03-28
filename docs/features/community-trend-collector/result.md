@@ -10,8 +10,9 @@
 | 신규 Collector | 4종 (Reddit, Mastodon, Clien, DCInside) |
 | 신규 Processor | 1종 (CommunityAnalyzer) |
 | 신규 모델 | 4종 (RedditPost, NitterTweet, KoreanPost, CommunityTrendAnalysis) |
-| 신규 테스트 | 47개 |
-| 전체 테스트 | 89개 (모두 green) |
+| 신규 테스트 | 59개 |
+| 전체 테스트 | 101개 (모두 green) |
+| SOLID 신규 파일 | 2종 (processors/base.py, collectors/factory.py) |
 
 ## 변경 파일
 
@@ -62,3 +63,12 @@
 - macOS Python 환경에서 `SSLCertVerificationError` 발생
 - `BaseCollector.make_connector()`로 certifi CA 번들 공통 적용
 - 전체 10개 Collector에 일관 적용 완료
+
+### SOLID 리팩토링 (추가 세션)
+- **BaseAnalyzer** (`processors/base.py`): Processor 4개의 중복 LLM 호출 패턴 공통화
+  - `_call_llm(prompt_key, variables, model_class)` 헬퍼로 각 Analyzer 코드량 50% 감소
+  - TestBaseAnalyzer 6개 추가
+- **CollectorFactory** (`collectors/factory.py`): Collector 생성 책임 `service.py`에서 분리
+  - 새 커뮤니티 소스 추가 시 factory.py + `_KOREAN_SOURCES` 상수만 수정
+  - `fetch_community()` 제네릭 딕셔너리 루프로 전환 (소스 추가 시 자동 반영)
+  - TestCollectorFactory 6개 추가
