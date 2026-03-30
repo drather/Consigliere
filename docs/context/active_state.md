@@ -1,12 +1,19 @@
 # Project Consigliere: Active State
 **Last Updated:** 2026-03-30
-**Current Active Feature:** LLM Harness Engineering
+**Current Active Feature:** 없음 (다음 작업 대기 중)
 
 ## 📍 Current Focus
-- **Branch:** `feature/llm-harness-engineering`
-- **Status:** ✅ 구현 완료, 머지 대기
+- **Branch:** `master`
+- **Status:** ✅ feature/llm-harness-engineering 머지 완료
 
 ## 💡 Recent Context
+- **completed:** LLM Harness Engineering (Token Observability, Context Compression, Model Routing, Prompt Caching, Semantic Cache)
+  - TokenUsage dataclass + get_last_usage() — 전 LLM 호출 토큰 추적
+  - Career processors 입력 압축: 포스팅 30개, 소스당 20-25개, 텍스트 150-200자
+  - TaskType enum + LLMFactory.create(task_type) — EXTRACTION→haiku, ANALYSIS→sonnet
+  - PromptLoader.load_with_cache_split() + ClaudeClient.generate_with_cache()
+  - LLMResponseCache + CachedLLMClient (Decorator 패턴)
+  - 신규 테스트 51개, 전체 230 passed, master 머지 및 push 완료
 - **completed:** 커뮤니티 트렌드 조사 모듈 + SOLID 리팩토링 (career 모듈 확장)
   - 데이터 소스: Reddit (공개 JSON API), Mastodon (해시태그 타임라인), 클리앙 (cm_app), DCInside
   - LLM 분석: CommunityAnalyzer → CommunityTrendAnalysis
@@ -21,9 +28,10 @@
 
 ## 🔜 다음 작업 로드맵
 
-### 1순위 — Job4 LLM 과다 호출 수정
-- 부동산 report 생성 시 LLM 호출이 너무 많아 토큰 과다 사용
-- 배치 처리 또는 프롬프트 통합으로 호출 횟수 감소
+### 1순위 — Career/RealEstate 서비스에 Harness 실제 주입
+- career/service.py에서 TaskType + CachedLLMClient 실제 사용
+- insight_orchestrator.py에서 TaskType 할당
+- 프롬프트 파일에 cache_boundary frontmatter 추가
 
 ### 2순위 — Career SOLID 장기 개선 (선택)
 - Processor Protocol 정의 (ISP/DIP 강화)
@@ -34,6 +42,13 @@
 - 주간/월간 리포트 커뮤니티 트렌드 섹션 추가
 
 ## ✅ Completed Tasks (Recent)
+- [x] **Feature: LLM Harness Engineering** (2026-03-30) <!-- id: 37 -->
+    - TokenUsage, get_last_usage(), 구조화 로깅
+    - Career processors 입력 압축 (30/20/25개 제한, 텍스트 트런케이션)
+    - TaskType enum + LLMFactory model routing
+    - PromptLoader.load_with_cache_split() + ClaudeClient.generate_with_cache()
+    - LLMResponseCache + CachedLLMClient (Decorator)
+    - 신규 테스트 51개, 전체 230 passed, master 머지 완료
 - [x] **Feature: 커뮤니티 트렌드 조사 모듈 + SOLID 리팩토링** (2026-03-28) <!-- id: 36 -->
     - Reddit/Mastodon/Clien/DCInside Collector, CommunityAnalyzer, Daily Report 커뮤니티 섹션
     - Twitter 대안 탐색: Nitter→twscrape→API v2(402)→Mastodon(✅, 68개/회)
