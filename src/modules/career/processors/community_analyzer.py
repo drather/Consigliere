@@ -8,6 +8,10 @@ from modules.career.models import (
     NitterTweet,
     RedditPost,
 )
+from core.prompt_optimizer import PromptTokenOptimizer as PTO
+
+_MAX_POSTS = 25
+_TEXT_MAX = 150
 
 
 class CommunityAnalyzer(BaseAnalyzer):
@@ -21,16 +25,27 @@ class CommunityAnalyzer(BaseAnalyzer):
         collection_status: Dict[str, str],
     ) -> CommunityTrendAnalysis:
         try:
+            # 입력 압축: 소스당 25개 제한 + 텍스트 필드 트런케이션
+            slim_reddit = []
+            for p in reddit_posts[:_MAX_POSTS]:
+                d = p.model_dump()
+                if d.get("selftext"):
+                    d["selftext"] = PTO.truncate(d["selftext"], _TEXT_MAX)
+                slim_reddit.append(d)
+
+            slim_tweets = []
+            for t in nitter_tweets[:_MAX_POSTS]:
+                d = t.model_dump()
+                if d.get("text"):
+                    d["text"] = PTO.truncate(d["text"], _TEXT_MAX)
+                slim_tweets.append(d)
+
+            slim_korean = [k.model_dump() for k in korean_posts[:_MAX_POSTS]]
+
             result = self._call_llm("career/community_analyst", {
-                "reddit_posts": json.dumps(
-                    [p.model_dump() for p in reddit_posts], ensure_ascii=False
-                ),
-                "nitter_tweets": json.dumps(
-                    [t.model_dump() for t in nitter_tweets], ensure_ascii=False
-                ),
-                "korean_posts": json.dumps(
-                    [k.model_dump() for k in korean_posts], ensure_ascii=False
-                ),
+                "reddit_posts": json.dumps(slim_reddit, ensure_ascii=False),
+                "nitter_tweets": json.dumps(slim_tweets, ensure_ascii=False),
+                "korean_posts": json.dumps(slim_korean, ensure_ascii=False),
                 "collection_status": json.dumps(collection_status, ensure_ascii=False),
             }, CommunityTrendAnalysis)
         except Exception as e:

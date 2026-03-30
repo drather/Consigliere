@@ -2,14 +2,20 @@ import json
 from typing import List, Dict, Any
 from modules.career.processors.base import BaseAnalyzer
 from modules.career.models import JobPosting, JobAnalysis
+from core.prompt_optimizer import PromptTokenOptimizer as PTO
+
+_MAX_POSTINGS = 30
 
 
 class JobAnalyzer(BaseAnalyzer):
     def analyze(self, postings: List[JobPosting], persona: Dict[str, Any]) -> JobAnalysis:
         try:
+            # 입력 압축: 상위 30개 포스팅만 전달
+            slim_postings = postings[:_MAX_POSTINGS]
+
             return self._call_llm("career/job_analyst", {
                 "job_postings": json.dumps(
-                    [p.model_dump() for p in postings], ensure_ascii=False
+                    [p.model_dump() for p in slim_postings], ensure_ascii=False
                 ),
                 "persona": json.dumps(persona, ensure_ascii=False),
                 "experience_years": persona.get("user", {}).get("experience_years", 3),

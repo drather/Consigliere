@@ -1,5 +1,14 @@
 # Project Consigliere: History
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-03-30
+
+## 2026-03-30: LLM Harness Engineering
+- **Feature (llm-harness-engineering):** LLM 호출 주변 harness 인프라 5종 TDD 구현
+- **Token Observability:** `TokenUsage` dataclass, `get_last_usage()`, 구조화 로그 `[Claude] usage: in=X out=Y cached=Z`
+- **Career Context Compression:** `PromptTokenOptimizer` core 이전, 포스팅 30개/소스 20-25개 제한, 텍스트 트런케이션 150-200자
+- **Model Routing:** `TaskType` enum (ANALYSIS/EXTRACTION/SYNTHESIS), `LLMFactory.create(task_type)`, 기본값 EXTRACTION→haiku
+- **Prompt Caching:** `load_with_cache_split()`, `generate_with_cache()`, `BaseAnalyzer._call_llm(use_cache=True)` opt-in
+- **Semantic Cache:** `LLMResponseCache` (SHA256→파일), `CachedLLMClient` (Decorator 패턴), TTL 설정 가능
+- **테스트:** 신규 51개 (전체 230 passed, 5 pre-existing 실패)
 
 ## 2026-03-28: 커뮤니티 트렌드 조사 모듈 + SOLID 리팩토링
 - **Feature (community-trend-collector):** 커리어 Daily Report에 개발자 커뮤니티 여론·트렌드 섹션 추가.
