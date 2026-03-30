@@ -1,10 +1,10 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-03-28
-**Current Active Feature:** 없음 (다음 작업 대기 중)
+**Last Updated:** 2026-03-30
+**Current Active Feature:** LLM Harness Engineering
 
 ## 📍 Current Focus
-- **Branch:** `master`
-- **Status:** ✅ feature/community-trend-collector 머지 완료
+- **Branch:** `feature/llm-harness-engineering`
+- **Status:** 🚧 구현 진행 중
 
 ## 💡 Recent Context
 - **completed:** 커뮤니티 트렌드 조사 모듈 + SOLID 리팩토링 (career 모듈 확장)
