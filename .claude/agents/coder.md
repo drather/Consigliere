@@ -41,7 +41,21 @@ test_files: [테스트 파일 경로 목록]
 pytest_result: PASS | FAIL
 pytest_output: (pytest 출력 마지막 요약)
 changes_summary: (주요 변경사항 3줄 요약)
+
+test_details:
+  {테스트 파일명} ({N}개):
+    ✅ test_함수명 — [검증 대상 기능] / [어떤 조건에서] / [무엇을 assert 하는가]
+    ✅ test_함수명 — ...
+  {테스트 파일명} ({N}개):
+    ✅ test_함수명 — ...
 ```
+
+test_details 작성 규칙:
+- 테스트 파일별로 그룹핑
+- 각 케이스마다 한 줄: "어떤 기능 / 어떤 조건 / 무엇을 검증"
+  - 나쁜 예: `test_cache_hit — 캐시 히트 테스트`
+  - 좋은 예: `test_geocode_cache_hit — GeocoderService.geocode() 호출 시 SQLite 캐시에 동일 키가 존재하면 카카오 API를 호출하지 않음을 Mock으로 검증`
+- FAIL 케이스는 ❌로 표시 + 실패 이유 한 줄
 
 ## 제약
 - **테스트 없이 구현 금지** — 반드시 테스트 먼저

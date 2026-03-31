@@ -64,10 +64,24 @@ Agent(subagent_type="general-purpose") 로 호출
 결과물: PASS / FAIL + 피드백 항목 목록
 ```
 
-### Step 4 — 루프 또는 완료
-- **PASS:** result.md 작성 → history.md 업데이트 → active_state.md 업데이트
+### Step 4 — 루프 또는 완료 대기
 - **FAIL:** 피드백을 CoderAgent에 전달 후 Step 2부터 재실행
 - **최대 반복:** 3회. 3회 후에도 FAIL이면 사용자에게 보고 후 중단
+- **PASS:** 아래 순서를 따른다
+
+### Step 5 — PASS 후 사용자 최종 테스트 대기 (필수)
+ValidatorAgent가 PASS를 반환해도 **절대 커밋/머지하지 않는다.**
+
+1. result.md 작성, history.md / active_state.md 업데이트
+2. 사용자에게 아래 내용을 보고하고 **명시적 승인을 기다린다:**
+   ```
+   ✅ ValidatorAgent PASS
+   구현 파일: [목록]
+   테스트: N passed
+
+   직접 테스트 후 커밋/머지를 요청해주세요.
+   ```
+3. 사용자가 "커밋해줘" / "머지해줘" / "push해줘" 등 명시적으로 요청한 경우에만 커밋·push를 진행한다.
 
 ---
 
@@ -83,7 +97,10 @@ CoderAgent 출력
 ├── implemented_files: [파일 경로 목록]
 ├── test_files: [테스트 파일 경로 목록]
 ├── pytest_result: PASS | FAIL
-└── pytest_output: str
+├── pytest_output: str
+└── test_details:
+      {테스트 파일명} ({N}개):
+        ✅/❌ test_함수명 — [검증 대상 기능] / [어떤 조건에서] / [무엇을 assert 하는가]
 
 ValidatorAgent 출력
 ├── verdict: PASS | FAIL

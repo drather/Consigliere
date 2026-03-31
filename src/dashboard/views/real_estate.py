@@ -225,18 +225,42 @@ def show_real_estate():
             else:
                 _kakao_key = os.environ.get("KAKAO_API_KEY", "")
                 if not _kakao_key:
-                    st.warning("KAKAO_API_KEY 환경변수가 설정되지 않았습니다. 지도 기능을 사용하려면 설정하세요.")
+                    st.warning("KAKAO_API_KEY 환경변수가 설정되지 않았습니다.")
+                elif st_folium is None:
+                    st.error("streamlit_folium이 설치되어 있지 않습니다.")
                 else:
-                    try:
-                        if st_folium is None:
-                            raise ImportError("streamlit_folium이 설치되어 있지 않습니다.")
-                        if "geocoder" not in st.session_state:
-                            st.session_state.geocoder = GeocoderService(api_key=_kakao_key)
-                        with st.spinner("아파트 좌표 조회 중..."):
-                            fmap = render_map_view(df, st.session_state.geocoder)
-                        st_folium(fmap, use_container_width=True, height=600)
-                    except Exception as _map_err:
-                        st.error(f"지도 렌더링 오류: {_map_err}")
+                    # 지도는 명시적 버튼 클릭 시에만 로드 (자동 실행 시 geocoder 블로킹 방지)
+                    col_load, col_clear = st.columns([2, 1])
+                    with col_load:
+                        load_map_btn = st.button("🗺️ 지도 로드", type="primary", use_container_width=True)
+                    with col_clear:
+                        if st.button("🔄 캐시 초기화", use_container_width=True):
+                            st.session_state.pop("map_cache_key", None)
+                            st.session_state.pop("cached_fmap", None)
+                            st.rerun()
+
+                    # 현재 df의 해시를 캐시 키로 사용 (필터 변경 감지)
+                    _cache_key = str(hash(tuple(sorted(df["apt_name"].tolist()))))
+
+                    if load_map_btn or (
+                        "cached_fmap" in st.session_state
+                        and st.session_state.get("map_cache_key") == _cache_key
+                    ):
+                        if st.session_state.get("map_cache_key") != _cache_key or "cached_fmap" not in st.session_state:
+                            if "geocoder" not in st.session_state:
+                                st.session_state.geocoder = GeocoderService(api_key=_kakao_key)
+                            with st.spinner("아파트 좌표 조회 중... (첫 로드 시 시간이 걸릴 수 있습니다)"):
+                                try:
+                                    fmap = render_map_view(df, st.session_state.geocoder)
+                                    st.session_state.cached_fmap = fmap
+                                    st.session_state.map_cache_key = _cache_key
+                                except Exception as _map_err:
+                                    st.error(f"지도 렌더링 오류: {_map_err}")
+                                    st.stop()
+
+                        st_folium(st.session_state.cached_fmap, use_container_width=True, height=600)
+                    else:
+                        st.info("'🗺️ 지도 로드' 버튼을 눌러 지도를 표시합니다.")
 
     # ──────────────────────────────────────────────────────────
     # TAB 2: Insight (서브탭 3개)
