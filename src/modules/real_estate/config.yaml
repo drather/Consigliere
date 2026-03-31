@@ -5,6 +5,8 @@ bok_codes:
   m2: "101Y001"
   loan_rate: "121Y002"
 
+geocode_cache_path: "data/geocode_cache.db"
+
 financial_defaults:
   tax_rate_multiplier: 0.03
   interest_rate: 0.045

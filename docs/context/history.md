@@ -1,5 +1,14 @@
 # Project Consigliere: History
-**Last Updated:** 2026-03-30
+**Last Updated:** 2026-04-01
+
+## 2026-04-01: 부동산 실거래가 지도 시각화
+- **Feature (real-estate-map-view):** 실거래가 데이터를 folium 지도 위에 아파트별 마커로 시각화, 클릭 시 거래 이력 최신순 팝업 표시
+- **지오코딩:** 카카오 Local API (keyword 검색) + SQLite 캐시 (`data/geocode_cache.db`) — 동일 아파트 반복 호출 방지
+- **UI:** Streamlit tab1에 서브탭 추가 ("📋 거래 목록" / "🗺️ 지도 뷰"), 기존 필터 공유
+- **SOLID:** GeocoderProtocol (DIP), cache_path config.yaml 관리 (Zero Hardcoding)
+- **테스트:** 신규 11개 (test_geocoder 7개 + test_map_view 4개), 모두 통과
+- **신규 파일:** geocoder.py, components/map_view.py
+- **3-Agent 오케스트레이션 첫 적용:** PlannerAgent→CoderAgent→ValidatorAgent(1차 FAIL→피드백→2차 PASS)
 
 ## 2026-03-30: LLM Harness Engineering
 - **Feature (llm-harness-engineering):** LLM 호출 주변 harness 인프라 5종 TDD 구현

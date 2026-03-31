@@ -1,3 +1,4 @@
+import os
 import re
 import streamlit as st
 import pandas as pd
@@ -5,9 +6,18 @@ from datetime import date, timedelta
 from typing import Dict, List
 
 try:
+    from streamlit_folium import st_folium
+except ImportError:
+    st_folium = None  # type: ignore
+
+try:
     from dashboard.api_client import DashboardClient
+    from dashboard.components.map_view import render_map_view
+    from modules.real_estate.geocoder import GeocoderService, GeocoderProtocol
 except ImportError:
     from src.dashboard.api_client import DashboardClient
+    from src.dashboard.components.map_view import render_map_view
+    from src.modules.real_estate.geocoder import GeocoderService, GeocoderProtocol
 
 
 def _mrkdwn_to_md(text: str) -> str:
@@ -176,34 +186,57 @@ def show_real_estate():
                 )
             st.session_state.tx_page = 0
 
+        sub_tab1, sub_tab2 = st.tabs(["📋 거래 목록", "🗺️ 지도 뷰"])
+
         df = st.session_state.tx_df
-        if df.empty:
-            st.info("조회 결과가 없습니다. 위 '📥 실거래가 수집'을 먼저 실행하세요.")
-        else:
-            total = len(df)
-            total_pages = max(1, -(-total // page_size))  # ceiling division
-            page = st.session_state.get("tx_page", 0)
-            page = max(0, min(page, total_pages - 1))
 
-            code_to_name = {d["code"]: d["name"] for d in st.session_state.get("districts", [])}
-            page_df = df.iloc[page * page_size: (page + 1) * page_size]
-            _render_tx_dataframe(page_df.copy(), code_to_name)
+        with sub_tab1:
+            if df.empty:
+                st.info("조회 결과가 없습니다. 위 '📥 실거래가 수집'을 먼저 실행하세요.")
+            else:
+                total = len(df)
+                total_pages = max(1, -(-total // page_size))  # ceiling division
+                page = st.session_state.get("tx_page", 0)
+                page = max(0, min(page, total_pages - 1))
 
-            # 페이지 네비게이션
-            nav1, nav2, nav3 = st.columns([1, 3, 1])
-            with nav1:
-                if st.button("◀ 이전", disabled=(page == 0), use_container_width=True):
-                    st.session_state.tx_page = page - 1
-                    st.rerun()
-            with nav2:
-                st.markdown(
-                    f"<div style='text-align:center;padding-top:6px'>총 <b>{total}건</b> · {page+1} / {total_pages} 페이지</div>",
-                    unsafe_allow_html=True
-                )
-            with nav3:
-                if st.button("다음 ▶", disabled=(page >= total_pages - 1), use_container_width=True):
-                    st.session_state.tx_page = page + 1
-                    st.rerun()
+                code_to_name = {d["code"]: d["name"] for d in st.session_state.get("districts", [])}
+                page_df = df.iloc[page * page_size: (page + 1) * page_size]
+                _render_tx_dataframe(page_df.copy(), code_to_name)
+
+                # 페이지 네비게이션
+                nav1, nav2, nav3 = st.columns([1, 3, 1])
+                with nav1:
+                    if st.button("◀ 이전", disabled=(page == 0), use_container_width=True):
+                        st.session_state.tx_page = page - 1
+                        st.rerun()
+                with nav2:
+                    st.markdown(
+                        f"<div style='text-align:center;padding-top:6px'>총 <b>{total}건</b> · {page+1} / {total_pages} 페이지</div>",
+                        unsafe_allow_html=True
+                    )
+                with nav3:
+                    if st.button("다음 ▶", disabled=(page >= total_pages - 1), use_container_width=True):
+                        st.session_state.tx_page = page + 1
+                        st.rerun()
+
+        with sub_tab2:
+            if df.empty:
+                st.info("조회 결과가 없습니다. 위 '📥 실거래가 수집'을 먼저 실행하세요.")
+            else:
+                _kakao_key = os.environ.get("KAKAO_API_KEY", "")
+                if not _kakao_key:
+                    st.warning("KAKAO_API_KEY 환경변수가 설정되지 않았습니다. 지도 기능을 사용하려면 설정하세요.")
+                else:
+                    try:
+                        if st_folium is None:
+                            raise ImportError("streamlit_folium이 설치되어 있지 않습니다.")
+                        if "geocoder" not in st.session_state:
+                            st.session_state.geocoder = GeocoderService(api_key=_kakao_key)
+                        with st.spinner("아파트 좌표 조회 중..."):
+                            fmap = render_map_view(df, st.session_state.geocoder)
+                        st_folium(fmap, use_container_width=True, height=600)
+                    except Exception as _map_err:
+                        st.error(f"지도 렌더링 오류: {_map_err}")
 
     # ──────────────────────────────────────────────────────────
     # TAB 2: Insight (서브탭 3개)
