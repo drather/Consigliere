@@ -131,7 +131,7 @@ class BaseLLMClient(ABC):
         pass
 
     @abstractmethod
-    def generate_json(self, prompt: str, max_tokens: int = 8192) -> Dict[str, Any]:
+    def generate_json(self, prompt: str, max_tokens: int = 8192, metadata: Optional[Dict] = None) -> Dict[str, Any]:
         pass
 
     def get_last_usage(self) -> TokenUsage:
@@ -159,9 +159,12 @@ class GeminiClient(BaseLLMClient):
     def _make_config(self, extra: Optional[Dict[str, Any]] = None):
         from google.genai import types
         kwargs = {}
-        # Only attach ThinkingConfig when thinking is explicitly enabled
         if self.thinking_level and self.thinking_level.lower() not in ("none", "off", ""):
             kwargs["thinking_config"] = types.ThinkingConfig(thinking_level=self.thinking_level)
+        else:
+            # gemini-2.5-flash는 ThinkingConfig 미지정 시 thinking을 기본 활성화한다.
+            # thinking_budget=0으로 명시적으로 비활성화해야 과금을 방지할 수 있다.
+            kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
         if extra:
             kwargs.update(extra)
         return types.GenerateContentConfig(**kwargs)
@@ -169,15 +172,22 @@ class GeminiClient(BaseLLMClient):
     def _record_usage(self, response) -> None:
         meta = getattr(response, "usage_metadata", None)
         if meta:
+            thinking_tokens = int(getattr(meta, "thoughts_token_count", 0) or 0)
             self._last_usage = TokenUsage(
                 input_tokens=getattr(meta, "prompt_token_count", 0),
                 output_tokens=getattr(meta, "candidates_token_count", 0),
             )
             logger.info(
-                "[Gemini] usage: in=%d out=%d",
+                "[Gemini] usage: in=%d out=%d thinking=%d",
                 self._last_usage.input_tokens,
                 self._last_usage.output_tokens,
+                thinking_tokens,
             )
+            if thinking_tokens > 0:
+                logger.warning(
+                    "[Gemini] thinking 토큰 %d개 발생 — GEMINI_THINKING_LEVEL 설정 확인 필요",
+                    thinking_tokens,
+                )
 
     def generate(self, prompt: str) -> str:
         if not self.api_key:
@@ -194,7 +204,7 @@ class GeminiClient(BaseLLMClient):
             logger.error(f"Gemini LLM Error: {e}")
             return str(e)
 
-    def generate_json(self, prompt: str, max_tokens: int = 8192) -> Dict[str, Any]:
+    def generate_json(self, prompt: str, max_tokens: int = 8192, metadata: Optional[Dict] = None) -> Dict[str, Any]:
         if not self.api_key:
             return {"error": "Missing API Key"}
         try:
@@ -263,7 +273,7 @@ class ClaudeClient(BaseLLMClient):
             logger.error(f"Claude LLM Error: {e}")
             return str(e)
 
-    def generate_json(self, prompt: str, max_tokens: int = 8192) -> Dict[str, Any]:
+    def generate_json(self, prompt: str, max_tokens: int = 8192, metadata: Optional[Dict] = None) -> Dict[str, Any]:
         if not self.api_key:
             return {"error": "Missing Claude API Key"}
         try:
