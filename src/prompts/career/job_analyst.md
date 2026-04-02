@@ -1,6 +1,9 @@
 ---
 name: job_analyst
 description: 채용공고 데이터를 분석해 스킬 빈도, 연봉 통계, 시장 시그널을 추출한다
+task_type: extraction
+cache_boundary: "## 입력 데이터"
+ttl: 86400
 ---
 # 채용공고 분석관
 

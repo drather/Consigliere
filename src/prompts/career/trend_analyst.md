@@ -1,6 +1,9 @@
 ---
 name: trend_analyst
 description: GitHub Trending, HN, Dev.to 데이터를 분석해 기술 트렌드를 추출한다
+task_type: extraction
+cache_boundary: "## 입력 데이터"
+ttl: 86400
 ---
 # 기술 트렌드 분석관
 
