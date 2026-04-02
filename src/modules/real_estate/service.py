@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Optional
 from core.storage import get_storage_provider, StorageProvider
 from core.prompt_loader import PromptLoader
 from core.llm import LLMClient
+from core.llm_pipeline import build_llm_pipeline
 from core.logger import get_logger
 from .repository import ChromaRealEstateRepository
 from .config import RealEstateConfig
@@ -33,7 +34,7 @@ class RealEstateAgent:
         self.storage: StorageProvider = get_storage_provider(storage_mode)
         root_storage = get_storage_provider("local", root_path=".")
         self.prompt_loader = PromptLoader(root_storage, base_dir="src/modules/real_estate/prompts")
-        self.llm = LLMClient()
+        self.llm = build_llm_pipeline()
         self.repository = ChromaRealEstateRepository()
         
         # Specialized Services
@@ -175,16 +176,33 @@ class RealEstateAgent:
             targets = self.config.get("districts", [])
             logger.info(f"[Job1] 비동기 수집: {len(targets)}개 지구, {target_ym}")
 
+        # cutoff가 이전 달에 걸치면 이전 달도 조회
+        cutoff_ym = cutoff_3days.strftime("%Y%m")
+        fetch_months = [target_ym]
+        if cutoff_ym != target_ym:
+            fetch_months.insert(0, cutoff_ym)
+            logger.info(f"[Job1] cutoff({cutoff_3days}) ← 이전 달 포함: {fetch_months}")
+
         # Step 0: 1년 이상 된 데이터 삭제
         deleted = self.repository.delete_old_transactions(cutoff_1year)
 
-        # Step 1: 비동기 병렬 fetch
+        # Step 1: 비동기 병렬 fetch (월별로 순차 실행, 지구별 병렬)
         molit_client = MOLITClient()
         loop = asyncio.new_event_loop()
         try:
-            fetched_results = loop.run_until_complete(
-                self._async_fetch_all(targets, target_ym, molit_client, cutoff_3days)
-            )
+            all_fetched: list = []
+            for ym in fetch_months:
+                month_results = loop.run_until_complete(
+                    self._async_fetch_all(targets, ym, molit_client, cutoff_3days)
+                )
+                all_fetched.extend(month_results)
+            # 같은 지구의 결과를 병합 (지구별로 txs 합산)
+            merged: dict = {}
+            for name, code, txs in all_fetched:
+                if code not in merged:
+                    merged[code] = (name, code, [])
+                merged[code][2].extend(txs)
+            fetched_results = list(merged.values())
         finally:
             loop.close()
 
