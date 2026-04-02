@@ -47,6 +47,17 @@
 ### 3순위 — BaseAnalyzer use_cache 분기 정리 (2단계)
 - `_call_llm(use_cache=True)` 경로 제거, PromptCacheFilter 단일 경로로 통합
 
+### 4순위 — 부동산 리포트 Validator/Retry 패턴 개선
+- **문제:** ReportValidator(코드 기반, 토큰 없음)의 score가 항상 15/100 → retry loop에서 SynthesizerAgent가 매번 2회 호출 → 토큰 ~50% 낭비
+- **원인 분석:**
+  - Budget compliance 0/40: LLM이 화이트리스트 무시하고 예산 초과 단지 추천
+  - Scorecard 0/25: 추천 단지 1개 (최소 3개 필요)
+  - commute_minutes 미인용 0/20, policy_facts 미인용 0/15
+- **선택지:**
+  - A (빠른): retry 제거 → 1회 실행, validator는 경고 전용으로 강등
+  - B (근본): Synthesizer 프롬프트 개선으로 score ≥ 75 달성 → retry 자연 소멸
+  - C (원복): ContextAnalyst + Synthesizer 2-call만 유지, validator 완전 제거
+
 ## 완료 작업 이력 (최근)
 - [x] **Feature: LLM Filter Chain** (2026-04-02)
     - LLMFilterChain (FilterChain 패턴, BaseLLMClient 구현)
