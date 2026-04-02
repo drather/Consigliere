@@ -1,6 +1,9 @@
 ---
 name: monthly_synthesizer
 description: 월간 주간 리포트들을 종합해 월간 성장 요약 리포트를 생성한다
+task_type: synthesis
+cache_boundary: "## 입력 데이터"
+ttl: 2592000
 ---
 # 월간 커리어 리포트 합성관
 

@@ -1,5 +1,19 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-04-02
+
+## 2026-04-02: LLM Filter Chain
+- **Feature (llm-filter-chain):** LLM 호출 최적화 관심사를 Filter Chain 패턴으로 비즈니스 로직에서 완전 분리
+- **신규 파일:** src/core/llm_pipeline.py — LLMFilter ABC, LLMRequest/LLMResponse, LLMFilterChain, 4개 Filter, build_llm_pipeline()
+- **4개 Filter:**
+  - ModelRoutingFilter: task_type(extraction→haiku, analysis/synthesis→sonnet) 기반 모델 자동 선택
+  - SemanticCacheFilter: SHA256(prompt) 파일 캐시, TTL 제어 (metadata["ttl"])
+  - PromptCacheFilter: cache_boundary 기반 Claude 프롬프트 캐싱 (static/dynamic 분리)
+  - TokenLogFilter: 토큰 사용량 구조화 로깅 + 세션 누적
+- **비즈니스 로직 변경:** CareerAgent, RealEstateAgent의 `self.llm = LLMClient()` → `build_llm_pipeline()` 한 줄 교체만 필요. BaseAnalyzer._call_llm()에 metadata 전달 추가.
+- **프롬프트 frontmatter:** career 6개 파일에 task_type, cache_boundary, ttl 추가
+- **Zero Hardcoding:** TTL/모델명/캐시경로 모두 환경변수(SEMANTIC_CACHE_TTL_SECONDS 등)로 override 가능
+- **테스트:** 신규 27개 (전체 195 passed, 3 pre-existing failures 무변화)
+- **3-Agent 오케스트레이션:** PlannerAgent→CoderAgent→ValidatorAgent 1회 PASS
 
 ## 2026-04-01: 부동산 실거래가 지도 시각화
 - **Feature (real-estate-map-view):** 실거래가 데이터를 folium 지도 위에 아파트별 마커로 시각화, 클릭 시 거래 이력 최신순 팝업 표시

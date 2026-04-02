@@ -1,6 +1,9 @@
 ---
 name: skill_gap_analyst
 description: 채용공고 분석 + 트렌드 분석 + 페르소나로 스킬 갭을 진단한다
+task_type: analysis
+cache_boundary: "## 입력 데이터"
+ttl: 86400
 ---
 # 스킬 갭 분석관
 

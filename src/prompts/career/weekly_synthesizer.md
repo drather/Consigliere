@@ -1,6 +1,9 @@
 ---
 name: weekly_synthesizer
 description: 7일치 Daily Report를 종합해 주간 커리어 리포트를 생성한다
+task_type: synthesis
+cache_boundary: "## 입력 데이터"
+ttl: 604800
 ---
 # 주간 커리어 리포트 합성관
 

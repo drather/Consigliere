@@ -3,7 +3,7 @@ import yaml
 from datetime import date
 from typing import Dict, Any, List, Optional
 from core.logger import get_logger
-from core.llm import LLMClient
+from core.llm import LLMClient, BaseLLMClient
 from core.prompt_loader import PromptLoader
 from .agents.specialized import ContextAnalystAgent, ReportValidator, SynthesizerAgent
 from .presenter import RealEstatePresenter
@@ -51,7 +51,7 @@ class InsightOrchestrator:
     """
     def __init__(
         self,
-        llm: LLMClient,
+        llm: BaseLLMClient,
         prompt_loader: PromptLoader,
         context_analyst=None,
         synthesizer=None,

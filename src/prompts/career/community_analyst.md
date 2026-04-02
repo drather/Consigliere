@@ -1,6 +1,9 @@
 ---
 name: community_analyst
 description: Reddit, Twitter(Nitter), 국내 커뮤니티 데이터로 개발자/AI 커뮤니티 트렌드를 분석한다
+task_type: extraction
+cache_boundary: "## 입력 데이터"
+ttl: 86400
 ---
 # 커뮤니티 트렌드 분석관
 

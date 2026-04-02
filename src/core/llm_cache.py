@@ -121,7 +121,7 @@ class CachedLLMClient(BaseLLMClient):
         self._last_usage = self._inner.get_last_usage()
         return response
 
-    def generate_json(self, prompt: str, max_tokens: int = 8192) -> Dict[str, Any]:
+    def generate_json(self, prompt: str, max_tokens: int = 8192, metadata=None) -> Dict[str, Any]:
         entry = self._cache.get(prompt, self._ttl)
         if entry:
             self._last_usage = TokenUsage(entry.input_tokens, entry.output_tokens)

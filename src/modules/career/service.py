@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from typing import Dict, Any, List, Optional
 
 from core.llm import LLMClient
+from core.llm_pipeline import build_llm_pipeline
 from core.prompt_loader import PromptLoader
 from core.storage import get_storage_provider
 from core.logger import get_logger
@@ -54,7 +55,7 @@ class CareerAgent:
         self.config = CareerConfig()
         root_storage = get_storage_provider("local", root_path=".")
         self.prompt_loader = PromptLoader(root_storage, base_dir="src/prompts")
-        self.llm = LLMClient()
+        self.llm = build_llm_pipeline()
         self.data_dir = self.config.get_data_dir()
         self._persona_manager = PersonaManager()
         self.persona = self._persona_manager.get()

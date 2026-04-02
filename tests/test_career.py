@@ -595,7 +595,7 @@ class TestBaseAnalyzer:
         analyzer._call_llm("career/job_analyst", {"key": "val"}, JobAnalysis)
 
         prompt_loader.load.assert_called_once_with("career/job_analyst", variables={"key": "val"})
-        llm.generate_json.assert_called_once_with("rendered prompt")
+        llm.generate_json.assert_called_once_with("rendered prompt", metadata={})
 
     def test_call_llm_parses_response_into_model(self):
         """_call_llm 반환값이 지정된 model_class 인스턴스다."""

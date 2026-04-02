@@ -43,6 +43,6 @@ class BaseAnalyzer:
             )
             data = self.llm.generate_json_with_cache(static_text, dynamic_text)
         else:
-            _, prompt = self.prompt_loader.load(prompt_key, variables=variables)
-            data = self.llm.generate_json(prompt)
+            metadata, prompt = self.prompt_loader.load(prompt_key, variables=variables)
+            data = self.llm.generate_json(prompt, metadata=metadata)
         return model_class(**data)

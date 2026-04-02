@@ -1,12 +1,20 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-04-02
 **Current Active Feature:** 없음 (다음 작업 대기 중)
 
-## 📍 Current Focus
+## 현재 포커스
 - **Branch:** `master`
-- **Status:** ✅ real-estate-map-view 완료
+- **Status:** ✅ llm-filter-chain 완료
 
-## 💡 Recent Context
+## 최근 컨텍스트
+- **completed:** LLM Filter Chain (Filter Chain 패턴으로 LLM 최적화 관심사 분리)
+  - src/core/llm_pipeline.py — LLMFilter ABC, LLMRequest/LLMResponse, LLMFilterChain, 4개 Filter, build_llm_pipeline()
+  - ModelRoutingFilter: task_type 기반 모델 자동 선택 (extraction→haiku, analysis/synthesis→sonnet)
+  - SemanticCacheFilter: SHA256(prompt) 파일 캐시, TTL 제어
+  - PromptCacheFilter: cache_boundary 기반 Claude 프롬프트 캐싱
+  - TokenLogFilter: 토큰 사용량 구조화 로깅 + 세션 누적
+  - career 6개 프롬프트 frontmatter (task_type, cache_boundary, ttl) 추가
+  - 신규 테스트 27개, 전체 195 passed, 3-Agent 오케스트레이션 1회 PASS
 - **completed:** LLM Harness Engineering (Token Observability, Context Compression, Model Routing, Prompt Caching, Semantic Cache)
   - TokenUsage dataclass + get_last_usage() — 전 LLM 호출 토큰 추적
   - Career processors 입력 압축: 포스팅 30개, 소스당 20-25개, 텍스트 150-200자
@@ -17,7 +25,7 @@
 - **completed:** 커뮤니티 트렌드 조사 모듈 + SOLID 리팩토링 (career 모듈 확장)
   - 데이터 소스: Reddit (공개 JSON API), Mastodon (해시태그 타임라인), 클리앙 (cm_app), DCInside
   - LLM 분석: CommunityAnalyzer → CommunityTrendAnalysis
-  - Daily Report 🌐 커뮤니티 트렌드 섹션 (개조식·백틱·줄바꿈)
+  - Daily Report 커뮤니티 트렌드 섹션 (개조식·백틱·줄바꿈)
   - SOLID 단기: BaseAnalyzer (Processor LLM 호출 패턴 공통화)
   - SOLID 중기: CollectorFactory (Collector 생성 책임 분리, 제네릭 루프)
   - 101 tests all green, master 머지 완료
@@ -26,22 +34,28 @@
 - **completed:** Job1 aiohttp 비동기 전환
 - **blocked:** 없음
 
-## 🔜 다음 작업 로드맵
+## 다음 작업 로드맵
 
-### 1순위 — Career/RealEstate 서비스에 Harness 실제 주입
-- career/service.py에서 TaskType + CachedLLMClient 실제 사용
-- insight_orchestrator.py에서 TaskType 할당
-- 프롬프트 파일에 cache_boundary frontmatter 추가
-
-### 2순위 — Career SOLID 장기 개선 (선택)
+### 1순위 — Career SOLID 장기 개선
 - Processor Protocol 정의 (ISP/DIP 강화)
 - CareerAgent 의존성 주입 패턴 적용
 
-### 3순위 — Career 모듈 고도화
+### 2순위 — Career 모듈 고도화
 - 수집 소스 확장 (LinkedIn, HackerNews Jobs 등)
 - 주간/월간 리포트 커뮤니티 트렌드 섹션 추가
 
-## ✅ Completed Tasks (Recent)
+### 3순위 — BaseAnalyzer use_cache 분기 정리 (2단계)
+- `_call_llm(use_cache=True)` 경로 제거, PromptCacheFilter 단일 경로로 통합
+
+## 완료 작업 이력 (최근)
+- [x] **Feature: LLM Filter Chain** (2026-04-02)
+    - LLMFilterChain (FilterChain 패턴, BaseLLMClient 구현)
+    - 4개 Filter: ModelRouting, SemanticCache, PromptCache, TokenLog
+    - career 서비스 + real_estate 서비스 build_llm_pipeline() 적용
+    - 신규 테스트 27개, 전체 195 passed, ValidatorAgent 1회 PASS
+- [x] **Feature: 부동산 실거래가 지도 시각화** (2026-04-01)
+    - folium 지도, 카카오 API 지오코딩, SQLite 캐시, Streamlit 서브탭
+    - GeocoderProtocol (DIP), 신규 11개 테스트, 3-Agent 오케스트레이션 첫 적용
 - [x] **Feature: LLM Harness Engineering** (2026-03-30) <!-- id: 37 -->
     - TokenUsage, get_last_usage(), 구조화 로깅
     - Career processors 입력 압축 (30/20/25개 제한, 텍스트 트런케이션)
