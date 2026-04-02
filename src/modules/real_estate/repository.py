@@ -128,9 +128,9 @@ class ChromaRealEstateRepository:
         - date_from / date_to / apt_name / price_min / price_max 필터는 Python 레벨에서 후처리
         """
         try:
-            fetch_limit = min(limit * 10, 500)
+            # limit 없이 전체 fetch → 날짜 내림차순 정렬 후 limit 적용
+            # (ChromaDB .get()은 삽입 순서로 반환하므로 cap을 두면 최신 데이터가 잘릴 수 있음)
             results = self.collection.get(
-                limit=fetch_limit,
                 where=where,
                 include=["metadatas"]
             )
