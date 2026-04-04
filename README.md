@@ -151,7 +151,7 @@ The **Streamlit Dashboard** is the primary UI for interacting with the system, a
 ### ⚙️ Automation
 - n8n 워크플로우 목록 및 상태 조회. `Open in n8n Editor` 버튼으로 비주얼 에디터 즉시 진입.
 - Telegram을 통한 양방향 통신 지원.
-
+- Claude desktop 도입을 통한 자동화
 ---
 
 ## 6. Tech Stack
