@@ -1,10 +1,10 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-02
-**Current Active Feature:** 없음 (다음 작업 대기 중)
+**Last Updated:** 2026-04-05
+**Current Active Feature:** `career-solid-refactor` (Planning 완료, 구현 대기)
 
 ## 현재 포커스
-- **Branch:** `master`
-- **Status:** ✅ llm-filter-chain 완료
+- **Branch:** `feature/career-solid-refactor` → master 머지 완료
+- **Status:** 📋 Spec/Progress 문서 작성 완료, 구현 미착수
 
 ## 최근 컨텍스트
 - **completed:** LLM Filter Chain (Filter Chain 패턴으로 LLM 최적화 관심사 분리)
