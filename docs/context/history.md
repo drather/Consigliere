@@ -1,5 +1,18 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-06
+
+## 2026-04-06: 시스템 전체 리뷰 및 개선 계획 수립
+- **Planning (career-solid-refactor):** Career SOLID 장기 개선 spec/progress 문서 작성 및 master 머지
+  - Processor Protocol 4종 (ISP/DIP), CareerPathResolver (SRP), CareerDataStore (SRP), CareerAgent DI 개선
+  - 구현 미착수, `docs/features/career_solid_refactor/` 참조
+- **시스템 전체 리뷰 — 신규 발견 이슈 및 개선 제안 (로드맵 반영):**
+  - Finance LLM Pipeline 미통합: `service.py`가 `LLMClient()` 직접 사용, `build_llm_pipeline()` 교체 필요
+  - Career 커뮤니티 소스 분류 하드코딩: `_REDDIT_SOURCES` 등이 service.py에 고정, config.yaml `category` 필드로 이동 필요
+  - n8n 워크플로우 실패 피드백 없음: 실행 히스토리 미저장, 실패 알림 부재
+  - 부동산 ↔ 커리어 소득 연계 분석 기회: 두 모듈을 연결하는 통합 인사이트 가능
+  - Career 스킬갭 트렌드 예측: gap_score 히스토리 활용한 예측/달성 시점 계산 미구현
+  - Streamlit 파이프라인 실행 블로킹: 장시간 요청 시 UI 멈춤, Background Task + polling 필요
+- **run_pipeline 중복 실행 재확인:** `generate_report()` 호출 후 LLM 분석 3종이 다시 실행됨, SOLID 작업 시 `_analyze()` 헬퍼로 통합 예정
 
 ## 2026-04-02: LLM Filter Chain
 - **Feature (llm-filter-chain):** LLM 호출 최적화 관심사를 Filter Chain 패턴으로 비즈니스 로직에서 완전 분리

@@ -1,5 +1,5 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-05
+**Last Updated:** 2026-04-06
 **Current Active Feature:** `career-solid-refactor` (Planning 완료, 구현 대기)
 
 ## 현재 포커스
@@ -39,16 +39,39 @@
 ### 1순위 — Career SOLID 장기 개선
 - Processor Protocol 정의 (ISP/DIP 강화)
 - CareerAgent 의존성 주입 패턴 적용
+- 상세: `docs/features/career_solid_refactor/spec.md`
 
-### 2순위 — Career 모듈 고도화
-- 수집 소스 확장 (LinkedIn, HackerNews Jobs 등)
-- 주간/월간 리포트 커뮤니티 트렌드 섹션 추가
+### 2순위 — Finance LLM Pipeline 통합 (빠른 개선)
+- **문제:** `finance/service.py`가 `LLMClient()` 직접 생성 → SemanticCache, TokenLog 혜택 없음
+- **개선:** `build_llm_pipeline()` 교체 (1시간 수정, 다른 모듈과 동일 패턴)
 
-### 3순위 — BaseAnalyzer use_cache 분기 정리 (2단계)
+### 3순위 — Career 커뮤니티 소스 분류 config화
+- **문제:** `service.py`의 `_REDDIT_SOURCES`, `_KOREAN_SOURCES` 등이 하드코딩 → 새 소스 추가 시 service.py 수정 필요
+- **개선:** `config.yaml` 소스 정의에 `category` 필드 추가 → service.py 무수정 확장
+
+### 4순위 — n8n 워크플로우 실행 결과 피드백 루프
+- **문제:** 워크플로우 실패 시 알림 없음, 실행 히스토리 미저장
+- **개선 방향:**
+  - n8n `GET /executions?workflowId=...` 폴링 또는 Error Workflow → Slack 실패 알림
+  - AutomationService에 `get_execution_history()` 추가
+
+### 5순위 — 부동산 ↔ 커리어 소득 연계 분석 (신규 기능)
+- **방향:** Career 스킬갭 개선 → 예상 연봉 상승 → 대출 가능액 재계산 → 진입 가능 단지 변화
+- **구현:** CareerAgent ↔ RealEstateAgent 간 소득 시나리오 연결 (통합 인사이트 API)
+
+### 6순위 — Career 스킬갭 트렌드 예측
+- **방향:** 히스토리(`tracker.py`)를 활용한 gap_score 추이 분석 + 목표 달성 예상 시점 계산
+- **구현:** 주간 리포트에 "4주 추이 / 예상 달성 주차" 섹션 추가
+
+### 7순위 — Streamlit 파이프라인 실행 비동기화
+- **문제:** `run-pipeline` 등 장시간 요청 시 대시보드 UI 블로킹
+- **개선:** FastAPI Background Task + 상태 polling 엔드포인트 → 진행상황 실시간 표시
+
+### 8순위 — BaseAnalyzer use_cache 분기 정리
 - `_call_llm(use_cache=True)` 경로 제거, PromptCacheFilter 단일 경로로 통합
 
-### 4순위 — 부동산 리포트 Validator/Retry 패턴 개선
-- **문제:** ReportValidator(코드 기반, 토큰 없음)의 score가 항상 15/100 → retry loop에서 SynthesizerAgent가 매번 2회 호출 → 토큰 ~50% 낭비
+### 9순위 — 부동산 리포트 Validator/Retry 패턴 개선
+- **문제:** ReportValidator score 항상 15/100 → SynthesizerAgent 매번 2회 호출 → 토큰 ~50% 낭비
 - **원인 분석:**
   - Budget compliance 0/40: LLM이 화이트리스트 무시하고 예산 초과 단지 추천
   - Scorecard 0/25: 추천 단지 1개 (최소 3개 필요)
