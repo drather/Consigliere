@@ -80,8 +80,8 @@ class CollectorFactory:
 
         새 커뮤니티 소스 추가:
           1. collectors/<new>.py 구현
-          2. 여기에 키-값 한 줄 추가
-          3. service.py의 _REDDIT_SOURCES / _MASTODON_SOURCES / _KOREAN_SOURCES 중 해당 집합에 키 추가
+          2. config.yaml community_sources에 키 및 category 필드 추가
+          3. 여기에 키-값 한 줄 추가
         """
         cs = config.get("community_sources", {})
         reddit_cfg = cs.get("reddit", {})

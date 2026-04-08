@@ -47,3 +47,12 @@ class CareerConfig:
 
     def get_llm_provider(self) -> str:
         return self.get("llm_provider", "claude")
+
+    def get_community_source_categories(self) -> Dict[str, str]:
+        """source_key → category 매핑을 반환한다. config.yaml의 category 필드 기준."""
+        sources = self.get("community_sources", {})
+        return {
+            key: cfg["category"]
+            for key, cfg in sources.items()
+            if isinstance(cfg, dict) and "category" in cfg
+        }

@@ -1,6 +1,13 @@
 # Project Consigliere: History
 **Last Updated:** 2026-04-08
 
+## 2026-04-08: Career 커뮤니티 소스 분류 config화
+- **Refactor (career-community-source-config):** `_REDDIT_SOURCES` 등 frozenset 하드코딩 제거, config.yaml category 기반 동적 분류
+  - `config.yaml` community_sources 4개 소스에 `category` 필드 추가
+  - `config.py` `get_community_source_categories()` 신규 메서드
+  - `service.py` frozenset 3개 → `defaultdict` 동적 분류로 교체 (OCP 충족)
+  - 179 passed (신규 테스트 2개 포함)
+
 ## 2026-04-08: Finance LLM Pipeline 통합
 - **Refactor (finance-llm-pipeline):** `FinanceAgent`의 `LLMClient()` → `build_llm_pipeline()` 교체
   - `service.py` import 교체 1줄, `parser.md` frontmatter 추가 (task_type/cache_boundary/ttl)

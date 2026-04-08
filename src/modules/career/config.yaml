@@ -33,6 +33,7 @@ report:
 
 community_sources:
   reddit:
+    category: reddit
     subreddits:
       - cscareerquestions
       - ExperiencedDevs
@@ -47,6 +48,7 @@ community_sources:
     timeout: 20
     # 인증 불필요: Reddit 공개 JSON API (/r/{sub}/top.json) 사용
   mastodon:
+    category: mastodon
     instances:
       - "fosstodon.org"
       - "hachyderm.io"
@@ -62,9 +64,11 @@ community_sources:
     limit_per_hashtag: 10
     timeout: 15
   clien:
+    category: korean
     board_url: "https://www.clien.net/service/board/cm_app"   # 개발한당 (구 cm_programmers 삭제됨)
     limit: 20
   dcinside:
+    category: korean
     gallery_id: "programming"
     list_url: "https://gall.dcinside.com/board/lists/?id=programming"
     limit: 20

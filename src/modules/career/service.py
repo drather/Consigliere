@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+from collections import defaultdict
 from datetime import date, timedelta
 from typing import Dict, Any, List, Optional
 
@@ -39,11 +40,12 @@ from modules.career.presenter import CareerPresenter
 
 logger = get_logger(__name__)
 
-# 커뮤니티 소스 카테고리 매핑 — 새 소스 추가 시 여기에만 키를 추가한다
-# (factory.py에 Collector 추가 후 아래 집합 중 해당 카테고리에 키 포함)
-_REDDIT_SOURCES = frozenset({"reddit"})
-_MASTODON_SOURCES = frozenset({"mastodon"})
-_KOREAN_SOURCES = frozenset({"clien", "dcinside"})
+# 카테고리 → 모델 매핑 (새 카테고리 추가 시에만 변경, 소스 추가 시 무수정)
+_CATEGORY_MODEL = {
+    "reddit": "RedditPost",
+    "mastodon": "NitterTweet",
+    "korean": "KoreanPost",
+}
 
 
 class CareerAgent:
@@ -202,18 +204,24 @@ class CareerAgent:
         stories = [HNStory(**s) for s in trend_data.get("stories", [])]
         articles = [DevToArticle(**a) for a in trend_data.get("articles", [])]
 
-        reddit_posts = [
-            RedditPost(**p)
-            for key in _REDDIT_SOURCES for p in community_data.get(key, [])
-        ]
-        mastodon_posts = [
-            NitterTweet(**t)
-            for key in _MASTODON_SOURCES for t in community_data.get(key, [])
-        ]
-        korean_posts = [
-            KoreanPost(**p)
-            for key in _KOREAN_SOURCES for p in community_data.get(key, [])
-        ]
+        source_categories = self.config.get_community_source_categories()
+        category_model_map = {
+            "reddit": RedditPost,
+            "mastodon": NitterTweet,
+            "korean": KoreanPost,
+        }
+        grouped: Dict[str, list] = defaultdict(list)
+        for source_key, posts_data in community_data.items():
+            if source_key == "collection_status" or not isinstance(posts_data, list):
+                continue
+            cat = source_categories.get(source_key)
+            model_cls = category_model_map.get(cat) if cat else None
+            if model_cls:
+                grouped[cat].extend(model_cls(**p) for p in posts_data)
+
+        reddit_posts = grouped["reddit"]
+        mastodon_posts = grouped["mastodon"]
+        korean_posts = grouped["korean"]
         collection_status = community_data.get("collection_status", {})
 
         gap_history = self.tracker.load_recent(

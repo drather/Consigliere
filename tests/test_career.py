@@ -310,6 +310,19 @@ class TestCareerConfig:
         assert config.get_hn_min_score() == 50
         assert "backend" in config.get_devto_tags()
 
+    def test_get_community_source_categories_returns_mapping(self):
+        config = CareerConfig(config_path="src/modules/career/config.yaml")
+        categories = config.get_community_source_categories()
+        assert categories["reddit"] == "reddit"
+        assert categories["mastodon"] == "mastodon"
+        assert categories["clien"] == "korean"
+        assert categories["dcinside"] == "korean"
+
+    def test_get_community_source_categories_empty_on_missing_file(self):
+        config = CareerConfig(config_path="nonexistent.yaml")
+        categories = config.get_community_source_categories()
+        assert categories == {}
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Collectors (단위 테스트 — 네트워크 없이 파싱 로직만 검증)
