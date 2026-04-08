@@ -10,7 +10,7 @@ from core.prompt_loader import PromptLoader
 from .models import Transaction, LedgerSummary
 from .repository import LedgerRepository
 from .markdown_ledger import MarkdownLedgerRepository
-from core.llm import LLMClient
+from core.llm_pipeline import build_llm_pipeline
 
 class FinanceAgent:
     def __init__(self, storage_mode: str = "local"):
@@ -24,8 +24,8 @@ class FinanceAgent:
         # Repository Dependency
         self.repository: LedgerRepository = MarkdownLedgerRepository(self.storage)
 
-        # Initialize LLM Client
-        self.llm = LLMClient()
+        # Initialize LLM Pipeline (SemanticCache, TokenLog, ModelRouting 포함)
+        self.llm = build_llm_pipeline()
 
     def get_monthly_ledger_df(self, year: int, month: int) -> pd.DataFrame:
         """

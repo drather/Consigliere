@@ -1,6 +1,12 @@
 # Project Consigliere: History
 **Last Updated:** 2026-04-08
 
+## 2026-04-08: Finance LLM Pipeline 통합
+- **Refactor (finance-llm-pipeline):** `FinanceAgent`의 `LLMClient()` → `build_llm_pipeline()` 교체
+  - `service.py` import 교체 1줄, `parser.md` frontmatter 추가 (task_type/cache_boundary/ttl)
+  - SemanticCache, TokenLog, ModelRouting(extraction→haiku) 혜택 적용
+  - 178 passed, pre-existing 1개 실패 무변화
+
 ## 2026-04-08: BaseAnalyzer use_cache 분기 정리
 - **Cleanup (baseanalyzer-use-cache-cleanup):** `_call_llm(use_cache)` dead code 제거, PromptCacheFilter 단일 경로로 통합
   - `base.py` use_cache 파라미터 및 if 분기 제거 (9줄 → 5줄)

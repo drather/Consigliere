@@ -1,7 +1,8 @@
 ---
 description: "Parse unstructured finance text into structured transaction data"
-model: "gemini-2.5-flash"
-input_variables: ["input_text", "today"]
+task_type: extraction
+cache_boundary: "# Input"
+ttl: 3600
 ---
 # Context
 You are Consigliere, a finance assistant.
