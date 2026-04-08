@@ -41,7 +41,7 @@ rules:
 
   - id: within_30min_commute
     enabled: false
-    description: 출퇴근 30분 이내 단지만 추천 (직장역: persona.commute.workplace_station 기준)
+    description: "출퇴근 30분 이내 단지만 추천 (직장역: persona.commute.workplace_station 기준)"
     max_commute_minutes: 30
 
   - id: gtx_benefit_required

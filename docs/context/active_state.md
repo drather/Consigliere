@@ -1,10 +1,10 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-06
-**Current Active Feature:** `career-solid-refactor` (Planning 완료, 구현 대기)
+**Last Updated:** 2026-04-07
+**Current Active Feature:** 대기 중 (다음: `career-solid-refactor` 구현 또는 `n8n-error-report`)
 
 ## 현재 포커스
-- **Branch:** `feature/career-solid-refactor` → master 머지 완료
-- **Status:** 📋 Spec/Progress 문서 작성 완료, 구현 미착수
+- **Branch:** `master`
+- **Status:** ✅ 8순위(부동산 파이프라인 재설계) 완료. 다음 작업 대기 중.
 
 ## 최근 컨텍스트
 - **completed:** LLM Filter Chain (Filter Chain 패턴으로 LLM 최적화 관심사 분리)
@@ -67,19 +67,10 @@
 - **문제:** `run-pipeline` 등 장시간 요청 시 대시보드 UI 블로킹
 - **개선:** FastAPI Background Task + 상태 polling 엔드포인트 → 진행상황 실시간 표시
 
-### 7순위 — BaseAnalyzer use_cache 분기 정리
-- `_call_llm(use_cache=True)` 경로 제거, PromptCacheFilter 단일 경로로 통합
-
-### 8순위 — 부동산 리포트 Validator/Retry 패턴 개선
-- **문제:** ReportValidator score 항상 15/100 → SynthesizerAgent 매번 2회 호출 → 토큰 ~50% 낭비
-- **원인 분석:**
-  - Budget compliance 0/40: LLM이 화이트리스트 무시하고 예산 초과 단지 추천
-  - Scorecard 0/25: 추천 단지 1개 (최소 3개 필요)
-  - commute_minutes 미인용 0/20, policy_facts 미인용 0/15
-- **선택지:**
-  - A (빠른): retry 제거 → 1회 실행, validator는 경고 전용으로 강등
-  - B (근본): Synthesizer 프롬프트 개선으로 score ≥ 75 달성 → retry 자연 소멸
-  - C (원복): ContextAnalyst + Synthesizer 2-call만 유지, validator 완전 제거
+### ~~7순위 — BaseAnalyzer use_cache 분기 정리~~ ✅ 완료 (2026-04-08)
+### ~~8순위 — 부동산 리포트 파이프라인 재설계~~ ✅ 완료 (2026-04-08)
+- LLM→Python 역할 분리, Zero Hardcoding, Validator/Retry 제거
+- CandidateFilter + ScoringEngine + 2 LLM 프롬프트
 
 ## 완료 작업 이력 (최근)
 - [x] **Feature: LLM Filter Chain** (2026-04-02)
