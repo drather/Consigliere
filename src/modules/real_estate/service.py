@@ -302,26 +302,31 @@ class RealEstateAgent:
     def generate_report(self, district_code: Optional[str] = None, target_date: Optional[date] = None) -> Dict[str, Any]:
         """Job 4: Generate insight report using stored data (macro from file, txs from ChromaDB).
 
-        district_code=None → persona.interest_areas 기반 4개 구 동시 수집
+        district_code=None → persona.interest_areas 기반 구 동시 수집
         district_code 지정 → 해당 구만 수집
         """
         if target_date is None:
             target_date = date.today()
         logger.info(f"[Job4] Generating report for {target_date}, district_code={district_code}")
 
-        # Load macro: prefer stored file, fallback to real-time
-        macro_dict = self._load_stored_macro(target_date) or self.macro_service.fetch_latest_macro_data().model_dump()
-        # Phase 3: Load Job2 news summary
-        news_summary = self._load_stored_news(target_date)
+        # Load news summary (Job2 결과)
+        news_text = self._load_stored_news(target_date)
 
         # Load persona + policy context
         persona_data = self._load_persona()
+        from core.policy_fetcher import fetch_latest_financial_policies
+        policy_context = fetch_latest_financial_policies()
+
+        # 예산 계산
+        budget_plan = self.calculator.calculate_budget(persona_data, policy_context)
+        budget_ceiling = budget_plan.final_max_price
 
         # Resolve target districts
         target_codes = self._resolve_interest_districts(persona_data, district_code)
-        logger.info(f"[Job4] Collecting from districts: {target_codes}")
+        logger.info(f"[Job4] districts: {target_codes}")
 
-        # Load transactions from ChromaDB across all target districts
+        # Load transactions from ChromaDB
+        recent_days = self.config.get("report", {}).get("recent_days", 7)
         all_txs: List[Dict[str, Any]] = []
         for code in target_codes:
             try:
@@ -331,8 +336,8 @@ class RealEstateAgent:
             except Exception as e:
                 logger.error(f"[Job4] ChromaDB query failed for {code}: {e}")
 
-        # Dedup by composite key
-        seen_keys = set()
+        # Dedup
+        seen_keys: set = set()
         deduped_txs = []
         for tx in all_txs:
             key = f"{tx.get('apt_name')}_{tx.get('exclusive_area')}_{tx.get('deal_date')}_{tx.get('floor')}"
@@ -340,53 +345,32 @@ class RealEstateAgent:
                 seen_keys.add(key)
                 deduped_txs.append(tx)
 
-        daily_txs = [t for t in deduped_txs if str(t.get("deal_date", "")) == target_date.isoformat()][:20]
-        if not daily_txs:
-            daily_txs = deduped_txs[:20]
+        # 예산 이하 필터 (코드 레벨)
+        candidates = [tx for tx in deduped_txs if tx.get("price", 0) <= budget_ceiling]
+        logger.info(f"[Job4] 예산({budget_ceiling/1e8:.1f}억) 이하 후보: {len(candidates)}건")
 
-        # Enrich with area intel
+        # area_intel enrich (일괄, per-apt ChromaDB 호출 없음)
         area_intel = self._load_area_intel()
-        daily_txs = self._enrich_transactions(daily_txs, area_intel)
+        workplace_station = persona_data.get("commute", {}).get("workplace_station", "")
+        candidates = self._enrich_transactions(candidates, area_intel, workplace_station)
 
-        from core.policy_fetcher import fetch_latest_financial_policies
-        policy_context = fetch_latest_financial_policies()
-        try:
-            area = persona_data.get("user", {}).get("interest_areas", ["수도권"])[0]
-            policy_facts = self.repository.search_policy(query=f"{area} 부동산 정책 공급 개발", n_results=3)
-        except Exception as e:
-            logger.warning(f"[Job4] Policy RAG search failed: {e}")
-            policy_facts = []
-        budget_plan = self.calculator.calculate_budget(persona_data, policy_context)
-
-        # Phase 1: 예산 이하 단지만 LLM에 전달 (구조적 강제)
-        budget_ceiling = budget_plan.final_max_price
-        pre_filter_count = len(daily_txs)
-        daily_txs = [tx for tx in daily_txs if tx.get("price", 0) <= budget_ceiling]
-        filtered_tx_count = pre_filter_count - len(daily_txs)
-        if filtered_tx_count > 0:
-            logger.info(f"[Job4] Budget filter: {filtered_tx_count}건 제거 (한도: {budget_ceiling/1e8:.1f}억, 잔여: {len(daily_txs)}건)")
-
-        # 예산 내 단지명 화이트리스트 (Synthesizer에 전달해 범위 외 추천 방지)
-        budget_complex_names = sorted({tx.get("apt_name", "") for tx in daily_txs if tx.get("apt_name")})
-        logger.info(f"[Job4] 화이트리스트 단지 {len(budget_complex_names)}개: {budget_complex_names}")
-
+        # 오케스트레이터에 위임
+        preference_rules = PreferenceRulesManager().get()
+        interest_areas = persona_data.get("user", {}).get("interest_areas", [])
         report_json = self.insight_orchestrator.generate_strategy(
             target_date=target_date,
-            macro_dict=macro_dict,
-            policy_context=policy_context,
-            daily_txs=daily_txs,
-            persona_data=persona_data.get("user", {}),
-            policy_facts=policy_facts,
-            budget_dict=budget_plan.model_dump(),
-            filtered_tx_count=filtered_tx_count,
-            news_summary=news_summary,
-            fallback_note=f"({target_date} 저장 데이터 기준, {len(target_codes)}개 구)",
-            budget_complex_names=budget_complex_names,
+            candidates=candidates,
+            budget_plan=budget_plan,
+            persona_data=persona_data,
+            preference_rules=preference_rules,
+            scoring_config=self.config.get("scoring", {}),
+            report_config=self.config.get("report", {}),
+            news_text=news_text,
+            interest_areas=interest_areas,
         )
 
-        score = report_json.get("_score", 0)
-        self._save_report(report_json, target_date, len(daily_txs))
-        return {"success": True, "score": score, "tx_count": len(daily_txs), "date": target_date.isoformat()}
+        self._save_report(report_json, target_date, len(candidates))
+        return {"success": True, "tx_count": len(candidates), "date": target_date.isoformat()}
 
     def _job1_done_flag(self, target_date: date) -> str:
         """Job1 완료 마커 파일 경로."""
@@ -531,7 +515,7 @@ class RealEstateAgent:
         if not dongs:
             return {}
 
-        commutes = [d["commute_minutes_to_samsung"] for d in dongs if d.get("commute_minutes_to_samsung")]
+        commutes = [d["commute_minutes"] for d in dongs if d.get("commute_minutes")]
         avg_commute = int(sum(commutes) / len(commutes)) if commutes else dist_intel.get("default_commute_minutes", 99)
 
         seen, all_stations = set(), []
@@ -544,82 +528,83 @@ class RealEstateAgent:
         school_notes = [d.get("school_zone_notes", "") for d in dongs if d.get("school_zone_notes")]
 
         return {
-            "commute_minutes_to_samsung": avg_commute,
+            "commute_minutes": avg_commute,
             "nearest_stations": all_stations[:4],
             "school_zone_notes": school_notes[0] if school_notes else f"{dist_intel.get('name', '')} 구 평균 데이터",
             "elementary_schools": [],
             "_is_district_average": True,
         }
 
-    def _enrich_transactions(self, txs: List[Dict[str, Any]], area_intel: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """각 거래 dict에 commute_minutes, nearest_stations, school_zone, reconstruction 정보 부착.
+    def _enrich_transactions(
+        self,
+        txs: List[Dict[str, Any]],
+        area_intel: Dict[str, Any],
+        workplace_station: str = "",
+    ) -> List[Dict[str, Any]]:
+        """각 거래 dict에 commute_minutes, nearest_stations, school_zone, reconstruction 정보를 부착한다.
 
-        매칭 우선순위: apt_name → notable_complexes 포함 여부 → 구 동 평균 → ChromaDB policy 검색
+        - area_intel.json에서 일괄 조회 (per-apt ChromaDB 호출 없음)
+        - 필드명: commute_minutes (목적지는 area_intel.reference_workplace 기준)
+        - 매칭: apt_name → notable_complexes → 구 평균 fallback
         """
         if not area_intel:
             return txs
 
         districts_intel = area_intel.get("districts", {})
         apt_overrides = area_intel.get("apartment_overrides", {})
+        reference_workplace = area_intel.get("reference_workplace", "")
+
+        # 직장역이 reference_workplace와 다를 경우 경고
+        if workplace_station and reference_workplace and workplace_station != reference_workplace:
+            logger.warning(
+                f"[Job4] persona 직장역({workplace_station})과 area_intel 기준역({reference_workplace})이 다름 "
+                f"— 출퇴근 시간은 {reference_workplace} 기준으로 표시됩니다."
+            )
 
         enriched = []
         for tx in txs:
             tx = dict(tx)
             apt_name = tx.get("apt_name", "")
             district_code = str(tx.get("district_code", ""))
-            has_reconstruction = False
 
-            # 재건축 정보: apartment_overrides에서 exact match
+            # 재건축 정보: apartment_overrides (area_intel.json 기반, ChromaDB 호출 없음)
             for override_key, override_val in apt_overrides.items():
                 if override_key in apt_name or apt_name in override_key:
                     tx["reconstruction_status"] = override_val.get("reconstruction_status", "")
                     tx["reconstruction_potential"] = override_val.get("reconstruction_potential", "UNKNOWN")
                     tx["gtx_benefit"] = override_val.get("gtx_benefit", False)
-                    has_reconstruction = True
+                    tx["apt_notes"] = override_val.get("notes", "")
                     break
 
-            # 재건축 정보가 없는 단지 → ChromaDB policy 검색으로 보완
-            if not has_reconstruction and apt_name:
-                try:
-                    policy_hits = self.repository.search_policy(
-                        query=f"{apt_name} 재건축 리모델링 GTX", n_results=1
-                    )
-                    if policy_hits:
-                        content = policy_hits[0].get("content", "")
-                        if apt_name in content or any(w in content for w in ["재건축", "리모델링", "GTX"]):
-                            tx["reconstruction_status"] = content[:120]
-                            tx["reconstruction_potential"] = "MEDIUM"
-                            tx["gtx_benefit"] = "GTX" in content
-                except Exception as e:
-                    logger.debug(f"[Job4] ChromaDB policy search for '{apt_name}' failed: {e}")
-
-            # 역세권/출퇴근/학군: district → dong 순서로 매칭
+            # 역세권/출퇴근/학군: district → dong 매칭
             dist_intel = districts_intel.get(district_code, {})
+            tx["district_name"] = dist_intel.get("name", "")
+
             if not dist_intel:
                 enriched.append(tx)
                 continue
 
+            # dong 매칭: notable_complexes 기준
             matched_dong = None
-            for dong_name, dong_data in dist_intel.get("dongs", {}).items():
+            for dong_data in dist_intel.get("dongs", {}).values():
                 notable = dong_data.get("notable_complexes", [])
                 if any(nc in apt_name or apt_name in nc for nc in notable):
                     matched_dong = dong_data
                     break
 
-            # Phase 2 fallback: 구 내 동 평균값 (기존 첫 번째 dong 대신)
+            # fallback: 구 평균
             if not matched_dong:
                 matched_dong = self._compute_district_average(dist_intel)
-                if matched_dong:
-                    logger.debug(f"[Job4] '{apt_name}': dong 미매칭 → 구 평균 fallback 적용")
 
             if matched_dong:
-                tx["commute_minutes_to_samsung"] = matched_dong.get("commute_minutes_to_samsung",
-                                                                     dist_intel.get("default_commute_minutes", 99))
+                tx["commute_minutes"] = matched_dong.get(
+                    "commute_minutes", dist_intel.get("default_commute_minutes", 99)
+                )
                 tx["nearest_stations"] = matched_dong.get("nearest_stations", [])
                 tx["school_zone_notes"] = matched_dong.get("school_zone_notes", "")
                 tx["elementary_schools"] = matched_dong.get("elementary_schools", [])
             else:
-                tx["commute_minutes_to_samsung"] = dist_intel.get("default_commute_minutes", 99)
+                tx["commute_minutes"] = dist_intel.get("default_commute_minutes", 99)
 
             enriched.append(tx)
 

@@ -1,6 +1,15 @@
 # Project Consigliere: History
 **Last Updated:** 2026-04-08
 
+## 2026-04-08: 부동산 인사이트 리포트 파이프라인 재설계
+- **Refactor (real-estate-insight-redesign):** LLM→Python 역할 분리, Zero Hardcoding 완성
+  - CandidateFilter: preference_rules를 Python 코드로 실행 (LLM 프롬프트 전달 방식 폐지)
+  - ScoringEngine: 5개 기준 가중치 점수 Python 수식으로 계산
+  - InsightOrchestrator: 전면 재작성 (LLM 최대 2회, Validator/Retry 제거)
+  - commute_minutes_to_samsung → commute_minutes + reference_workplace
+  - config.yaml scoring/report 섹션 추가 (임계값 전부 config화)
+  - 신규 테스트 20개, 207 passed
+
 ## 2026-04-08: Career 커뮤니티 소스 분류 config화
 - **Refactor (career-community-source-config):** `_REDDIT_SOURCES` 등 frozenset 하드코딩 제거, config.yaml category 기반 동적 분류
   - `config.yaml` community_sources 4개 소스에 `category` 필드 추가

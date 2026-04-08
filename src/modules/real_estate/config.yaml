@@ -12,6 +12,25 @@ financial_defaults:
   interest_rate: 0.045
   loan_term_years: 30
 
+report:
+  recent_days: 7          # 후보 조회 기간 (일)
+  top_n: 10               # 최종 추천 상위 N개
+
+scoring:
+  commute_thresholds: [20, 35]      # 분 기준: HIGH(≤20), MEDIUM(≤35), LOW(>35)
+  household_thresholds: [300, 500]  # 세대수 기준: HIGH(≥500), MEDIUM(≥300), LOW(<300)
+  school_keywords:                  # 학군 HIGH 판정 키워드
+    - "학원가"
+    - "명문"
+    - "특목고"
+    - "자사고"
+  reconstruction_score_map:         # 재건축 잠재력 → 점수
+    HIGH: 100
+    MEDIUM: 60
+    LOW: 20
+    COMPLETED: 50
+    UNKNOWN: 10
+
 districts:
   # ── 서울특별시 (25개 구) ──────────────────────
   - code: "11110"

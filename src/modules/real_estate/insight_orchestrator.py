@@ -1,187 +1,171 @@
+"""
+InsightOrchestrator — 부동산 인사이트 리포트 파이프라인 오케스트레이터
+
+흐름:
+  1. Python: 예산 필터 → preference_rules 필터 → area_intel enrich
+  2. LLM #1 (경량): 뉴스 → 호재 JSON (HoreaAnalyst)
+  3. Python: 5개 기준 가중치 점수 계산 → 상위 N개 선정
+  4. LLM #2 (단일): scored 결과 → 리포트 서술 (ReportSynthesizer)
+
+모든 임계값·기준·목적지는 config/persona에서 읽는다. Zero Hardcoding.
+"""
+import json
 import os
-import yaml
 from datetime import date
-from typing import Dict, Any, List, Optional
-from core.logger import get_logger
-from core.llm import LLMClient, BaseLLMClient
+from typing import Any, Dict, List, Optional
+
+from core.llm import BaseLLMClient
 from core.prompt_loader import PromptLoader
-from .agents.specialized import ContextAnalystAgent, ReportValidator, SynthesizerAgent
+from core.logger import get_logger
+from .candidate_filter import CandidateFilter
+from .scoring import ScoringEngine
 from .presenter import RealEstatePresenter
-from .prompt_optimizer import PromptTokenOptimizer as PTO
 
 logger = get_logger(__name__)
 
-_RULES_FILE = os.path.join(os.path.dirname(__file__), "preference_rules.yaml")
+_억 = 100_000_000
 
-
-def _load_preference_rules() -> str:
-    """preference_rules.yaml에서 enabled=True 규칙만 읽어 프롬프트용 문자열로 반환."""
-    try:
-        with open(_RULES_FILE, encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        enabled = [r for r in data.get("rules", []) if r.get("enabled", False)]
-        if not enabled:
-            return ""
-        lines = ["아래 조건을 모두 충족하는 단지만 추천하십시오 (위반 시 즉시 기각):"]
-        for r in enabled:
-            lines.append(f"- [{r['id']}] {r['constraint'].strip()}")
-        return "\n".join(lines)
-    except Exception as e:
-        logger.warning(f"⚠️ [Orchestrator] preference_rules.yaml 로드 실패: {e}")
-        return ""
-
-# tx_data에서 ContextAnalyst에 전달할 핵심 필드만 유지 (입력 토큰 절감)
-TX_SLIM_FIELDS = {
-    "apt_name", "deal_price", "exclusive_area", "deal_date", "floor",
-    "commute_minutes_to_samsung", "nearest_stations", "school_zone_notes",
-    "elementary_schools", "reconstruction_status", "reconstruction_potential", "gtx_benefit",
-}
-
-# Synthesizer에 전달할 persona 핵심 필드
-PERSONA_SLIM_KEYS = {"priority_weights", "investment_style", "commute", "apartment_preferences"}
 
 class InsightOrchestrator:
-    """
-    Orchestrates the multi-agent pipeline to generate validated real estate strategies.
-
-    Cost-optimized flow (3 LLM calls vs original 6):
-      1. ContextAnalystAgent  — macro + data analysis in a single call  (was 2 calls)
-      2. SynthesizerAgent     — generates Slack Block Kit report          (1 call)
-      3. CodeBasedValidator   — rule-based budget check, no LLM           (was 1-2 calls)
-    """
     def __init__(
         self,
         llm: BaseLLMClient,
         prompt_loader: PromptLoader,
-        context_analyst=None,
-        synthesizer=None,
-        validator=None,
-        presenter=None,
+        presenter: Optional[RealEstatePresenter] = None,
     ):
-        self.context_analyst = context_analyst or ContextAnalystAgent(llm, prompt_loader)
-        self.synthesizer = synthesizer or SynthesizerAgent(llm, prompt_loader)
-        self.validator = validator or ReportValidator()
+        self.llm = llm
+        self.prompt_loader = prompt_loader
         self.presenter = presenter or RealEstatePresenter()
+
+    # ── Public API ─────────────────────────────────────────────────────
 
     def generate_strategy(
         self,
         target_date: date,
-        macro_dict: Dict[str, Any],
-        policy_context: Dict[str, Any],
-        daily_txs: List[Dict[str, Any]],
+        candidates: List[Dict[str, Any]],
+        budget_plan: Any,
         persona_data: Dict[str, Any],
-        policy_facts: List[Dict[str, Any]],
-        budget_dict: Dict[str, Any],
-        filtered_tx_count: int = 0,
-        news_summary: str = "",
-        fallback_note: str = "",
-        budget_complex_names: Optional[List[str]] = None,
+        preference_rules: List[Dict[str, Any]],
+        scoring_config: Dict[str, Any],
+        report_config: Dict[str, Any],
+        news_text: str = "",
+        interest_areas: List[str] = None,
     ) -> Dict[str, Any]:
+        """
+        Args:
+            candidates: 예산 필터 + enrich 완료된 거래 목록
+            budget_plan: BudgetPlan 인스턴스
+            persona_data: persona.yaml user 섹션
+            preference_rules: preference_rules.yaml rules 목록
+            scoring_config: config.yaml scoring 섹션
+            report_config: config.yaml report 섹션
+            news_text: Job2 뉴스 텍스트 (없으면 빈 문자열)
+            interest_areas: 관심 지역 목록
+        """
+        interest_areas = interest_areas or []
+        top_n = report_config.get("top_n", 10)
 
-        # ── 입력 데이터 슬림화 (PromptTokenOptimizer 일괄 적용) ──────────────
-        slim_tx_data    = PTO.slim_list(daily_txs, TX_SLIM_FIELDS)
-        slim_policy_facts = [{"content": PTO.truncate(f.get("content", ""), 500)} for f in policy_facts[:3]]
-        slim_persona    = PTO.drop_empty({k: persona_data[k] for k in PERSONA_SLIM_KEYS if k in persona_data})
-        slim_budget     = PTO.slim_budget(budget_dict)
-        slim_policy_ctx = PTO.slim_policy_context(policy_context)
-        # interest_areas는 ContextAnalyst에 필요하므로 별도 유지
-        interest_areas  = persona_data.get("interest_areas", [])
+        # Step 1: preference_rules 필터 (Python 코드)
+        filtered = CandidateFilter(preference_rules).apply(candidates)
+        logger.info(f"[Orchestrator] preference_rules 필터 후: {len(filtered)}건")
 
-        # budget_complex_names: 예산 내 추천 가능 단지 화이트리스트
-        complex_names = budget_complex_names or []
+        if not filtered:
+            logger.warning("[Orchestrator] 필터 후 후보 없음 — 빈 리포트 반환")
+            return self._empty_report()
 
-        # 1. Preliminary Analysis (single combined LLM call)
-        logger.info("👨‍💼 [Orchestrator] Running combined context analysis...")
-        context_result = self.context_analyst.run({
-            "macro_data": macro_dict,
-            "policy_context": slim_policy_ctx,
-            "tx_data": slim_tx_data,
-            "interest_areas": interest_areas,
-            "news_summary": news_summary,
-        })
-        economist_insight = PTO.truncate(context_result["economist_insight"], 1500)
-        analyst_insight   = PTO.truncate(context_result["analyst_insight"],   2000)
+        # Step 2: LLM #1 — 뉴스 호재 분석 (경량)
+        horea_data = {}
+        if news_text.strip():
+            horea_data = self._analyze_horea(news_text, interest_areas)
+            logger.info(f"[Orchestrator] 호재 분석 완료: {list(horea_data.keys())}")
 
-        # 2. Synthesize + Validate loop (최대 3회 재시도)
-        budget_constraint_note = (
-            f"⚠️ 예산 필터 적용: {filtered_tx_count}건의 예산 초과 거래가 제거되었습니다. "
-            f"아래 리스트에 포함된 단지만 추천하십시오. 리스트 외 단지 추천은 즉시 기각됩니다."
-            if filtered_tx_count > 0
-            else ""
+        # Step 3: 점수 계산 (Python 수식)
+        priority_weights = persona_data.get("priority_weights", {})
+        engine = ScoringEngine(weights=priority_weights, config=scoring_config)
+        scored = engine.score_all(filtered, horea_data=horea_data)
+        top_candidates = scored[:top_n]
+        logger.info(f"[Orchestrator] 상위 {len(top_candidates)}개 선정 (전체 {len(scored)}개 중)")
+
+        # Step 4: LLM #2 — 리포트 서술 (단일 호출)
+        report_json = self._synthesize_report(
+            target_date=target_date,
+            top_candidates=top_candidates,
+            budget_plan=budget_plan,
+            persona_data=persona_data,
+            top_n=top_n,
+        )
+        return report_json
+
+    # ── LLM #1: 호재 분석 ─────────────────────────────────────────────
+
+    def _analyze_horea(self, news_text: str, interest_areas: List[str]) -> Dict[str, Any]:
+        """뉴스 텍스트 → 지역별 호재 JSON. 실패 시 빈 dict 반환."""
+        try:
+            _, prompt = self.prompt_loader.load(
+                "horea_analyst",
+                variables={
+                    "interest_areas": json.dumps(interest_areas, ensure_ascii=False),
+                    "news_text": news_text[:1500],
+                },
+            )
+            result = self.llm.generate_json(prompt)
+            return result if isinstance(result, dict) else {}
+        except Exception as e:
+            logger.warning(f"[Orchestrator] 호재 분석 실패 (무시): {e}")
+            return {}
+
+    # ── LLM #2: 리포트 서술 ───────────────────────────────────────────
+
+    def _synthesize_report(
+        self,
+        target_date: date,
+        top_candidates: List[Dict],
+        budget_plan: Any,
+        persona_data: Dict,
+        top_n: int,
+    ) -> Dict[str, Any]:
+        """scored 상위 목록 → Slack Block Kit JSON 리포트."""
+        pw = persona_data.get("priority_weights", {})
+        total_w = sum(pw.values()) or 1
+        label_map = {
+            "commute": "출퇴근편의성",
+            "liquidity": "환금성",
+            "price_potential": "가격상승가능성",
+            "living_convenience": "생활편의",
+            "school": "학군",
+        }
+        ranked = sorted(pw.items(), key=lambda x: x[1], reverse=True)
+        priority_desc = ", ".join(
+            f"{label_map.get(k, k)} {round(v/total_w*100)}%"
+            for k, v in ranked
         )
 
-        # priority_weights → 리포트 분석 강조 지침 생성
-        pw = persona_data.get("priority_weights", {})
-        if pw:
-            total = sum(pw.values()) or 1
-            label_map = {
-                "commute": "출퇴근 편의성",
-                "liquidity": "환금성(역세권)",
-                "school": "학군",
-                "living_convenience": "생활편의",
-                "price_potential": "가격상승 가능성",
-            }
-            ranked = sorted(pw.items(), key=lambda x: x[1], reverse=True)
-            weights_desc = ", ".join(
-                f"{label_map.get(k, k)} {round(v/total*100)}%"
-                for k, v in ranked
+        try:
+            metadata, prompt = self.prompt_loader.load(
+                "report_synthesizer",
+                variables={
+                    "target_date": target_date.strftime("%Y-%m-%d"),
+                    "budget_reasoning": getattr(budget_plan, "reasoning", ""),
+                    "priority_weights_desc": priority_desc,
+                    "top_n": top_n,
+                    "ranked_candidates": json.dumps(
+                        top_candidates, ensure_ascii=False, default=str
+                    ),
+                },
             )
-            priority_note = (
-                f"사용자의 선호 기준 가중치 (높을수록 중요): {weights_desc}. "
-                f"각 추천 단지마다 이 기준 순서대로 분석 섹션을 구성하고, "
-                f"가중치가 높은 항목을 더 상세히 서술하십시오."
-            )
-        else:
-            priority_note = ""
+            result = self.llm.generate_json(prompt, metadata=metadata)
+            if "blocks" in result:
+                return result
+            logger.warning("[Orchestrator] Synthesizer 응답에 blocks 없음")
+        except Exception as e:
+            logger.error(f"[Orchestrator] 리포트 생성 실패: {e}")
 
-        base_variables = {
-            "target_date": target_date.strftime("%Y-%m-%d"),
-            "economist_insight": economist_insight,
-            "analyst_insight": analyst_insight,
-            "persona_data": PTO.compact_json(slim_persona),
-            "policy_context": PTO.compact_json(slim_policy_ctx),
-            "policy_facts": PTO.compact_json(slim_policy_facts),
-            "budget_plan": PTO.compact_json(slim_budget),
-            "budget_constraint_note": budget_constraint_note,
-            "priority_note": priority_note,
-            "news_summary": news_summary,
-            "fallback_note": fallback_note,
-            "validator_feedback": "",
-            "budget_filtered_complexes": PTO.compact_json(complex_names),
-            "user_preference_rules": _load_preference_rules(),
+        return self._empty_report()
+
+    def _empty_report(self) -> Dict[str, Any]:
+        return {
+            "blocks": [{
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "⚠️ 조건에 맞는 추천 단지가 없습니다."},
+            }]
         }
-        report_json = {}
-        score = 0
-        feedback = ""
-        for attempt in range(1, 3):  # 최대 2회 시도 (토큰 절감)
-            logger.info(f"🧠 [Orchestrator] Synthesizing report (attempt {attempt}/3)...")
-            report_json = self.synthesizer.run(base_variables)
-            if "blocks" not in report_json:
-                logger.warning(f"⚠️ [Orchestrator] Invalid structure on attempt {attempt}: {str(report_json)[:200]}")
-                continue
-
-            validation_result = self.validator.run({
-                "budget_plan": budget_dict,
-                "generated_report": report_json,
-                "policy_facts": slim_policy_facts,
-                "available_complex_count": len(complex_names),
-            })
-            score = validation_result.get("score", 0)
-            feedback = validation_result.get("feedback", "")
-
-            if score >= 75:
-                logger.info(f"✅ [Orchestrator] Validated (Score: {score}) on attempt {attempt}.")
-                break
-
-            logger.warning(f"⚠️ [Orchestrator] Score {score} < 75 on attempt {attempt}, retrying with feedback: {feedback}")
-            base_variables["validator_feedback"] = feedback
-
-        if "blocks" not in report_json:
-            logger.error("❌ [Orchestrator] Synthesizer failed after 2 attempts.")
-            return {"blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ 리포트 생성 중 오류가 발생했습니다."}}]}
-
-        # 4. Final Polish
-        report_json = self.presenter.inject_validation_warning(report_json, score)
-        report_json = self.presenter.beautify_citations(report_json, policy_facts)
-        report_json["_score"] = score
-        return report_json
