@@ -1,6 +1,13 @@
 # Project Consigliere: History
 **Last Updated:** 2026-04-08
 
+## 2026-04-08: 부동산 인사이트 리포트 E2E 검증 및 버그픽스
+- **BugFix (real-estate-insight-redesign):** E2E 파이프라인 검증 중 2건 버그 발견·수정
+  - `generate_insight_report()`: 구버전 orchestrator 파라미터(`macro_dict` 등) → `generate_report()` 위임으로 교체
+  - `_handle_min_household_count`: `household_count` 미존재 시 전 후보 탈락 → 데이터 없으면 통과
+  - 수도권 71개 지구 E2E 파이프라인 완전 동작 확인 (1,536건 수집, Slack 전송)
+  - 20 passed (CandidateFilter 7 + ScoringEngine 13)
+
 ## 2026-04-08: 부동산 인사이트 리포트 파이프라인 재설계
 - **Refactor (real-estate-insight-redesign):** LLM→Python 역할 분리, Zero Hardcoding 완성
   - CandidateFilter: preference_rules를 Python 코드로 실행 (LLM 프롬프트 전달 방식 폐지)

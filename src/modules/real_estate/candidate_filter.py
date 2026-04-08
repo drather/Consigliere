@@ -27,9 +27,13 @@ def _handle_min_exclusive_area(candidates: List[Dict], rule: Dict) -> List[Dict]
 
 
 def _handle_min_household_count(candidates: List[Dict], rule: Dict) -> List[Dict]:
-    """세대수 min_households 이상만 통과."""
+    """세대수 min_households 이상만 통과. household_count가 없으면 통과시킨다 (데이터 미확인)."""
     threshold = rule.get("min_households", 500)
-    return [c for c in candidates if c.get("household_count", 0) >= threshold]
+    return [
+        c for c in candidates
+        if c.get("household_count") is None or c.get("household_count", 0) == 0
+        or c.get("household_count", 0) >= threshold
+    ]
 
 
 def _handle_within_commute(candidates: List[Dict], rule: Dict) -> List[Dict]:

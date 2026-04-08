@@ -75,61 +75,26 @@ class RealEstateAgent:
         dedup_txs = sorted([(v[0], len(v)) for v in grouped_txs.values()], key=lambda x: x[0].price, reverse=True)
         return self.presenter.format_daily_summary(target_date, dedup_txs)
 
-    def generate_insight_report(self, district_code: str = "11680", target_date: date = None) -> List[Dict[str, Any]]:
+    def generate_insight_report(self, district_code: str = None, target_date: date = None) -> List[Dict[str, Any]]:
         """
-        Orchestrates multi-source data gathering and triggers the Multi-Agent Strategy loop.
+        Live insight report: fetches transactions directly and delegates to generate_report().
         """
-        if target_date is None: target_date = date.today()
-        logger.info(f"📊 [RealEstateAgent] Generating report for {target_date}...")
+        if target_date is None:
+            target_date = date.today()
+        logger.info(f"📊 [RealEstateAgent] generate_insight_report → delegating to generate_report for {target_date}")
+        self.generate_report(district_code, target_date)
 
-        # 1. Gather Data
-        from .monitor.service import TransactionMonitorService
-        monitor_service = TransactionMonitorService()
-        target_ym = target_date.strftime("%Y%m")
-        
-        # Use districts from dynamic config
-        district_list = self.config.get("districts", [{"code": "11680", "name": "강남"}])
-        all_transactions = []
-        for d in district_list:
+        # Return saved report blocks
+        report_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "reports")
+        filename = os.path.join(report_dir, f"{target_date.isoformat()}_Report.json")
+        if os.path.exists(filename):
             try:
-                all_transactions.extend(monitor_service.get_daily_transactions(d["code"], target_ym))
+                with open(filename, "r", encoding="utf-8") as f:
+                    saved = json.load(f)
+                return saved.get("blocks", [])
             except Exception as e:
-                logger.error(f"⚠️ [RealEstateAgent] Data fetch failed for {d['code']}: {e}")
-
-        daily_txs = [tx.__dict__ for tx in all_transactions if tx.deal_date == target_date][:15]
-        if not daily_txs: daily_txs = [tx.__dict__ for tx in sorted(all_transactions, key=lambda x: x.deal_date, reverse=True)[:15]]
-        
-        # 2. External Contexts
-        persona_data = self._load_persona()
-        from core.policy_fetcher import fetch_latest_financial_policies
-        policy_context = fetch_latest_financial_policies()
-        macro_data = self.macro_service.fetch_latest_macro_data()
-        
-        # RAG for Policy Facts
-        try:
-            area = persona_data.get("user", {}).get("interest_areas", ["수도권"])[0]
-            policy_facts = self.repository.search_policy(query=f"{area} 부동산 정책 공급 개발", n_results=3)
-        except Exception as e:
-            logger.warning(f"[Job4] Policy RAG search failed: {e}")
-            policy_facts = []
-
-        # 3. Dynamic Budget
-        budget_plan = self.calculator.calculate_budget(persona_data, policy_context)
-
-        # 4. Agent Orchestration (Phase 3 Loop)
-        report_json = self.insight_orchestrator.generate_strategy(
-            target_date=target_date,
-            macro_dict=macro_data.model_dump(),
-            policy_context=policy_context,
-            daily_txs=daily_txs,
-            persona_data=persona_data.get("user", {}),
-            policy_facts=policy_facts,
-            budget_dict=budget_plan.model_dump(),
-            fallback_note=f"({target_date} 데이터 기준)"
-        )
-
-        self._save_report(report_json, target_date, len(daily_txs))
-        return report_json.get("blocks", [])
+                logger.error(f"[generate_insight_report] Failed to load saved report: {e}")
+        return []
 
     def _save_report(self, report_json: Dict[str, Any], target_date: date, tx_count: int) -> None:
         """생성된 리포트를 JSON 파일로 저장한다."""

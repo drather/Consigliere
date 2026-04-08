@@ -33,3 +33,20 @@
 ## 검증
 - 신규 테스트 20개 (CandidateFilter 7개 + ScoringEngine 13개)
 - 207 passed, 0 failed
+
+## 버그픽스 (2026-04-08 E2E 검증 중 발견)
+
+### BUG-1: generate_insight_report() 구버전 orchestrator 파라미터
+- **증상:** `GET /agent/real_estate/insight_report` → `InsightOrchestrator.generate_strategy() got an unexpected keyword argument 'macro_dict'`
+- **원인:** 리팩토링 후 `InsightOrchestrator.generate_strategy()` 시그니처가 변경됐으나, `service.py`의 `generate_insight_report()` 메서드가 구버전 파라미터(`macro_dict`, `daily_txs`, `policy_context` 등)로 호출하던 코드를 그대로 유지
+- **수정:** `generate_insight_report()` → `generate_report()`에 위임하도록 전면 교체 (중복 로직 제거, SRP 충족)
+
+### BUG-2: min_household_count 규칙이 household_count 미존재 데이터를 전부 탈락
+- **증상:** `⚠️ 조건에 맞는 추천 단지가 없습니다.` — 국토부 API가 세대수를 제공하지 않아 ChromaDB에 `household_count` 미저장
+- **원인:** `_handle_min_household_count`에서 `c.get("household_count", 0) >= 500` → 기본값 0이므로 전 후보 탈락
+- **수정:** `household_count`가 None 또는 0인 경우(=데이터 미확인) 통과시키도록 수정
+
+## E2E 파이프라인 검증 (2026-04-08)
+- 수도권 71개 지구 1,536건 수집 / 1,521건 저장
+- 예산 8.74억 이하 47건 → 59㎡ 필터 12건 → 상위 10개 LLM 서술
+- Slack 전송 완료 (`sent`)
