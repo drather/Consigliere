@@ -1,5 +1,11 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-06
+**Last Updated:** 2026-04-08
+
+## 2026-04-08: BaseAnalyzer use_cache 분기 정리
+- **Cleanup (baseanalyzer-use-cache-cleanup):** `_call_llm(use_cache)` dead code 제거, PromptCacheFilter 단일 경로로 통합
+  - `base.py` use_cache 파라미터 및 if 분기 제거 (9줄 → 5줄)
+  - `test_llm_harness.py` TestBaseAnalyzerUseCacheFlag 2개 케이스 제거
+  - 188 passed, pre-existing 1개 실패 무변화
 
 ## 2026-04-06: 시스템 전체 리뷰 및 개선 계획 수립
 - **Planning (career-solid-refactor):** Career SOLID 장기 개선 spec/progress 문서 작성 및 master 머지

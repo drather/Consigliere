@@ -59,22 +59,18 @@
     - 파일명: `error_{workflow_id}_{timestamp}.json` 형식
     - 관리자가 언제든 로그 디렉토리에서 이력 확인 가능
 
-### 5순위 — 부동산 ↔ 커리어 소득 연계 분석 (신규 기능)
-- **방향:** Career 스킬갭 개선 → 예상 연봉 상승 → 대출 가능액 재계산 → 진입 가능 단지 변화
-- **구현:** CareerAgent ↔ RealEstateAgent 간 소득 시나리오 연결 (통합 인사이트 API)
-
-### 6순위 — Career 스킬갭 트렌드 예측
+### 5순위 — Career 스킬갭 트렌드 예측
 - **방향:** 히스토리(`tracker.py`)를 활용한 gap_score 추이 분석 + 목표 달성 예상 시점 계산
 - **구현:** 주간 리포트에 "4주 추이 / 예상 달성 주차" 섹션 추가
 
-### 7순위 — Streamlit 파이프라인 실행 비동기화
+### 6순위 — Streamlit 파이프라인 실행 비동기화
 - **문제:** `run-pipeline` 등 장시간 요청 시 대시보드 UI 블로킹
 - **개선:** FastAPI Background Task + 상태 polling 엔드포인트 → 진행상황 실시간 표시
 
-### 8순위 — BaseAnalyzer use_cache 분기 정리
+### 7순위 — BaseAnalyzer use_cache 분기 정리
 - `_call_llm(use_cache=True)` 경로 제거, PromptCacheFilter 단일 경로로 통합
 
-### 9순위 — 부동산 리포트 Validator/Retry 패턴 개선
+### 8순위 — 부동산 리포트 Validator/Retry 패턴 개선
 - **문제:** ReportValidator score 항상 15/100 → SynthesizerAgent 매번 2회 호출 → 토큰 ~50% 낭비
 - **원인 분석:**
   - Budget compliance 0/40: LLM이 화이트리스트 무시하고 예산 초과 단지 추천

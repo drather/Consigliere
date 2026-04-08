@@ -640,51 +640,6 @@ class TestClaudeGenerateWithCache:
         assert len(content_blocks) == 1
 
 
-class TestBaseAnalyzerUseCacheFlag:
-    def test_use_cache_true_calls_generate_json_with_cache(self):
-        from modules.career.processors.base import BaseAnalyzer
-        from modules.career.models import JobAnalysis
-
-        class FakeAnalyzer(BaseAnalyzer):
-            def analyze(self, *args, **kwargs): ...
-
-        fake_llm = MagicMock()
-        fake_llm.generate_json_with_cache.return_value = {
-            "top_skills": [], "salary_range": {}, "hiring_signal": "neutral",
-            "top_companies": [], "analysis_summary": "", "analyzed_at": "2026-01-01"
-        }
-
-        fake_loader = MagicMock()
-        fake_loader.load_with_cache_split.return_value = ({}, "static", "dynamic")
-
-        analyzer = FakeAnalyzer(llm=fake_llm, prompt_loader=fake_loader)
-        result = analyzer._call_llm("some/prompt", {}, JobAnalysis, use_cache=True)
-
-        fake_llm.generate_json_with_cache.assert_called_once()
-        fake_llm.generate_json.assert_not_called()
-
-    def test_use_cache_false_calls_generate_json(self):
-        from modules.career.processors.base import BaseAnalyzer
-        from modules.career.models import JobAnalysis
-
-        class FakeAnalyzer(BaseAnalyzer):
-            def analyze(self, *args, **kwargs): ...
-
-        fake_llm = MagicMock()
-        fake_llm.generate_json.return_value = {
-            "top_skills": [], "salary_range": {}, "hiring_signal": "neutral",
-            "top_companies": [], "analysis_summary": "", "analyzed_at": "2026-01-01"
-        }
-
-        fake_loader = MagicMock()
-        fake_loader.load.return_value = ({}, "full prompt")
-
-        analyzer = FakeAnalyzer(llm=fake_llm, prompt_loader=fake_loader)
-        result = analyzer._call_llm("some/prompt", {}, JobAnalysis, use_cache=False)
-
-        fake_llm.generate_json.assert_called_once()
-        fake_llm.generate_json_with_cache.assert_not_called()
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. SEMANTIC / RESPONSE CACHE
