@@ -1,12 +1,16 @@
 # Project Consigliere: Active State
 **Last Updated:** 2026-04-09
-**Current Active Feature:** `apartment-master-db` — 아파트 마스터 DB 구축
+**Current Active Feature:** 다음 작업 선택 대기
 
 ## 현재 포커스
-- **Branch:** `feature/apartment-master-db`
-- **Status:** ✅ 완료 — Phase 4 (머지·Push 대기)
+- **Branch:** `master`
+- **Status:** ✅ 아파트 마스터 DB 구축 완료 — master 커밋 완료
 
 ## 최근 컨텍스트
+- **completed:** 아파트 마스터 DB 구축 — 실제 API 검증 + 수도권 9,269개 단지 수집 완료
+  - API URL 수정 (getTotalAptList3, AptBasisInfoServiceV4)
+  - 필드 매핑 수정 (hoCnt, kaptDongCnt, kaptUsedate)
+  - scripts/build_apartment_master.py (이어받기 지원)
 - **completed:** LLM Filter Chain (Filter Chain 패턴으로 LLM 최적화 관심사 분리)
   - src/core/llm_pipeline.py — LLMFilter ABC, LLMRequest/LLMResponse, LLMFilterChain, 4개 Filter, build_llm_pipeline()
   - ModelRoutingFilter: task_type 기반 모델 자동 선택 (extraction→haiku, analysis/synthesis→sonnet)
