@@ -1,10 +1,10 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-07
-**Current Active Feature:** 대기 중 (다음: `career-solid-refactor` 구현 또는 `n8n-error-report`)
+**Last Updated:** 2026-04-09
+**Current Active Feature:** `apartment-master-db` — 아파트 마스터 DB 구축
 
 ## 현재 포커스
-- **Branch:** `master`
-- **Status:** ✅ 8순위(부동산 파이프라인 재설계) 완료. 다음 작업 대기 중.
+- **Branch:** `feature/apartment-master-db`
+- **Status:** 🔄 Phase 1 (Spec 작성 중)
 
 ## 최근 컨텍스트
 - **completed:** LLM Filter Chain (Filter Chain 패턴으로 LLM 최적화 관심사 분리)
@@ -36,20 +36,28 @@
 
 ## 다음 작업 로드맵
 
-### 1순위 — Career SOLID 장기 개선
+### 1순위 — 부동산 아파트 마스터 정보 구축 (Data Enrichment)
+- **목표:** 실거래가 외에 아파트 단지의 물리적/법적 정보를 통합하여 분석 품질 고도화
+- **주요 데이터:** 용적률, 건폐율, 세대수, 준공일(사용승인일), 시공사 등
+- **데이터 소스:**
+  - 국토교통부 건축물대장 API (용적률, 건폐율, 면적)
+  - K-apt(공동주택관리정보시스템) API (세대수, 난방방식, 준공일)
+- **구현 계획:** `models.py` 확장, `MasterDataService` 신설, `area_intel.json` 자동화 연동
+
+### 2순위 — Career SOLID 장기 개선
 - Processor Protocol 정의 (ISP/DIP 강화)
 - CareerAgent 의존성 주입 패턴 적용
 - 상세: `docs/features/career_solid_refactor/spec.md`
 
-### 2순위 — Finance LLM Pipeline 통합 (빠른 개선)
+### 3순위 — Finance LLM Pipeline 통합 (빠른 개선)
 - **문제:** `finance/service.py`가 `LLMClient()` 직접 생성 → SemanticCache, TokenLog 혜택 없음
 - **개선:** `build_llm_pipeline()` 교체 (1시간 수정, 다른 모듈과 동일 패턴)
 
-### 3순위 — Career 커뮤니티 소스 분류 config화
+### 4순위 — Career 커뮤니티 소스 분류 config화
 - **문제:** `service.py`의 `_REDDIT_SOURCES`, `_KOREAN_SOURCES` 등이 하드코딩 → 새 소스 추가 시 service.py 수정 필요
 - **개선:** `config.yaml` 소스 정의에 `category` 필드 추가 → service.py 무수정 확장
 
-### 4순위 — n8n 워크플로우 실행 결과 피드백 루프
+### 5순위 — n8n 워크플로우 실행 결과 피드백 루프
 - **문제:** 워크플로우 실패 시 알림 없음, 실행 히스토리 미저장, 장애 원인 분석 불가
 - **개선 방향:**
   - n8n `GET /executions?workflowId=...` 폴링 또는 Error Workflow → Slack 실패 알림
@@ -59,11 +67,11 @@
     - 파일명: `error_{workflow_id}_{timestamp}.json` 형식
     - 관리자가 언제든 로그 디렉토리에서 이력 확인 가능
 
-### 5순위 — Career 스킬갭 트렌드 예측
+### 6순위 — Career 스킬갭 트렌드 예측
 - **방향:** 히스토리(`tracker.py`)를 활용한 gap_score 추이 분석 + 목표 달성 예상 시점 계산
 - **구현:** 주간 리포트에 "4주 추이 / 예상 달성 주차" 섹션 추가
 
-### 6순위 — Streamlit 파이프라인 실행 비동기화
+### 7순위 — Streamlit 파이프라인 실행 비동기화
 - **문제:** `run-pipeline` 등 장시간 요청 시 대시보드 UI 블로킹
 - **개선:** FastAPI Background Task + 상태 polling 엔드포인트 → 진행상황 실시간 표시
 
