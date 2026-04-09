@@ -1,6 +1,7 @@
 """
 ApartmentMasterService — 전수 구축(build_initial) + 온디맨드 조회(get_or_fetch).
 """
+import json
 import time
 import logging
 from datetime import datetime, timezone
@@ -11,6 +12,8 @@ from .client import ApartmentMasterClient
 from .repository import ApartmentMasterRepository
 
 logger = logging.getLogger(__name__)
+
+_PROGRESS_LOG_INTERVAL = 50  # N건마다 진행상황 파일 갱신 + 로그 출력
 
 
 class ApartmentMasterService:
@@ -26,23 +29,37 @@ class ApartmentMasterService:
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
-    def build_initial(self, districts: List[Dict]) -> Dict[str, int]:
+    def build_initial(
+        self,
+        districts: List[Dict],
+        progress_path: Optional[str] = None,
+    ) -> Dict[str, int]:
         """수도권 전체 지구 전수 구축. 이미 저장된 단지(complex_code 기준)는 스킵.
 
+        중단 후 재시작 시 DB에 저장된 complex_code를 기준으로 자동 이어받기.
+        progress_path 지정 시 진행상황을 JSON 파일로 실시간 기록.
+
         Args:
-            districts: config.yaml districts 목록 [{"code": "11680", "name": "강남구"}, ...]
+            districts: 대상 지구 목록 [{"code": "11680", "name": "강남구"}, ...]
+            progress_path: 진행상황 JSON 파일 경로 (None 이면 파일 미기록)
         Returns:
             {"total": N, "saved": M, "skipped": K, "errors": E}
         """
         existing_codes = set(self.repository.get_all_complex_codes())
         total = saved = skipped = errors = 0
+        started_at = datetime.now(timezone.utc).isoformat()
 
-        for district in districts:
+        logger.info(
+            f"[AptMaster] build_initial 시작 — 대상 {len(districts)}개 지구, "
+            f"기존 저장 {len(existing_codes)}건 스킵 예정"
+        )
+
+        for district_idx, district in enumerate(districts, 1):
             sigungu_cd = district.get("code", "")
             name = district.get("name", sigungu_cd)
             complexes = self.client.fetch_complex_list(sigungu_cd)
-            time.sleep(self.rate_limit_sec)
 
+            district_saved = district_errors = 0
             for item in complexes:
                 kapt_code = item.get("kaptCode", "")
                 kapt_name = item.get("kaptName", "")
@@ -57,6 +74,7 @@ class ApartmentMasterService:
 
                 if not info:
                     errors += 1
+                    district_errors += 1
                     continue
 
                 master = self._parse_info(kapt_name, sigungu_cd, kapt_code, info)
@@ -64,15 +82,41 @@ class ApartmentMasterService:
                     self.repository.save(master)
                     existing_codes.add(kapt_code)
                     saved += 1
-                    logger.debug(f"[AptMaster] 저장: {kapt_name}({kapt_code}) — {master.household_count}세대")
+                    district_saved += 1
                 except Exception as e:
                     logger.error(f"[AptMaster] 저장 실패 {kapt_name}: {e}")
                     errors += 1
+                    district_errors += 1
 
-            logger.info(f"[AptMaster] {name}({sigungu_cd}) 완료: {len(complexes)}개 단지")
+                # N건마다 진행상황 갱신
+                if progress_path and saved % _PROGRESS_LOG_INTERVAL == 0:
+                    self._write_progress(
+                        progress_path, started_at, len(districts), district_idx,
+                        name, total, saved, skipped, errors,
+                    )
+                    logger.info(
+                        f"[AptMaster] 진행: {saved}건 저장 / {skipped}건 스킵 / "
+                        f"{errors}건 오류 ({district_idx}/{len(districts)} 지구)"
+                    )
 
-        logger.info(f"[AptMaster] build_initial 완료: total={total}, saved={saved}, skipped={skipped}, errors={errors}")
-        return {"total": total, "saved": saved, "skipped": skipped, "errors": errors}
+            logger.info(
+                f"[AptMaster] [{district_idx}/{len(districts)}] {name}({sigungu_cd}) 완료 "
+                f"— 단지 {len(complexes)}개, 저장 {district_saved}개, 오류 {district_errors}개"
+            )
+
+        stats = {"total": total, "saved": saved, "skipped": skipped, "errors": errors}
+
+        if progress_path:
+            self._write_progress(
+                progress_path, started_at, len(districts), len(districts),
+                "완료", total, saved, skipped, errors, done=True,
+            )
+
+        logger.info(
+            f"[AptMaster] build_initial 완료 — "
+            f"total={total}, saved={saved}, skipped={skipped}, errors={errors}"
+        )
+        return stats
 
     def get_or_fetch(self, apt_name: str, district_code: str) -> Optional[ApartmentMaster]:
         """SQLite 조회 → 없으면 API 조회 후 저장.
@@ -113,11 +157,9 @@ class ApartmentMasterService:
 
         Returns: kaptCode or None
         """
-        # 완전 일치
         for c in candidates:
             if c.get("kaptName", "") == apt_name:
                 return c["kaptCode"]
-        # 부분 일치 (한쪽이 다른 쪽을 포함)
         for c in candidates:
             k_name = c.get("kaptName", "")
             if apt_name in k_name or k_name in apt_name:
@@ -129,7 +171,7 @@ class ApartmentMasterService:
         """API 응답 dict → ApartmentMaster."""
         def _int(val) -> int:
             try:
-                return int(str(val).replace(",", "").strip())
+                return int(float(str(val).replace(",", "").strip()))
             except (ValueError, TypeError):
                 return 0
 
@@ -137,10 +179,50 @@ class ApartmentMasterService:
             apt_name=apt_name,
             district_code=district_code,
             complex_code=kapt_code,
-            household_count=_int(info.get("hhldCnt", 0)),
-            building_count=_int(info.get("bdNum", 0)),
-            parking_count=_int(info.get("kaptTarea", 0)),
+            household_count=_int(info.get("hoCnt", 0)),
+            building_count=_int(info.get("kaptDongCnt", 0)),
+            parking_count=0,  # API 미제공
             constructor=str(info.get("kaptBcompany", "") or ""),
-            approved_date=str(info.get("useAprDay", "") or ""),
+            approved_date=str(info.get("kaptUsedate", "") or ""),
             fetched_at=datetime.now(timezone.utc).isoformat(),
         )
+
+    @staticmethod
+    def _write_progress(
+        path: str,
+        started_at: str,
+        total_districts: int,
+        current_district_idx: int,
+        current_district_name: str,
+        total: int,
+        saved: int,
+        skipped: int,
+        errors: int,
+        done: bool = False,
+    ) -> None:
+        """진행상황을 JSON 파일로 기록."""
+        try:
+            data = {
+                "status": "done" if done else "running",
+                "started_at": started_at,
+                "last_updated_at": datetime.now(timezone.utc).isoformat(),
+                "districts": {
+                    "total": total_districts,
+                    "current_index": current_district_idx,
+                    "current_name": current_district_name,
+                },
+                "complexes": {
+                    "total_seen": total,
+                    "saved": saved,
+                    "skipped_existing": skipped,
+                    "errors": errors,
+                },
+                "resume_note": (
+                    "재시작 시 DB에 저장된 단지를 자동으로 스킵합니다. "
+                    "같은 스크립트를 그대로 재실행하세요."
+                ),
+            }
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning(f"[AptMaster] 진행상황 파일 기록 실패: {e}")

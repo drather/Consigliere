@@ -98,34 +98,33 @@ class TestApartmentMasterRepository:
 
 class TestApartmentMasterClient:
     def _make_list_response(self):
-        """공동주택 단지 목록 API mock 응답."""
+        """공동주택 전체 목록 API mock 응답 (items가 list 직접 반환)."""
         return {
             "response": {
                 "body": {
-                    "items": {
-                        "item": [
-                            {"kaptCode": "A12345", "kaptName": "래미안퍼스티지", "bjdCode": "1165010100"},
-                            {"kaptCode": "B67890", "kaptName": "반포자이", "bjdCode": "1165010200"},
-                        ]
-                    },
+                    "items": [
+                        {"kaptCode": "A12345", "kaptName": "래미안퍼스티지", "bjdCode": "1165010100"},
+                        {"kaptCode": "B67890", "kaptName": "반포자이", "bjdCode": "1165010200"},
+                    ],
                     "totalCount": 2,
+                    "numOfRows": 10000,
+                    "pageNo": 1,
                 }
             }
         }
 
     def _make_info_response(self):
-        """공동주택 기본정보 API mock 응답."""
+        """공동주택 기본정보 API mock 응답 (실제 필드명 반영)."""
         return {
             "response": {
                 "body": {
                     "item": {
                         "kaptCode": "A12345",
                         "kaptName": "래미안퍼스티지",
-                        "hhldCnt": "2444",
-                        "bdNum": "36",
-                        "kaptTarea": "3200",
+                        "hoCnt": 2444,
+                        "kaptDongCnt": "36",
                         "kaptBcompany": "삼성물산",
-                        "useAprDay": "20090101",
+                        "kaptUsedate": "20090101",
                     }
                 }
             }
@@ -154,6 +153,30 @@ class TestApartmentMasterClient:
 
         assert items == []
 
+    def test_fetch_complex_list_filters_by_sigungu(self):
+        """bjdCode prefix로 시군구 필터링 확인."""
+        from modules.real_estate.apartment_master.client import ApartmentMasterClient
+        client = ApartmentMasterClient(api_key="test-key")
+
+        resp = {
+            "response": {
+                "body": {
+                    "items": [
+                        {"kaptCode": "A12345", "kaptName": "래미안퍼스티지", "bjdCode": "1165010100"},
+                        {"kaptCode": "C99999", "kaptName": "강남래미안", "bjdCode": "1168010100"},  # 강남구
+                    ],
+                    "totalCount": 2, "numOfRows": 10000, "pageNo": 1,
+                }
+            }
+        }
+        with patch("requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.json.return_value = resp
+            items = client.fetch_complex_list("11650")  # 서초구만
+
+        assert len(items) == 1
+        assert items[0]["kaptCode"] == "A12345"
+
     def test_fetch_complex_info_returns_dict(self):
         from modules.real_estate.apartment_master.client import ApartmentMasterClient
         client = ApartmentMasterClient(api_key="test-key")
@@ -164,9 +187,10 @@ class TestApartmentMasterClient:
             info = client.fetch_complex_info("A12345")
 
         assert info is not None
-        assert info["hhldCnt"] == "2444"
-        assert info["bdNum"] == "36"
+        assert info["hoCnt"] == 2444
+        assert info["kaptDongCnt"] == "36"
         assert info["kaptBcompany"] == "삼성물산"
+        assert info["kaptUsedate"] == "20090101"
 
     def test_fetch_complex_info_returns_none_on_error(self):
         from modules.real_estate.apartment_master.client import ApartmentMasterClient
@@ -178,24 +202,24 @@ class TestApartmentMasterClient:
 
         assert info is None
 
-    def test_fetch_complex_list_single_item_coerced_to_list(self):
-        """API가 item 1건일 때 dict로 반환하는 케이스 처리."""
+    def test_fetch_complex_list_legacy_dict_items_handled(self):
+        """하위 호환: 구버전 API가 items를 {'item': [...]} 형태로 반환하는 경우."""
         from modules.real_estate.apartment_master.client import ApartmentMasterClient
         client = ApartmentMasterClient(api_key="test-key")
 
-        single_item_resp = {
+        legacy_resp = {
             "response": {
                 "body": {
                     "items": {
                         "item": {"kaptCode": "A12345", "kaptName": "래미안퍼스티지", "bjdCode": "1165010100"}
                     },
-                    "totalCount": 1,
+                    "totalCount": 1, "numOfRows": 10000, "pageNo": 1,
                 }
             }
         }
         with patch("requests.get") as mock_get:
             mock_get.return_value.status_code = 200
-            mock_get.return_value.json.return_value = single_item_resp
+            mock_get.return_value.json.return_value = legacy_resp
             items = client.fetch_complex_list("11650")
 
         assert len(items) == 1
@@ -213,11 +237,10 @@ class TestApartmentMasterService:
         client.fetch_complex_info.return_value = {
             "kaptCode": "A12345",
             "kaptName": "래미안퍼스티지",
-            "hhldCnt": "2444",
-            "bdNum": "36",
-            "kaptTarea": "3200",
+            "hoCnt": 2444,
+            "kaptDongCnt": "36",
             "kaptBcompany": "삼성물산",
-            "useAprDay": "20090101",
+            "kaptUsedate": "20090101",
         }
         return client
 
