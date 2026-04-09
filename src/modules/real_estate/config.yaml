@@ -6,6 +6,8 @@ bok_codes:
   loan_rate: "121Y002"
 
 geocode_cache_path: "data/geocode_cache.db"
+apartment_master_db_path: "data/apartment_master.db"
+apartment_master_rate_limit_sec: 0.3
 
 financial_defaults:
   tax_rate_multiplier: 0.03

@@ -1,6 +1,15 @@
 # Project Consigliere: History
 **Last Updated:** 2026-04-08
 
+## 2026-04-09: 아파트 마스터 DB 구축
+- **Feature (apartment-master-db):** 공동주택 공공 API로 수도권 아파트 마스터 정보 수집·저장
+  - `ApartmentMasterClient`: 공동주택 단지목록 + 기본정보 2개 공공 API
+  - `ApartmentMasterRepository`: SQLite CRUD (geocoder.py 패턴, PK=district_code__apt_name)
+  - `ApartmentMasterService`: 전수 구축(build_initial) + 온디맨드 보완(get_or_fetch)
+  - `_enrich_transactions()` 확장: household_count, building_count, constructor, approved_date 자동 부착
+  - `POST /jobs/real-estate/build-apartment-master` 신규 엔드포인트
+  - 신규 테스트 20개, 241 passed
+
 ## 2026-04-08: 부동산 인사이트 리포트 E2E 검증 및 버그픽스
 - **BugFix (real-estate-insight-redesign):** E2E 파이프라인 검증 중 2건 버그 발견·수정
   - `generate_insight_report()`: 구버전 orchestrator 파라미터(`macro_dict` 등) → `generate_report()` 위임으로 교체

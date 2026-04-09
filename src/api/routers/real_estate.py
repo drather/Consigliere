@@ -286,6 +286,16 @@ def job_generate_report(
         logger.error(f"Job4 Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/jobs/real-estate/build-apartment-master")
+def job_build_apartment_master(agent: RealEstateAgent = Depends(get_real_estate_agent)):
+    """Job 0: 수도권 아파트 마스터 DB 전수 구축 (최초 1회 또는 갱신 시 사용)."""
+    try:
+        result = agent.build_apartment_master()
+        return {"status": "success", **result}
+    except Exception as e:
+        logger.error(f"Job0 (ApartmentMaster) Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/jobs/real-estate/run-pipeline")
 def job_run_pipeline(
     request: JobGenerateReportRequest,

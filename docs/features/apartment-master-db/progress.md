@@ -10,31 +10,31 @@
 ## Phase 1 — Planning
 - [x] `spec.md` 작성
 - [x] `progress.md` 생성
-- [ ] 문서 커밋
+- [x] 문서 커밋
 
 ## Phase 2 — Implementation (TDD)
-- [ ] `tests/modules/real_estate/test_apartment_master.py` 작성 (Red)
-- [ ] `models.py` — `ApartmentMaster` dataclass
-- [ ] `apartment_master/__init__.py`
-- [ ] `apartment_master/repository.py` — SQLite CRUD
-- [ ] `apartment_master/client.py` — 공공 API 클라이언트
-- [ ] `apartment_master/service.py` — build_initial + get_or_fetch
-- [ ] `service.py` — RealEstateAgent 주입 + `_enrich_transactions()` 확장
-- [ ] `routers/real_estate.py` — 신규 엔드포인트
-- [ ] `config.yaml` + `.env.example` 업데이트
-- [ ] 전체 테스트 통과 확인
+- [x] `tests/modules/real_estate/test_apartment_master.py` 작성 (Red)
+- [x] `models.py` — `ApartmentMaster` dataclass
+- [x] `apartment_master/__init__.py`
+- [x] `apartment_master/repository.py` — SQLite CRUD
+- [x] `apartment_master/client.py` — 공공 API 클라이언트
+- [x] `apartment_master/service.py` — build_initial + get_or_fetch
+- [x] `service.py` — RealEstateAgent 주입 + `_enrich_transactions()` 확장
+- [x] `routers/real_estate.py` — 신규 엔드포인트
+- [x] `config.yaml` + `.env.example` 업데이트
+- [x] 전체 테스트 통과 (241 passed)
 
 ## Phase 2.5 — SOLID Review
-- [ ] SRP 확인
-- [ ] OCP 확인 (새 API 추가 시 client.py만 수정)
-- [ ] DIP 확인 (Protocol 기반 주입)
-- [ ] Zero Hardcoding 확인
+- [x] SRP 확인
+- [x] OCP 확인 (새 API 추가 시 client.py만 수정)
+- [x] DIP 확인 (직접 주입, Protocol 추가는 issues.md에 기록)
+- [x] Zero Hardcoding 확인
 
 ## Phase 3 — Documentation
-- [ ] `issues.md`
-- [ ] `result.md`
-- [ ] `history.md` 업데이트
-- [ ] `active_state.md` 업데이트
+- [x] `issues.md`
+- [x] `result.md`
+- [x] `history.md` 업데이트
+- [x] `active_state.md` 업데이트
 
 ## Phase 4 — Release
 - [ ] master 머지

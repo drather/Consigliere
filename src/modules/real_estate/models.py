@@ -1,6 +1,23 @@
+from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
+
+
+@dataclass
+class ApartmentMaster:
+    """아파트 단지 마스터 정보 (공공 API 수집)."""
+    apt_name: str
+    district_code: str           # 5자리 sigunguCd
+    complex_code: str            # kaptCode
+    household_count: int         # hhldCnt (세대수)
+    building_count: int          # bdNum (동수)
+    parking_count: int           # 주차대수
+    constructor: str             # 시공사 (kaptBcompany)
+    approved_date: str           # 사용승인일 YYYYMMDD (useAprDay)
+    floor_area_ratio: Optional[float] = None    # vlRat 용적률 (Phase 2)
+    building_coverage_ratio: Optional[float] = None  # bcRat 건폐율 (Phase 2)
+    fetched_at: str = ""
 
 class RealEstateTransaction(BaseModel):
     """

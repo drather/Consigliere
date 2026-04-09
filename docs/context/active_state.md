@@ -4,7 +4,7 @@
 
 ## 현재 포커스
 - **Branch:** `feature/apartment-master-db`
-- **Status:** 🔄 Phase 1 (Spec 작성 중)
+- **Status:** ✅ 완료 — Phase 4 (머지·Push 대기)
 
 ## 최근 컨텍스트
 - **completed:** LLM Filter Chain (Filter Chain 패턴으로 LLM 최적화 관심사 분리)

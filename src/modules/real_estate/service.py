@@ -19,24 +19,27 @@ from .macro.bok_service import MacroService
 from .news.service import NewsService
 from .calculator import FinancialCalculator
 from .persona_manager import PersonaManager, PreferenceRulesManager
+from .apartment_master.client import ApartmentMasterClient
+from .apartment_master.repository import ApartmentMasterRepository
+from .apartment_master.service import ApartmentMasterService
 
 logger = get_logger(__name__)
 
 class RealEstateAgent:
     """
-    Facade for the Real Estate module. 
+    Facade for the Real Estate module.
     Delegates specialized tasks to internal services for SOLID compliance.
     """
     def __init__(self, storage_mode: str = "local"):
         self.config = RealEstateConfig()
-        
+
         # Core Infrastructure
         self.storage: StorageProvider = get_storage_provider(storage_mode)
         root_storage = get_storage_provider("local", root_path=".")
         self.prompt_loader = PromptLoader(root_storage, base_dir="src/modules/real_estate/prompts")
         self.llm = build_llm_pipeline()
         self.repository = ChromaRealEstateRepository()
-        
+
         # Specialized Services
         self.tour_service = TourService(self.llm, self.prompt_loader, self.repository)
         self.insight_orchestrator = InsightOrchestrator(self.llm, self.prompt_loader)
@@ -44,6 +47,15 @@ class RealEstateAgent:
         self.macro_service = MacroService()
         self.news_service = NewsService()
         self.calculator = FinancialCalculator()
+
+        # Apartment Master
+        apt_master_db = self.config.get("apartment_master_db_path", "data/apartment_master.db")
+        apt_master_rate = float(self.config.get("apartment_master_rate_limit_sec", 0.3))
+        self.apt_master_service = ApartmentMasterService(
+            client=ApartmentMasterClient(),
+            repository=ApartmentMasterRepository(db_path=apt_master_db),
+            rate_limit_sec=apt_master_rate,
+        )
 
     def log_tour(self, user_text: str) -> str:
         return self.tour_service.log_tour(user_text)
@@ -263,6 +275,21 @@ class RealEstateAgent:
             json.dump(macro_dict, f, ensure_ascii=False, indent=2)
         logger.info(f"[Job3] Macro saved: {filename}")
         return {"success": True, "date": today, "macro": macro_dict}
+
+    def build_apartment_master(self) -> Dict[str, Any]:
+        """Job 0: 수도권 아파트 마스터 DB 전수 구축.
+
+        config.yaml의 71개 districts를 순회하여 공동주택 공공 API로 세대수·동수·건설사·사용승인일을 수집,
+        SQLite에 저장한다. 이미 저장된 단지는 스킵한다.
+        """
+        import time as _time
+        logger.info("[Job0] 아파트 마스터 DB 전수 구축 시작")
+        start = _time.time()
+        districts = self.config.get("districts", [])
+        stats = self.apt_master_service.build_initial(districts)
+        elapsed = round(_time.time() - start, 1)
+        logger.info(f"[Job0] 완료: {stats}, elapsed={elapsed}s")
+        return {**stats, "elapsed_seconds": elapsed}
 
     def generate_report(self, district_code: Optional[str] = None, target_date: Optional[date] = None) -> Dict[str, Any]:
         """Job 4: Generate insight report using stored data (macro from file, txs from ChromaDB).
@@ -570,6 +597,17 @@ class RealEstateAgent:
                 tx["elementary_schools"] = matched_dong.get("elementary_schools", [])
             else:
                 tx["commute_minutes"] = dist_intel.get("default_commute_minutes", 99)
+
+            # 아파트 마스터 정보 enrich (세대수, 동수, 건설사, 사용승인일)
+            try:
+                master = self.apt_master_service.get_or_fetch(apt_name, district_code)
+                if master:
+                    tx["household_count"] = master.household_count
+                    tx["building_count"] = master.building_count
+                    tx["constructor"] = master.constructor
+                    tx["approved_date"] = master.approved_date
+            except Exception as e:
+                logger.warning(f"[Enrich] 마스터 조회 실패 {apt_name}: {e}")
 
             enriched.append(tx)
 
