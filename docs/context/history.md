@@ -1,7 +1,18 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-08
+**Last Updated:** 2026-04-09
 
-## 2026-04-09: 아파트 마스터 DB 구축
+## 2026-04-09: 아파트 마스터 DB 구축 — 실제 API 검증 완료
+- **Fix + Data:** 실제 API 키 승인 후 연동 테스트 → 3가지 버그 발견·수정
+  - API URL 수정: `AptListService3/getSigunguAptList3` (항상 0건) → `getTotalAptList3`
+  - API URL 수정: `AtclService/getAphusBassInfoV4` (500) → `AptBasisInfoServiceV4`
+  - 필드 매핑 수정: `hhldCnt`→`hoCnt`, `bdNum`→`kaptDongCnt`, `useAprDay`→`kaptUsedate`
+  - `fetch_complex_list`: 전체 목록 in-memory 캐시 후 bjdCode prefix 필터링으로 재설계
+  - `build_initial`: `progress.json` 실시간 기록, 재시작 이어받기 지원 추가
+  - `scripts/build_apartment_master.py`: 수도권 초기 구축 실행 스크립트 신설
+  - 수도권(서울+인천+경기) **9,261개 단지** 실제 수집 완료 (세대수 0건 58개, 99% 완전 데이터)
+  - 21 passed (테스트 +1개)
+
+## 2026-04-09: 아파트 마스터 DB 구축 — 설계
 - **Feature (apartment-master-db):** 공동주택 공공 API로 수도권 아파트 마스터 정보 수집·저장
   - `ApartmentMasterClient`: 공동주택 단지목록 + 기본정보 2개 공공 API
   - `ApartmentMasterRepository`: SQLite CRUD (geocoder.py 패턴, PK=district_code__apt_name)

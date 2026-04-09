@@ -40,13 +40,29 @@
 
 ## 다음 작업 로드맵
 
-### 1순위 — 부동산 아파트 마스터 정보 구축 (Data Enrichment)
-- **목표:** 실거래가 외에 아파트 단지의 물리적/법적 정보를 통합하여 분석 품질 고도화
-- **주요 데이터:** 용적률, 건폐율, 세대수, 준공일(사용승인일), 시공사 등
-- **데이터 소스:**
-  - 국토교통부 건축물대장 API (용적률, 건폐율, 면적)
-  - K-apt(공동주택관리정보시스템) API (세대수, 난방방식, 준공일)
-- **구현 계획:** `models.py` 확장, `MasterDataService` 신설, `area_intel.json` 자동화 연동
+### 1순위 — 아파트 마스터 데이터 활용 (Data Enrichment 고도화)
+> 수도권 9,261개 단지 마스터 DB 구축 완료 (2026-04-09). 이를 바탕으로 아래 3가지 후속 작업 예정.
+
+#### 1-A. 실거래가 분석 품질 향상
+- **목표:** `_enrich_transactions()`에서 마스터 데이터를 실제로 활용하여 scoring·filtering 실효성 제고
+- **주요 개선:**
+  - `_score_liquidity()`: `household_count` 실값 반영 (현재 0으로 고정되어 무의미)
+  - `min_household_count` preference rule 실제 동작 확인 및 검증
+  - 리포트 서술에 건설사·준공연도 자동 포함 (예: "삼성물산 시공, 2009년 준공")
+- **선행 조건:** `get_or_fetch` 호출 경로 및 enrich 로직 검증 필요
+
+#### 1-B. 아파트 마스터 조회 화면 (Streamlit UI)
+- **목표:** Streamlit 대시보드에 마스터 DB 조회 탭 추가
+- **주요 기능:**
+  - 지구명·아파트명 검색
+  - 세대수·준공연도·건설사 필터링
+  - 테이블 형태 결과 표시 + 선택 단지 상세보기
+- **구현 위치:** `streamlit_app.py` 또는 `pages/` 서브탭
+
+#### 1-C. 마스터 DB 주기적 갱신
+- **목표:** 신규 단지 등록 시 자동 보완
+- **방식:** `build_apartment_master` Job을 월 1회 n8n 스케줄 등록
+- **이어받기:** 기존 `build_initial`의 skipped 로직으로 신규 단지만 추가
 
 ### 2순위 — Career SOLID 장기 개선
 - Processor Protocol 정의 (ISP/DIP 강화)
@@ -85,6 +101,11 @@
 - CandidateFilter + ScoringEngine + 2 LLM 프롬프트
 
 ## 완료 작업 이력 (최근)
+- [x] **Feature: 아파트 마스터 DB 구축 + 실제 API 검증** (2026-04-09)
+    - API URL·필드명 3종 버그픽스 (실제 API 승인 후 발견)
+    - 수도권 9,261개 단지 수집 완료 (서울+인천+경기, 99% 완전 데이터)
+    - scripts/build_apartment_master.py (이어받기·progress.json 지원)
+    - 21 tests passed
 - [x] **Feature: LLM Filter Chain** (2026-04-02)
     - LLMFilterChain (FilterChain 패턴, BaseLLMClient 구현)
     - 4개 Filter: ModelRouting, SemanticCache, PromptCache, TokenLog
