@@ -168,22 +168,48 @@ class ApartmentMasterService:
 
     @staticmethod
     def _parse_info(apt_name: str, district_code: str, kapt_code: str, info: Dict) -> ApartmentMaster:
-        """API 응답 dict → ApartmentMaster."""
+        """API 응답 dict → ApartmentMaster (getAphusBassInfoV4 전체 필드 매핑)."""
         def _int(val) -> int:
             try:
                 return int(float(str(val).replace(",", "").strip()))
             except (ValueError, TypeError):
                 return 0
 
+        def _float(val) -> float:
+            try:
+                return float(str(val).replace(",", "").strip())
+            except (ValueError, TypeError):
+                return 0.0
+
+        def _str(val) -> str:
+            return str(val or "").strip()
+
         return ApartmentMaster(
             apt_name=apt_name,
             district_code=district_code,
             complex_code=kapt_code,
+            # 기본 정보
             household_count=_int(info.get("hoCnt", 0)),
             building_count=_int(info.get("kaptDongCnt", 0)),
-            parking_count=0,  # API 미제공
-            constructor=str(info.get("kaptBcompany", "") or ""),
-            approved_date=str(info.get("kaptUsedate", "") or ""),
+            parking_count=0,           # API 미제공
+            constructor=_str(info.get("kaptBcompany")),
+            approved_date=_str(info.get("kaptUsedate")),
+            # 주소
+            road_address=_str(info.get("doroJuso")),
+            legal_address=_str(info.get("kaptAddr")),
+            # 건물 구조
+            top_floor=_int(info.get("kaptTopFloor", 0)),
+            base_floor=_int(info.get("kaptBaseFloor", 0)),
+            total_area=_float(info.get("kaptTarea", 0)),
+            # 단지 특성
+            heat_type=_str(info.get("codeHeatNm")),
+            developer=_str(info.get("kaptAcompany")),
+            elevator_count=_int(info.get("kaptdEcntp", 0)),
+            # 전용면적별 세대수
+            units_60=_int(info.get("kaptMparea60", 0)),
+            units_85=_int(info.get("kaptMparea85", 0)),
+            units_135=_int(info.get("kaptMparea135", 0)),
+            units_136_plus=_int(info.get("kaptMparea136", 0)),
             fetched_at=datetime.now(timezone.utc).isoformat(),
         )
 

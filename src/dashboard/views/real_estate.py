@@ -897,13 +897,14 @@ def show_real_estate():
                         "세대수": m.household_count,
                         "동수": m.building_count,
                         "건설사": m.constructor or "-",
+                        "시행사": m.developer or "-",
                         "준공연도": year_str,
-                        "_district_code": m.district_code,
-                        "_complex_code": m.complex_code,
+                        "최고층": f"{m.top_floor}F" if m.top_floor else "-",
+                        "난방": m.heat_type or "-",
                     })
 
                 df = _pd.DataFrame(rows)
-                display_cols = ["아파트명", "지구", "세대수", "동수", "건설사", "준공연도"]
+                display_cols = ["아파트명", "지구", "세대수", "동수", "건설사", "시행사", "준공연도", "최고층", "난방"]
 
                 # 선택 가능 테이블
                 selection = st.dataframe(
@@ -920,18 +921,57 @@ def show_real_estate():
                 if selected_rows:
                     idx = selected_rows[0]
                     m = results[idx]
+                    year_disp = m.approved_date[:4] if m.approved_date and len(m.approved_date) >= 4 else "-"
                     with st.expander(f"📋 {m.apt_name} 상세 정보", expanded=True):
-                        c1, c2, c3 = st.columns(3)
-                        with c1:
+                        # 주소
+                        if m.road_address:
+                            st.caption(f"📍 {m.road_address}")
+                        elif m.legal_address:
+                            st.caption(f"📍 {m.legal_address}")
+
+                        # 기본 지표
+                        r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+                        with r1c1:
                             st.metric("세대수", f"{m.household_count:,}세대")
-                            st.metric("건설사", m.constructor or "-")
-                        with c2:
+                        with r1c2:
                             st.metric("동수", f"{m.building_count}개동")
-                            year_disp = m.approved_date[:4] if m.approved_date and len(m.approved_date) >= 4 else "-"
+                        with r1c3:
                             st.metric("준공연도", f"{year_disp}년")
-                        with c3:
-                            st.metric("단지코드", m.complex_code or "-")
-                            st.metric("지구코드", m.district_code)
+                        with r1c4:
+                            st.metric("최고층수", f"{m.top_floor}F" if m.top_floor else "-")
+
+                        r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+                        with r2c1:
+                            st.metric("건설사", m.constructor or "-")
+                        with r2c2:
+                            st.metric("시행사", m.developer or "-")
+                        with r2c3:
+                            st.metric("난방방식", m.heat_type or "-")
+                        with r2c4:
+                            st.metric("승강기", f"{m.elevator_count}대" if m.elevator_count else "-")
+
+                        # 면적별 세대수
+                        total_units = m.units_60 + m.units_85 + m.units_135 + m.units_136_plus
+                        if total_units > 0:
+                            st.markdown("**전용면적별 세대 구성**")
+                            uc1, uc2, uc3, uc4 = st.columns(4)
+                            with uc1:
+                                st.metric("60㎡ 이하", f"{m.units_60:,}세대")
+                            with uc2:
+                                st.metric("60~85㎡", f"{m.units_85:,}세대")
+                            with uc3:
+                                st.metric("85~135㎡", f"{m.units_135:,}세대")
+                            with uc4:
+                                st.metric("135㎡ 초과", f"{m.units_136_plus:,}세대")
+
+                        # 기타 정보
+                        st.caption(
+                            f"단지코드: {m.complex_code or '-'}  |  "
+                            f"지구코드: {m.district_code}  |  "
+                            f"지하층수: {m.base_floor}층  |  "
+                            f"연면적: {m.total_area:,.0f}㎡" if m.total_area else
+                            f"단지코드: {m.complex_code or '-'}  |  지구코드: {m.district_code}"
+                        )
         except Exception as _e:
             st.error(f"마스터 DB 조회 오류: {_e}")
             st.info("API 서버가 실행 중인지 확인하거나 DB 경로를 점검하세요.")

@@ -1,9 +1,8 @@
 """
 ApartmentMasterRepository — SQLite CRUD for apartment master data.
 
-geocoder.py 패턴과 동일한 구조:
-  - cache_key = f"{district_code}__{apt_name}"
-  - INSERT OR REPLACE로 저장
+스키마: cache_key = f"{district_code}__{apt_name}"
+마이그레이션: _init_db()가 신규 컬럼을 자동으로 ALTER TABLE 추가 (기존 DB 보존)
 """
 import sqlite3
 from datetime import datetime, timezone
@@ -20,11 +19,37 @@ CREATE TABLE IF NOT EXISTS apartment_master (
     parking_count       INTEGER DEFAULT 0,
     constructor         TEXT DEFAULT '',
     approved_date       TEXT DEFAULT '',
-    floor_area_ratio    REAL,
-    building_coverage_ratio REAL,
+    road_address        TEXT DEFAULT '',
+    legal_address       TEXT DEFAULT '',
+    top_floor           INTEGER DEFAULT 0,
+    base_floor          INTEGER DEFAULT 0,
+    total_area          REAL DEFAULT 0.0,
+    heat_type           TEXT DEFAULT '',
+    developer           TEXT DEFAULT '',
+    elevator_count      INTEGER DEFAULT 0,
+    units_60            INTEGER DEFAULT 0,
+    units_85            INTEGER DEFAULT 0,
+    units_135           INTEGER DEFAULT 0,
+    units_136_plus      INTEGER DEFAULT 0,
     fetched_at          TEXT
 )
 """
+
+# 기존 DB에 없을 수 있는 신규 컬럼 목록 (컬럼명, 타입, 기본값)
+_NEW_COLUMNS = [
+    ("road_address",  "TEXT",    "''"),
+    ("legal_address", "TEXT",    "''"),
+    ("top_floor",     "INTEGER", "0"),
+    ("base_floor",    "INTEGER", "0"),
+    ("total_area",    "REAL",    "0.0"),
+    ("heat_type",     "TEXT",    "''"),
+    ("developer",     "TEXT",    "''"),
+    ("elevator_count","INTEGER", "0"),
+    ("units_60",      "INTEGER", "0"),
+    ("units_85",      "INTEGER", "0"),
+    ("units_135",     "INTEGER", "0"),
+    ("units_136_plus","INTEGER", "0"),
+]
 
 
 class ApartmentMasterRepository:
@@ -36,6 +61,18 @@ class ApartmentMasterRepository:
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(_DDL)
             conn.commit()
+            # 기존 DB 마이그레이션: 신규 컬럼이 없으면 추가
+            self._migrate(conn)
+
+    def _migrate(self, conn: sqlite3.Connection) -> None:
+        """기존 DB에 신규 컬럼이 없으면 ALTER TABLE로 추가한다."""
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(apartment_master)").fetchall()}
+        for col_name, col_type, default in _NEW_COLUMNS:
+            if col_name not in existing:
+                conn.execute(
+                    f"ALTER TABLE apartment_master ADD COLUMN {col_name} {col_type} DEFAULT {default}"
+                )
+        conn.commit()
 
     @staticmethod
     def _cache_key(apt_name: str, district_code: str) -> str:
@@ -46,7 +83,10 @@ class ApartmentMasterRepository:
         with sqlite3.connect(self._db_path) as conn:
             row = conn.execute(
                 "SELECT complex_code, household_count, building_count, parking_count, "
-                "constructor, approved_date, floor_area_ratio, building_coverage_ratio "
+                "constructor, approved_date, "
+                "road_address, legal_address, top_floor, base_floor, total_area, "
+                "heat_type, developer, elevator_count, "
+                "units_60, units_85, units_135, units_136_plus "
                 "FROM apartment_master WHERE cache_key = ?",
                 (key,),
             ).fetchone()
@@ -61,8 +101,18 @@ class ApartmentMasterRepository:
             parking_count=row[3] or 0,
             constructor=row[4] or "",
             approved_date=row[5] or "",
-            floor_area_ratio=row[6],
-            building_coverage_ratio=row[7],
+            road_address=row[6] or "",
+            legal_address=row[7] or "",
+            top_floor=row[8] or 0,
+            base_floor=row[9] or 0,
+            total_area=row[10] or 0.0,
+            heat_type=row[11] or "",
+            developer=row[12] or "",
+            elevator_count=row[13] or 0,
+            units_60=row[14] or 0,
+            units_85=row[15] or 0,
+            units_135=row[16] or 0,
+            units_136_plus=row[17] or 0,
         )
 
     def save(self, master: ApartmentMaster) -> None:
@@ -72,8 +122,11 @@ class ApartmentMasterRepository:
             conn.execute(
                 "INSERT OR REPLACE INTO apartment_master "
                 "(cache_key, complex_code, household_count, building_count, parking_count, "
-                "constructor, approved_date, floor_area_ratio, building_coverage_ratio, fetched_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "constructor, approved_date, "
+                "road_address, legal_address, top_floor, base_floor, total_area, "
+                "heat_type, developer, elevator_count, "
+                "units_60, units_85, units_135, units_136_plus, fetched_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     key,
                     master.complex_code,
@@ -82,8 +135,18 @@ class ApartmentMasterRepository:
                     master.parking_count,
                     master.constructor,
                     master.approved_date,
-                    master.floor_area_ratio,
-                    master.building_coverage_ratio,
+                    master.road_address,
+                    master.legal_address,
+                    master.top_floor,
+                    master.base_floor,
+                    master.total_area,
+                    master.heat_type,
+                    master.developer,
+                    master.elevator_count,
+                    master.units_60,
+                    master.units_85,
+                    master.units_135,
+                    master.units_136_plus,
                     fetched_at,
                 ),
             )
@@ -150,7 +213,10 @@ class ApartmentMasterRepository:
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         sql = (
             f"SELECT cache_key, complex_code, household_count, building_count, parking_count, "
-            f"constructor, approved_date, floor_area_ratio, building_coverage_ratio "
+            f"constructor, approved_date, "
+            f"road_address, legal_address, top_floor, base_floor, total_area, "
+            f"heat_type, developer, elevator_count, "
+            f"units_60, units_85, units_135, units_136_plus "
             f"FROM apartment_master {where_clause} LIMIT ?"
         )
         params.append(limit)
@@ -173,8 +239,18 @@ class ApartmentMasterRepository:
                 parking_count=row[4] or 0,
                 constructor=row[5] or "",
                 approved_date=row[6] or "",
-                floor_area_ratio=row[7],
-                building_coverage_ratio=row[8],
+                road_address=row[7] or "",
+                legal_address=row[8] or "",
+                top_floor=row[9] or 0,
+                base_floor=row[10] or 0,
+                total_area=row[11] or 0.0,
+                heat_type=row[12] or "",
+                developer=row[13] or "",
+                elevator_count=row[14] or 0,
+                units_60=row[15] or 0,
+                units_85=row[16] or 0,
+                units_135=row[17] or 0,
+                units_136_plus=row[18] or 0,
             ))
         return results
 
