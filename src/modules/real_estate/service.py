@@ -533,18 +533,16 @@ class RealEstateAgent:
         area_intel: Dict[str, Any],
         workplace_station: str = "",
     ) -> List[Dict[str, Any]]:
-        """각 거래 dict에 commute_minutes, nearest_stations, school_zone, reconstruction 정보를 부착한다.
+        """각 거래 dict에 commute_minutes, nearest_stations, school_zone, reconstruction,
+        아파트 마스터(세대수·건설사·준공연도) 정보를 부착한다.
 
         - area_intel.json에서 일괄 조회 (per-apt ChromaDB 호출 없음)
-        - 필드명: commute_minutes (목적지는 area_intel.reference_workplace 기준)
+        - 아파트 마스터 DB 조회는 area_intel 유무와 무관하게 항상 실행
         - 매칭: apt_name → notable_complexes → 구 평균 fallback
         """
-        if not area_intel:
-            return txs
-
-        districts_intel = area_intel.get("districts", {})
-        apt_overrides = area_intel.get("apartment_overrides", {})
-        reference_workplace = area_intel.get("reference_workplace", "")
+        districts_intel = area_intel.get("districts", {}) if area_intel else {}
+        apt_overrides = area_intel.get("apartment_overrides", {}) if area_intel else {}
+        reference_workplace = area_intel.get("reference_workplace", "") if area_intel else ""
 
         # 직장역이 reference_workplace와 다를 경우 경고
         if workplace_station and reference_workplace and workplace_station != reference_workplace:
@@ -559,7 +557,23 @@ class RealEstateAgent:
             apt_name = tx.get("apt_name", "")
             district_code = str(tx.get("district_code", ""))
 
-            # 재건축 정보: apartment_overrides (area_intel.json 기반, ChromaDB 호출 없음)
+            # ── 아파트 마스터 정보 enrich (세대수, 동수, 건설사, 사용승인일) ──
+            # area_intel 유무와 무관하게 항상 실행
+            try:
+                master = self.apt_master_service.get_or_fetch(apt_name, district_code)
+                if master:
+                    tx["household_count"] = master.household_count
+                    tx["building_count"] = master.building_count
+                    tx["constructor"] = master.constructor
+                    tx["approved_date"] = master.approved_date
+            except Exception as e:
+                logger.warning(f"[Enrich] 마스터 조회 실패 {apt_name}: {e}")
+
+            if not area_intel:
+                enriched.append(tx)
+                continue
+
+            # ── 재건축 정보: apartment_overrides (area_intel.json 기반) ──
             for override_key, override_val in apt_overrides.items():
                 if override_key in apt_name or apt_name in override_key:
                     tx["reconstruction_status"] = override_val.get("reconstruction_status", "")
@@ -568,7 +582,7 @@ class RealEstateAgent:
                     tx["apt_notes"] = override_val.get("notes", "")
                     break
 
-            # 역세권/출퇴근/학군: district → dong 매칭
+            # ── 역세권/출퇴근/학군: district → dong 매칭 ──
             dist_intel = districts_intel.get(district_code, {})
             tx["district_name"] = dist_intel.get("name", "")
 
@@ -597,17 +611,6 @@ class RealEstateAgent:
                 tx["elementary_schools"] = matched_dong.get("elementary_schools", [])
             else:
                 tx["commute_minutes"] = dist_intel.get("default_commute_minutes", 99)
-
-            # 아파트 마스터 정보 enrich (세대수, 동수, 건설사, 사용승인일)
-            try:
-                master = self.apt_master_service.get_or_fetch(apt_name, district_code)
-                if master:
-                    tx["household_count"] = master.household_count
-                    tx["building_count"] = master.building_count
-                    tx["constructor"] = master.constructor
-                    tx["approved_date"] = master.approved_date
-            except Exception as e:
-                logger.warning(f"[Enrich] 마스터 조회 실패 {apt_name}: {e}")
 
             enriched.append(tx)
 

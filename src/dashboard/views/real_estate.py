@@ -74,7 +74,7 @@ def _render_tx_dataframe(df: pd.DataFrame, code_to_name: Dict[str, str] = None):
 def show_real_estate():
     st.title("🏢 Real Estate Insights")
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Market Monitor", "💡 Insight", "📋 Report Archive", "👤 페르소나"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Market Monitor", "💡 Insight", "📋 Report Archive", "👤 페르소나", "🏗️ 단지 검색"])
 
     # ──────────────────────────────────────────────────────────
     # TAB 1: Market Monitor
@@ -820,3 +820,118 @@ def show_real_estate():
                     st.success(f"✅ {len(updated_rules)}개 규칙 저장 완료. 다음 리포트 생성 시 반영됩니다.")
                     st.session_state.preference_rules = result.get("rules", updated_rules)
                     st.rerun()
+
+    # ──────────────────────────────────────────────────────────
+    # TAB 5: 단지 검색 (아파트 마스터 DB 직접 조회)
+    # ──────────────────────────────────────────────────────────
+    with tab5:
+        st.subheader("🏗️ 아파트 마스터 DB 검색")
+        st.caption("수도권 9,261개 단지 정보를 검색합니다. (세대수·건설사·준공연도 기준 필터링)")
+
+        try:
+            import os as _os
+            import sys as _sys
+            _src = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), '..', '..'))
+            if _src not in _sys.path:
+                _sys.path.insert(0, _src)
+            from modules.real_estate.apartment_master.repository import ApartmentMasterRepository
+            from modules.real_estate.config import RealEstateConfig
+
+            _cfg = RealEstateConfig()
+            _db_path = _cfg.get("apartment_master_db_path", "data/apartment_master.db")
+            _repo = ApartmentMasterRepository(db_path=_db_path)
+
+            # ── 필터 입력 UI ──
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                search_name = st.text_input("아파트명 검색 (부분일치)", placeholder="래미안, 힐스테이트 …", key="master_search_name")
+            with col_f2:
+                # 지구 드롭다운
+                districts = _cfg.get("districts", [])
+                district_options = {"전체": ""} | {d["name"]: d["code"] for d in districts}
+                selected_district_name = st.selectbox("지구 선택", list(district_options.keys()), key="master_district")
+                selected_district_code = district_options[selected_district_name]
+
+            col_f3, col_f4 = st.columns(2)
+            with col_f3:
+                min_hh, max_hh = st.slider("세대수 범위", min_value=0, max_value=5000, value=(0, 5000), step=50, key="master_hh_range")
+            with col_f4:
+                constructors_all = ["전체"] + _repo.get_distinct_constructors()
+                selected_constructor = st.selectbox("건설사", constructors_all, key="master_constructor")
+                constructor_filter = "" if selected_constructor == "전체" else selected_constructor
+
+            col_f5, col_f6 = st.columns([3, 1])
+            with col_f5:
+                year_start, year_end = st.slider("준공연도 범위", min_value=1970, max_value=2030, value=(1990, 2025), key="master_year_range")
+            with col_f6:
+                st.write("")
+                search_btn = st.button("🔍 검색", key="master_search_btn", use_container_width=True)
+
+            # ── 검색 실행 ──
+            if search_btn or "master_results" not in st.session_state:
+                with st.spinner("검색 중..."):
+                    st.session_state.master_results = _repo.search(
+                        apt_name=search_name,
+                        district_code=selected_district_code,
+                        min_household=min_hh if min_hh > 0 else 0,
+                        max_household=max_hh if max_hh < 5000 else 99999,
+                        constructor=constructor_filter,
+                        approved_year_start=year_start,
+                        approved_year_end=year_end,
+                    )
+
+            results = st.session_state.get("master_results", [])
+            st.markdown(f"**{len(results)}건** 검색됨 (최대 500건)")
+
+            if results:
+                import pandas as _pd
+
+                _code_to_name = {d["code"]: d["name"] for d in districts}
+
+                rows = []
+                for m in results:
+                    year_str = m.approved_date[:4] if m.approved_date and len(m.approved_date) >= 4 else "-"
+                    rows.append({
+                        "아파트명": m.apt_name,
+                        "지구": _code_to_name.get(m.district_code, m.district_code),
+                        "세대수": m.household_count,
+                        "동수": m.building_count,
+                        "건설사": m.constructor or "-",
+                        "준공연도": year_str,
+                        "_district_code": m.district_code,
+                        "_complex_code": m.complex_code,
+                    })
+
+                df = _pd.DataFrame(rows)
+                display_cols = ["아파트명", "지구", "세대수", "동수", "건설사", "준공연도"]
+
+                # 선택 가능 테이블
+                selection = st.dataframe(
+                    df[display_cols],
+                    use_container_width=True,
+                    hide_index=True,
+                    on_select="rerun",
+                    selection_mode="single-row",
+                    key="master_table",
+                )
+
+                # 단지 상세 보기
+                selected_rows = selection.get("selection", {}).get("rows", [])
+                if selected_rows:
+                    idx = selected_rows[0]
+                    m = results[idx]
+                    with st.expander(f"📋 {m.apt_name} 상세 정보", expanded=True):
+                        c1, c2, c3 = st.columns(3)
+                        with c1:
+                            st.metric("세대수", f"{m.household_count:,}세대")
+                            st.metric("건설사", m.constructor or "-")
+                        with c2:
+                            st.metric("동수", f"{m.building_count}개동")
+                            year_disp = m.approved_date[:4] if m.approved_date and len(m.approved_date) >= 4 else "-"
+                            st.metric("준공연도", f"{year_disp}년")
+                        with c3:
+                            st.metric("단지코드", m.complex_code or "-")
+                            st.metric("지구코드", m.district_code)
+        except Exception as _e:
+            st.error(f"마스터 DB 조회 오류: {_e}")
+            st.info("API 서버가 실행 중인지 확인하거나 DB 경로를 점검하세요.")

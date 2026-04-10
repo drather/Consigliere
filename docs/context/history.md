@@ -1,5 +1,17 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-09
+**Last Updated:** 2026-04-10
+
+## 2026-04-10: 아파트 마스터 데이터 활용 고도화 (1-A + 1-B)
+- **BugFix:** `_enrich_transactions()` early return 버그 수정
+  - `area_intel={}` 시 마스터 DB 조회 블록이 실행되지 않아 `household_count=0`, `constructor=""` 상태로 전파되던 문제 해결
+  - 마스터 조회 로직을 루프 최상단으로 이동 → area_intel 유무와 무관하게 항상 실행
+  - `_score_liquidity()` 이제 실제 세대수 기반으로 동작 (기존: 항상 LOW 20점)
+- **Feature:** `ApartmentMasterRepository.search()` + `get_distinct_constructors()` 추가
+  - 동적 WHERE 조건 조합, 최대 500건 반환
+- **Feature:** Streamlit `🏗️ 단지 검색` 탭 추가 (tab5)
+  - 아파트명/지구/세대수/건설사/준공연도 복합 필터, 단지 상세 expander
+- **Prompt:** `report_synthesizer.md` — 건설사·준공연도 서술 지시 추가
+- 신규 테스트 29개 (scoring_liquidity 8 + enrich_constructor 7 + apt_master_search 14), 전체 271 passed
 
 ## 2026-04-09: 아파트 마스터 DB 구축 — 실제 API 검증 완료
 - **Fix + Data:** 실제 API 키 승인 후 연동 테스트 → 3가지 버그 발견·수정
