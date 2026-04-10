@@ -77,7 +77,7 @@ class ApartmentMasterService:
                     district_errors += 1
                     continue
 
-                master = self._parse_info(kapt_name, sigungu_cd, kapt_code, info)
+                master = self._parse_info(kapt_name, sigungu_cd, kapt_code, info, list_item=item)
                 try:
                     self.repository.save(master)
                     existing_codes.add(kapt_code)
@@ -136,7 +136,7 @@ class ApartmentMasterService:
     def _fetch_and_cache(self, apt_name: str, district_code: str) -> Optional[ApartmentMaster]:
         """API 호출 → 이름 매칭 → 기본정보 조회 → 저장."""
         candidates = self.client.fetch_complex_list(district_code)
-        kapt_code = self._match_name(apt_name, candidates)
+        kapt_code, matched_item = self._match_name_with_item(apt_name, candidates)
         if not kapt_code:
             logger.debug(f"[AptMaster] 매칭 실패: {apt_name} in {district_code}")
             return None
@@ -145,7 +145,7 @@ class ApartmentMasterService:
         if not info:
             return None
 
-        master = self._parse_info(apt_name, district_code, kapt_code, info)
+        master = self._parse_info(apt_name, district_code, kapt_code, info, list_item=matched_item)
         try:
             self.repository.save(master)
         except Exception as e:
@@ -153,22 +153,38 @@ class ApartmentMasterService:
         return master
 
     def _match_name(self, apt_name: str, candidates: List[Dict]) -> Optional[str]:
+        """apt_name ↔ kaptName 매칭. Returns: kaptCode or None."""
+        code, _ = self._match_name_with_item(apt_name, candidates)
+        return code
+
+    def _match_name_with_item(self, apt_name: str, candidates: List[Dict]):
         """apt_name ↔ kaptName 매칭: 완전일치 → 부분일치(포함관계).
 
-        Returns: kaptCode or None
+        Returns: (kaptCode, matched_item) or (None, None)
         """
         for c in candidates:
             if c.get("kaptName", "") == apt_name:
-                return c["kaptCode"]
+                return c["kaptCode"], c
         for c in candidates:
             k_name = c.get("kaptName", "")
             if apt_name in k_name or k_name in apt_name:
-                return c["kaptCode"]
-        return None
+                return c["kaptCode"], c
+        return None, None
 
     @staticmethod
-    def _parse_info(apt_name: str, district_code: str, kapt_code: str, info: Dict) -> ApartmentMaster:
-        """API 응답 dict → ApartmentMaster (getAphusBassInfoV4 전체 필드 매핑)."""
+    def _parse_info(
+        apt_name: str,
+        district_code: str,
+        kapt_code: str,
+        info: Dict,
+        list_item: Optional[Dict] = None,
+    ) -> ApartmentMaster:
+        """API 응답 dict → ApartmentMaster.
+
+        Args:
+            info:      API 2 (getAphusBassInfoV4) 응답
+            list_item: API 1 (getTotalAptList3) 단지 항목 — as1~as4 시도/시군구/읍면동/리
+        """
         def _int(val) -> int:
             try:
                 return int(float(str(val).replace(",", "").strip()))
@@ -210,6 +226,11 @@ class ApartmentMasterService:
             units_85=_int(info.get("kaptMparea85", 0)),
             units_135=_int(info.get("kaptMparea135", 0)),
             units_136_plus=_int(info.get("kaptMparea136", 0)),
+            # 행정구역 (API 1 목록 항목에서 추출)
+            sido=_str((list_item or {}).get("as1")),
+            sigungu=_str((list_item or {}).get("as2")),
+            eupmyeondong=_str((list_item or {}).get("as3")),
+            ri=_str((list_item or {}).get("as4")),
             fetched_at=datetime.now(timezone.utc).isoformat(),
         )
 

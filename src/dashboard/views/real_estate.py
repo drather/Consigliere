@@ -842,28 +842,30 @@ def show_real_estate():
             _repo = ApartmentMasterRepository(db_path=_db_path)
 
             # ── 필터 입력 UI ──
-            col_f1, col_f2 = st.columns(2)
+            col_f1, col_f2, col_f3 = st.columns(3)
             with col_f1:
                 search_name = st.text_input("아파트명 검색 (부분일치)", placeholder="래미안, 힐스테이트 …", key="master_search_name")
             with col_f2:
-                # 지구 드롭다운
-                districts = _cfg.get("districts", [])
-                district_options = {"전체": ""} | {d["name"]: d["code"] for d in districts}
-                selected_district_name = st.selectbox("지구 선택", list(district_options.keys()), key="master_district")
-                selected_district_code = district_options[selected_district_name]
-
-            col_f3, col_f4 = st.columns(2)
+                sido_opts = ["전체"] + _repo.get_distinct_sidos()
+                selected_sido = st.selectbox("시도", sido_opts, key="master_sido")
+                sido_filter = "" if selected_sido == "전체" else selected_sido
             with col_f3:
-                min_hh, max_hh = st.slider("세대수 범위", min_value=0, max_value=5000, value=(0, 5000), step=50, key="master_hh_range")
+                sigungu_opts = ["전체"] + _repo.get_distinct_sigungus(sido_filter)
+                selected_sigungu = st.selectbox("시군구", sigungu_opts, key="master_sigungu")
+                sigungu_filter = "" if selected_sigungu == "전체" else selected_sigungu
+
+            col_f4, col_f5 = st.columns(2)
             with col_f4:
+                min_hh, max_hh = st.slider("세대수 범위", min_value=0, max_value=5000, value=(0, 5000), step=50, key="master_hh_range")
+            with col_f5:
                 constructors_all = ["전체"] + _repo.get_distinct_constructors()
                 selected_constructor = st.selectbox("건설사", constructors_all, key="master_constructor")
                 constructor_filter = "" if selected_constructor == "전체" else selected_constructor
 
-            col_f5, col_f6 = st.columns([3, 1])
-            with col_f5:
-                year_start, year_end = st.slider("준공연도 범위", min_value=1970, max_value=2030, value=(1990, 2025), key="master_year_range")
+            col_f6, col_f7 = st.columns([3, 1])
             with col_f6:
+                year_start, year_end = st.slider("준공연도 범위", min_value=1970, max_value=2030, value=(1990, 2025), key="master_year_range")
+            with col_f7:
                 st.write("")
                 search_btn = st.button("🔍 검색", key="master_search_btn", use_container_width=True)
 
@@ -872,7 +874,8 @@ def show_real_estate():
                 with st.spinner("검색 중..."):
                     st.session_state.master_results = _repo.search(
                         apt_name=search_name,
-                        district_code=selected_district_code,
+                        sido=sido_filter,
+                        sigungu=sigungu_filter,
                         min_household=min_hh if min_hh > 0 else 0,
                         max_household=max_hh if max_hh < 5000 else 99999,
                         constructor=constructor_filter,

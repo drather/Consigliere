@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS apartment_master (
     units_85            INTEGER DEFAULT 0,
     units_135           INTEGER DEFAULT 0,
     units_136_plus      INTEGER DEFAULT 0,
+    sido                TEXT DEFAULT '',
+    sigungu             TEXT DEFAULT '',
+    eupmyeondong        TEXT DEFAULT '',
+    ri                  TEXT DEFAULT '',
     fetched_at          TEXT
 )
 """
@@ -49,6 +53,10 @@ _NEW_COLUMNS = [
     ("units_85",      "INTEGER", "0"),
     ("units_135",     "INTEGER", "0"),
     ("units_136_plus","INTEGER", "0"),
+    ("sido",          "TEXT",    "''"),
+    ("sigungu",       "TEXT",    "''"),
+    ("eupmyeondong",  "TEXT",    "''"),
+    ("ri",            "TEXT",    "''"),
 ]
 
 
@@ -86,7 +94,8 @@ class ApartmentMasterRepository:
                 "constructor, approved_date, "
                 "road_address, legal_address, top_floor, base_floor, total_area, "
                 "heat_type, developer, elevator_count, "
-                "units_60, units_85, units_135, units_136_plus "
+                "units_60, units_85, units_135, units_136_plus, "
+                "sido, sigungu, eupmyeondong, ri "
                 "FROM apartment_master WHERE cache_key = ?",
                 (key,),
             ).fetchone()
@@ -113,6 +122,10 @@ class ApartmentMasterRepository:
             units_85=row[15] or 0,
             units_135=row[16] or 0,
             units_136_plus=row[17] or 0,
+            sido=row[18] or "",
+            sigungu=row[19] or "",
+            eupmyeondong=row[20] or "",
+            ri=row[21] or "",
         )
 
     def save(self, master: ApartmentMaster) -> None:
@@ -125,8 +138,9 @@ class ApartmentMasterRepository:
                 "constructor, approved_date, "
                 "road_address, legal_address, top_floor, base_floor, total_area, "
                 "heat_type, developer, elevator_count, "
-                "units_60, units_85, units_135, units_136_plus, fetched_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "units_60, units_85, units_135, units_136_plus, "
+                "sido, sigungu, eupmyeondong, ri, fetched_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     key,
                     master.complex_code,
@@ -147,6 +161,10 @@ class ApartmentMasterRepository:
                     master.units_85,
                     master.units_135,
                     master.units_136_plus,
+                    master.sido,
+                    master.sigungu,
+                    master.eupmyeondong,
+                    master.ri,
                     fetched_at,
                 ),
             )
@@ -168,6 +186,8 @@ class ApartmentMasterRepository:
         self,
         apt_name: str = "",
         district_code: str = "",
+        sido: str = "",
+        sigungu: str = "",
         min_household: int = 0,
         max_household: int = 99999,
         constructor: str = "",
@@ -179,7 +199,9 @@ class ApartmentMasterRepository:
 
         Args:
             apt_name: 아파트명 부분일치 (빈 문자열이면 무시)
-            district_code: 정확일치 (빈 문자열이면 무시)
+            district_code: 시군구코드 prefix 매칭 (빈 문자열이면 무시)
+            sido: 시도 완전일치 (빈 문자열이면 무시, 예: 서울특별시)
+            sigungu: 시군구 완전일치 (빈 문자열이면 무시, 예: 강남구)
             min_household: 최소 세대수 (0이면 무시)
             max_household: 최대 세대수 (99999이면 무시)
             constructor: 건설사 부분일치 (빈 문자열이면 무시)
@@ -196,6 +218,12 @@ class ApartmentMasterRepository:
         if district_code:
             conditions.append("cache_key LIKE ?")
             params.append(f"{district_code}__%")
+        if sido:
+            conditions.append("sido = ?")
+            params.append(sido)
+        if sigungu:
+            conditions.append("sigungu = ?")
+            params.append(sigungu)
         if min_household > 0:
             conditions.append("household_count >= ?")
             params.append(min_household)
@@ -216,7 +244,8 @@ class ApartmentMasterRepository:
             f"constructor, approved_date, "
             f"road_address, legal_address, top_floor, base_floor, total_area, "
             f"heat_type, developer, elevator_count, "
-            f"units_60, units_85, units_135, units_136_plus "
+            f"units_60, units_85, units_135, units_136_plus, "
+            f"sido, sigungu, eupmyeondong, ri "
             f"FROM apartment_master {where_clause} LIMIT ?"
         )
         params.append(limit)
@@ -251,6 +280,10 @@ class ApartmentMasterRepository:
                 units_85=row[16] or 0,
                 units_135=row[17] or 0,
                 units_136_plus=row[18] or 0,
+                sido=row[19] or "",
+                sigungu=row[20] or "",
+                eupmyeondong=row[21] or "",
+                ri=row[22] or "",
             ))
         return results
 
@@ -261,4 +294,29 @@ class ApartmentMasterRepository:
                 "SELECT DISTINCT constructor FROM apartment_master "
                 "WHERE constructor != '' ORDER BY constructor"
             ).fetchall()
+        return [r[0] for r in rows]
+
+    def get_distinct_sidos(self) -> List[str]:
+        """시도 드롭다운용 목록 반환."""
+        with sqlite3.connect(self._db_path) as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT sido FROM apartment_master "
+                "WHERE sido != '' ORDER BY sido"
+            ).fetchall()
+        return [r[0] for r in rows]
+
+    def get_distinct_sigungus(self, sido: str = "") -> List[str]:
+        """시군구 드롭다운용 목록 반환. sido 지정 시 해당 시도 내 시군구만 반환."""
+        with sqlite3.connect(self._db_path) as conn:
+            if sido:
+                rows = conn.execute(
+                    "SELECT DISTINCT sigungu FROM apartment_master "
+                    "WHERE sigungu != '' AND sido = ? ORDER BY sigungu",
+                    (sido,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT DISTINCT sigungu FROM apartment_master "
+                    "WHERE sigungu != '' ORDER BY sigungu"
+                ).fetchall()
         return [r[0] for r in rows]

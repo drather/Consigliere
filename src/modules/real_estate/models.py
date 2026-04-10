@@ -32,6 +32,11 @@ class ApartmentMaster:
     units_85: int = 0            # kaptMparea85 (60~85㎡)
     units_135: int = 0           # kaptMparea135 (85~135㎡)
     units_136_plus: int = 0      # kaptMparea136 (135㎡ 초과)
+    # 행정구역 (API 1: getTotalAptList3 — 시도/시군구/읍면동 필터링용)
+    sido: str = ""               # as1 (시도, 예: 서울특별시)
+    sigungu: str = ""            # as2 (시군구, 예: 서초구)
+    eupmyeondong: str = ""       # as3 (읍면동, 예: 반포동)
+    ri: str = ""                 # as4 (리, 도심지역은 보통 빈값)
     fetched_at: str = ""
 
 class RealEstateTransaction(BaseModel):
