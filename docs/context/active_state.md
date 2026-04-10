@@ -1,10 +1,10 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-09
-**Current Active Feature:** 다음 작업 선택 대기
+**Last Updated:** 2026-04-10
+**Current Active Feature:** apt_master_utilization
 
 ## 현재 포커스
-- **Branch:** `master`
-- **Status:** ✅ 아파트 마스터 DB 구축 완료 — master 커밋 완료
+- **Branch:** `feature/apt_master_utilization`
+- **Status:** 🚧 Phase 1 (Spec 작성 중) — 1-A 실거래가 분석 품질 향상 + 1-B Streamlit 마스터 조회 탭
 
 ## 최근 컨텍스트
 - **completed:** 아파트 마스터 DB 구축 — 실제 API 검증 + 수도권 9,269개 단지 수집 완료
