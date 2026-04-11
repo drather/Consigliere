@@ -3,22 +3,20 @@
 **Current Active Feature:** —
 
 ## 현재 포커스
-- **Branch:** `master`
-- **Status:** ✅ apt_master_utilization 완료 — master 머지 완료
+- **Branch:** `master` (feature/apt_master_map_integration 머지 대기)
+- **Status:** ✅ Phase 2–3 완료 — Phase 4 Release 대기
 
 ## 최근 완료 작업
+- **completed:** Tab5 아파트 마스터 + 실거래가 지도 통합 (2026-04-11)
+  - render_master_map_view + _build_master_popup_html + get_transactions_by_district_codes
+  - Tab5 서브탭 (📋 단지 목록 | 🗺️ 지도 뷰), 지연 로드 + 해시 캐시
+  - 23 tests passed
 - **completed:** 아파트 마스터 DB 필드 전면 확장 + 전체 재수집 (2026-04-11)
   - ApartmentMaster 10→26 필드 (API 가용 정보 완전 수집)
   - sido/sigungu/eupmyeondong/ri 필드 추가 (Streamlit cascading 필터)
   - scripts/build_apartment_master.py --rebuild 플래그
   - 수도권 9,275건 완전 재수집 (0 오류)
 - **completed:** 아파트 마스터 데이터 활용 고도화 — 1-A + 1-B (2026-04-10)
-  - BugFix: `_enrich_transactions()` early return → household_count/constructor 항상 부착
-  - `_score_liquidity()` 이제 실제 세대수 기반 동작
-  - Streamlit `🏗️ 단지 검색` 탭 (시도/시군구/세대수/건설사/준공연도 필터)
-  - 신규 테스트 29개, 전체 81 passed
-- **completed:** LLM Filter Chain (2026-04-02)
-- **completed:** LLM Harness Engineering (2026-03-30)
 - **blocked:** 없음
 
 ## 다음 작업 로드맵

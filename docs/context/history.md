@@ -1,6 +1,16 @@
 # Project Consigliere: History
 **Last Updated:** 2026-04-11
 
+## 2026-04-11: Tab5 아파트 마스터 + 실거래가 지도 통합 완성
+- **Feature:** `feature/apt_master_map_integration`
+  - `render_master_map_view(masters, transactions_df, geocoder)` 신규 추가 — Tab5 전용 지도 렌더러
+  - `_build_master_popup_html(master, transactions)` — 단지 기본정보 + 실거래가 이력 팝업
+  - `get_transactions_by_district_codes(district_codes, apt_names, limit_per_district)` — district 단위 광역 조회 후 apt_name 필터링
+  - Tab5 서브탭 구조 (📋 단지 목록 | 🗺️ 지도 뷰) — 기존 테이블 유지, 지도 뷰 추가
+  - 지연 로드(Lazy Load) + 해시 기반 캐시 무효화
+  - 파란 마커(거래있음) / 회색 마커(거래없음) 색상 구분
+- 23 tests passed (test_map_view.py 16 + test_apt_master_map.py 7)
+
 ## 2026-04-11: 아파트 마스터 DB 필드 전면 확장 + 전체 재수집 완료
 - **Feature:** `ApartmentMaster` dataclass 10→26 필드 확장 (API 가용 정보 완전 수집)
   - API2 신규: road_address, legal_address, top_floor, base_floor, total_area, heat_type, developer, elevator_count, units_60/85/135/136_plus
