@@ -12,11 +12,11 @@ except ImportError:
 
 try:
     from dashboard.api_client import DashboardClient
-    from dashboard.components.map_view import render_map_view
+    from dashboard.components.map_view import render_map_view, render_master_map_view
     from modules.real_estate.geocoder import GeocoderService, GeocoderProtocol
 except ImportError:
     from src.dashboard.api_client import DashboardClient
-    from src.dashboard.components.map_view import render_map_view
+    from src.dashboard.components.map_view import render_map_view, render_master_map_view
     from src.modules.real_estate.geocoder import GeocoderService, GeocoderProtocol
 
 
@@ -891,90 +891,155 @@ def show_real_estate():
 
                 _code_to_name = {d["code"]: d["name"] for d in districts}
 
-                rows = []
-                for m in results:
-                    year_str = m.approved_date[:4] if m.approved_date and len(m.approved_date) >= 4 else "-"
-                    rows.append({
-                        "아파트명": m.apt_name,
-                        "지구": _code_to_name.get(m.district_code, m.district_code),
-                        "세대수": m.household_count,
-                        "동수": m.building_count,
-                        "건설사": m.constructor or "-",
-                        "시행사": m.developer or "-",
-                        "준공연도": year_str,
-                        "최고층": f"{m.top_floor}F" if m.top_floor else "-",
-                        "난방": m.heat_type or "-",
-                    })
+                sub_list, sub_map = st.tabs(["📋 단지 목록", "🗺️ 지도 뷰"])
 
-                df = _pd.DataFrame(rows)
-                display_cols = ["아파트명", "지구", "세대수", "동수", "건설사", "시행사", "준공연도", "최고층", "난방"]
+                # ── 📋 단지 목록 탭 ──────────────────────────────────────
+                with sub_list:
+                    rows = []
+                    for m in results:
+                        year_str = m.approved_date[:4] if m.approved_date and len(m.approved_date) >= 4 else "-"
+                        rows.append({
+                            "아파트명": m.apt_name,
+                            "지구": _code_to_name.get(m.district_code, m.district_code),
+                            "세대수": m.household_count,
+                            "동수": m.building_count,
+                            "건설사": m.constructor or "-",
+                            "시행사": m.developer or "-",
+                            "준공연도": year_str,
+                            "최고층": f"{m.top_floor}F" if m.top_floor else "-",
+                            "난방": m.heat_type or "-",
+                        })
 
-                # 선택 가능 테이블
-                selection = st.dataframe(
-                    df[display_cols],
-                    use_container_width=True,
-                    hide_index=True,
-                    on_select="rerun",
-                    selection_mode="single-row",
-                    key="master_table",
-                )
+                    df_master = _pd.DataFrame(rows)
+                    display_cols = ["아파트명", "지구", "세대수", "동수", "건설사", "시행사", "준공연도", "최고층", "난방"]
 
-                # 단지 상세 보기
-                selected_rows = selection.get("selection", {}).get("rows", [])
-                if selected_rows:
-                    idx = selected_rows[0]
-                    m = results[idx]
-                    year_disp = m.approved_date[:4] if m.approved_date and len(m.approved_date) >= 4 else "-"
-                    with st.expander(f"📋 {m.apt_name} 상세 정보", expanded=True):
-                        # 주소
-                        if m.road_address:
-                            st.caption(f"📍 {m.road_address}")
-                        elif m.legal_address:
-                            st.caption(f"📍 {m.legal_address}")
+                    # 선택 가능 테이블
+                    selection = st.dataframe(
+                        df_master[display_cols],
+                        use_container_width=True,
+                        hide_index=True,
+                        on_select="rerun",
+                        selection_mode="single-row",
+                        key="master_table",
+                    )
 
-                        # 기본 지표
-                        r1c1, r1c2, r1c3, r1c4 = st.columns(4)
-                        with r1c1:
-                            st.metric("세대수", f"{m.household_count:,}세대")
-                        with r1c2:
-                            st.metric("동수", f"{m.building_count}개동")
-                        with r1c3:
-                            st.metric("준공연도", f"{year_disp}년")
-                        with r1c4:
-                            st.metric("최고층수", f"{m.top_floor}F" if m.top_floor else "-")
+                    # 단지 상세 보기
+                    selected_rows = selection.get("selection", {}).get("rows", [])
+                    if selected_rows:
+                        idx = selected_rows[0]
+                        m = results[idx]
+                        year_disp = m.approved_date[:4] if m.approved_date and len(m.approved_date) >= 4 else "-"
+                        with st.expander(f"📋 {m.apt_name} 상세 정보", expanded=True):
+                            # 주소
+                            if m.road_address:
+                                st.caption(f"📍 {m.road_address}")
+                            elif m.legal_address:
+                                st.caption(f"📍 {m.legal_address}")
 
-                        r2c1, r2c2, r2c3, r2c4 = st.columns(4)
-                        with r2c1:
-                            st.metric("건설사", m.constructor or "-")
-                        with r2c2:
-                            st.metric("시행사", m.developer or "-")
-                        with r2c3:
-                            st.metric("난방방식", m.heat_type or "-")
-                        with r2c4:
-                            st.metric("승강기", f"{m.elevator_count}대" if m.elevator_count else "-")
+                            # 기본 지표
+                            r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+                            with r1c1:
+                                st.metric("세대수", f"{m.household_count:,}세대")
+                            with r1c2:
+                                st.metric("동수", f"{m.building_count}개동")
+                            with r1c3:
+                                st.metric("준공연도", f"{year_disp}년")
+                            with r1c4:
+                                st.metric("최고층수", f"{m.top_floor}F" if m.top_floor else "-")
 
-                        # 면적별 세대수
-                        total_units = m.units_60 + m.units_85 + m.units_135 + m.units_136_plus
-                        if total_units > 0:
-                            st.markdown("**전용면적별 세대 구성**")
-                            uc1, uc2, uc3, uc4 = st.columns(4)
-                            with uc1:
-                                st.metric("60㎡ 이하", f"{m.units_60:,}세대")
-                            with uc2:
-                                st.metric("60~85㎡", f"{m.units_85:,}세대")
-                            with uc3:
-                                st.metric("85~135㎡", f"{m.units_135:,}세대")
-                            with uc4:
-                                st.metric("135㎡ 초과", f"{m.units_136_plus:,}세대")
+                            r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+                            with r2c1:
+                                st.metric("건설사", m.constructor or "-")
+                            with r2c2:
+                                st.metric("시행사", m.developer or "-")
+                            with r2c3:
+                                st.metric("난방방식", m.heat_type or "-")
+                            with r2c4:
+                                st.metric("승강기", f"{m.elevator_count}대" if m.elevator_count else "-")
 
-                        # 기타 정보
-                        st.caption(
-                            f"단지코드: {m.complex_code or '-'}  |  "
-                            f"지구코드: {m.district_code}  |  "
-                            f"지하층수: {m.base_floor}층  |  "
-                            f"연면적: {m.total_area:,.0f}㎡" if m.total_area else
-                            f"단지코드: {m.complex_code or '-'}  |  지구코드: {m.district_code}"
+                            # 면적별 세대수
+                            total_units = m.units_60 + m.units_85 + m.units_135 + m.units_136_plus
+                            if total_units > 0:
+                                st.markdown("**전용면적별 세대 구성**")
+                                uc1, uc2, uc3, uc4 = st.columns(4)
+                                with uc1:
+                                    st.metric("60㎡ 이하", f"{m.units_60:,}세대")
+                                with uc2:
+                                    st.metric("60~85㎡", f"{m.units_85:,}세대")
+                                with uc3:
+                                    st.metric("85~135㎡", f"{m.units_135:,}세대")
+                                with uc4:
+                                    st.metric("135㎡ 초과", f"{m.units_136_plus:,}세대")
+
+                            # 기타 정보
+                            st.caption(
+                                f"단지코드: {m.complex_code or '-'}  |  "
+                                f"지구코드: {m.district_code}  |  "
+                                f"지하층수: {m.base_floor}층  |  "
+                                f"연면적: {m.total_area:,.0f}㎡" if m.total_area else
+                                f"단지코드: {m.complex_code or '-'}  |  지구코드: {m.district_code}"
+                            )
+
+                # ── 🗺️ 지도 뷰 탭 ────────────────────────────────────────
+                with sub_map:
+                    _kakao_key = os.environ.get("KAKAO_API_KEY", "")
+                    if not _kakao_key:
+                        st.warning("KAKAO_API_KEY 환경변수가 없어 지도 기능을 사용할 수 없습니다.")
+                    elif st_folium is None:
+                        st.warning("streamlit-folium 패키지가 설치되지 않았습니다.")
+                    else:
+                        # 캐시 키: 검색 결과 단지 집합 기준
+                        _map_cache_key = str(hash(tuple(sorted(
+                            f"{m.district_code}__{m.apt_name}" for m in results
+                        ))))
+
+                        col_load, col_clear = st.columns([2, 1])
+                        with col_load:
+                            load_map_btn = st.button("🗺️ 지도 로드", key="master_map_load_btn", use_container_width=True)
+                        with col_clear:
+                            clear_map_btn = st.button("🔄 초기화", key="master_map_clear_btn", use_container_width=True)
+
+                        if clear_map_btn:
+                            for _k in ("master_cached_fmap", "master_tx_df", "master_map_cache_key"):
+                                st.session_state.pop(_k, None)
+                            st.rerun()
+
+                        _cache_hit = (
+                            st.session_state.get("master_map_cache_key") == _map_cache_key
+                            and "master_cached_fmap" in st.session_state
                         )
+
+                        if load_map_btn or _cache_hit:
+                            if not _cache_hit:
+                                # 거래 데이터 조회
+                                _district_codes = list({m.district_code for m in results})
+                                _apt_names = {m.apt_name for m in results}
+                                with st.spinner("실거래가 이력 조회 중..."):
+                                    _tx_df = DashboardClient.get_transactions_by_district_codes(
+                                        _district_codes,
+                                        apt_names=_apt_names,
+                                    )
+                                # 지도 렌더링
+                                with st.spinner("지도 렌더링 중..."):
+                                    _geocoder = GeocoderService(kakao_api_key=_kakao_key)
+                                    _fmap = render_master_map_view(results, _tx_df, _geocoder)
+                                # 캐시 저장
+                                st.session_state.master_cached_fmap = _fmap
+                                st.session_state.master_tx_df = _tx_df
+                                st.session_state.master_map_cache_key = _map_cache_key
+
+                            _fmap = st.session_state.master_cached_fmap
+                            _tx_df = st.session_state.get("master_tx_df", _pd.DataFrame())
+                            _tx_count = len(_tx_df) if not _tx_df.empty else 0
+                            st.caption(
+                                f"표시 단지: {len(results)}개  |  "
+                                f"거래 이력: {_tx_count}건  |  "
+                                "파란 마커=거래있음, 회색 마커=거래없음"
+                            )
+                            st_folium(_fmap, use_container_width=True, height=620)
+                        else:
+                            st.info("지도 로드 버튼을 눌러 단지 위치와 실거래가 이력을 확인하세요.")
+
         except Exception as _e:
             st.error(f"마스터 DB 조회 오류: {_e}")
             st.info("API 서버가 실행 중인지 확인하거나 DB 경로를 점검하세요.")

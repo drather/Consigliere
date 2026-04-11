@@ -68,6 +68,40 @@ class DashboardClient:
             return pd.DataFrame()
 
     @staticmethod
+    def get_transactions_by_district_codes(
+        district_codes: list,
+        apt_names: set = None,
+        limit_per_district: int = 500,
+    ) -> pd.DataFrame:
+        """Tab5 지도 전용: district_code별 광역 조회 후 apt_names 집합으로 Python 필터링.
+
+        Args:
+            district_codes: 5자리 시군구 코드 목록
+            apt_names: 필터할 apt_name 집합. None이면 전체 반환
+            limit_per_district: district_code당 최대 조회 건수
+        Returns:
+            복수 지구 거래 합산 DataFrame
+        """
+        frames = []
+        for dc in district_codes:
+            df = DashboardClient.get_real_estate_transactions(
+                district_code=dc,
+                limit=limit_per_district,
+            )
+            if not df.empty:
+                frames.append(df)
+
+        if not frames:
+            return pd.DataFrame()
+
+        combined = pd.concat(frames, ignore_index=True)
+
+        if apt_names:
+            combined = combined[combined["apt_name"].isin(apt_names)]
+
+        return combined
+
+    @staticmethod
     def list_news_reports() -> List[str]:
         """Fetches list of available news reports."""
         try:
