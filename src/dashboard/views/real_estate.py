@@ -74,7 +74,7 @@ def _render_tx_dataframe(df: pd.DataFrame, code_to_name: Dict[str, str] = None):
 def show_real_estate():
     st.title("🏢 Real Estate Insights")
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Market Monitor", "💡 Insight", "📋 Report Archive", "👤 페르소나"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Market Monitor", "💡 Insight", "📋 Report Archive", "👤 페르소나", "🏗️ 단지 검색"])
 
     # ──────────────────────────────────────────────────────────
     # TAB 1: Market Monitor
@@ -820,3 +820,161 @@ def show_real_estate():
                     st.success(f"✅ {len(updated_rules)}개 규칙 저장 완료. 다음 리포트 생성 시 반영됩니다.")
                     st.session_state.preference_rules = result.get("rules", updated_rules)
                     st.rerun()
+
+    # ──────────────────────────────────────────────────────────
+    # TAB 5: 단지 검색 (아파트 마스터 DB 직접 조회)
+    # ──────────────────────────────────────────────────────────
+    with tab5:
+        st.subheader("🏗️ 아파트 마스터 DB 검색")
+        st.caption("수도권 9,261개 단지 정보를 검색합니다. (세대수·건설사·준공연도 기준 필터링)")
+
+        try:
+            import os as _os
+            import sys as _sys
+            _src = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), '..', '..'))
+            if _src not in _sys.path:
+                _sys.path.insert(0, _src)
+            from modules.real_estate.apartment_master.repository import ApartmentMasterRepository
+            from modules.real_estate.config import RealEstateConfig
+
+            _cfg = RealEstateConfig()
+            _db_path = _cfg.get("apartment_master_db_path", "data/apartment_master.db")
+            _repo = ApartmentMasterRepository(db_path=_db_path)
+
+            # ── 필터 입력 UI ──
+            col_f1, col_f2, col_f3 = st.columns(3)
+            with col_f1:
+                search_name = st.text_input("아파트명 검색 (부분일치)", placeholder="래미안, 힐스테이트 …", key="master_search_name")
+            with col_f2:
+                sido_opts = ["전체"] + _repo.get_distinct_sidos()
+                selected_sido = st.selectbox("시도", sido_opts, key="master_sido")
+                sido_filter = "" if selected_sido == "전체" else selected_sido
+            with col_f3:
+                sigungu_opts = ["전체"] + _repo.get_distinct_sigungus(sido_filter)
+                selected_sigungu = st.selectbox("시군구", sigungu_opts, key="master_sigungu")
+                sigungu_filter = "" if selected_sigungu == "전체" else selected_sigungu
+
+            col_f4, col_f5 = st.columns(2)
+            with col_f4:
+                min_hh, max_hh = st.slider("세대수 범위", min_value=0, max_value=5000, value=(0, 5000), step=50, key="master_hh_range")
+            with col_f5:
+                constructors_all = ["전체"] + _repo.get_distinct_constructors()
+                selected_constructor = st.selectbox("건설사", constructors_all, key="master_constructor")
+                constructor_filter = "" if selected_constructor == "전체" else selected_constructor
+
+            col_f6, col_f7 = st.columns([3, 1])
+            with col_f6:
+                year_start, year_end = st.slider("준공연도 범위", min_value=1970, max_value=2030, value=(1990, 2025), key="master_year_range")
+            with col_f7:
+                st.write("")
+                search_btn = st.button("🔍 검색", key="master_search_btn", use_container_width=True)
+
+            # ── 검색 실행 ──
+            if search_btn or "master_results" not in st.session_state:
+                with st.spinner("검색 중..."):
+                    st.session_state.master_results = _repo.search(
+                        apt_name=search_name,
+                        sido=sido_filter,
+                        sigungu=sigungu_filter,
+                        min_household=min_hh if min_hh > 0 else 0,
+                        max_household=max_hh if max_hh < 5000 else 99999,
+                        constructor=constructor_filter,
+                        approved_year_start=year_start,
+                        approved_year_end=year_end,
+                    )
+
+            results = st.session_state.get("master_results", [])
+            st.markdown(f"**{len(results)}건** 검색됨 (최대 500건)")
+
+            if results:
+                import pandas as _pd
+
+                _code_to_name = {d["code"]: d["name"] for d in districts}
+
+                rows = []
+                for m in results:
+                    year_str = m.approved_date[:4] if m.approved_date and len(m.approved_date) >= 4 else "-"
+                    rows.append({
+                        "아파트명": m.apt_name,
+                        "지구": _code_to_name.get(m.district_code, m.district_code),
+                        "세대수": m.household_count,
+                        "동수": m.building_count,
+                        "건설사": m.constructor or "-",
+                        "시행사": m.developer or "-",
+                        "준공연도": year_str,
+                        "최고층": f"{m.top_floor}F" if m.top_floor else "-",
+                        "난방": m.heat_type or "-",
+                    })
+
+                df = _pd.DataFrame(rows)
+                display_cols = ["아파트명", "지구", "세대수", "동수", "건설사", "시행사", "준공연도", "최고층", "난방"]
+
+                # 선택 가능 테이블
+                selection = st.dataframe(
+                    df[display_cols],
+                    use_container_width=True,
+                    hide_index=True,
+                    on_select="rerun",
+                    selection_mode="single-row",
+                    key="master_table",
+                )
+
+                # 단지 상세 보기
+                selected_rows = selection.get("selection", {}).get("rows", [])
+                if selected_rows:
+                    idx = selected_rows[0]
+                    m = results[idx]
+                    year_disp = m.approved_date[:4] if m.approved_date and len(m.approved_date) >= 4 else "-"
+                    with st.expander(f"📋 {m.apt_name} 상세 정보", expanded=True):
+                        # 주소
+                        if m.road_address:
+                            st.caption(f"📍 {m.road_address}")
+                        elif m.legal_address:
+                            st.caption(f"📍 {m.legal_address}")
+
+                        # 기본 지표
+                        r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+                        with r1c1:
+                            st.metric("세대수", f"{m.household_count:,}세대")
+                        with r1c2:
+                            st.metric("동수", f"{m.building_count}개동")
+                        with r1c3:
+                            st.metric("준공연도", f"{year_disp}년")
+                        with r1c4:
+                            st.metric("최고층수", f"{m.top_floor}F" if m.top_floor else "-")
+
+                        r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+                        with r2c1:
+                            st.metric("건설사", m.constructor or "-")
+                        with r2c2:
+                            st.metric("시행사", m.developer or "-")
+                        with r2c3:
+                            st.metric("난방방식", m.heat_type or "-")
+                        with r2c4:
+                            st.metric("승강기", f"{m.elevator_count}대" if m.elevator_count else "-")
+
+                        # 면적별 세대수
+                        total_units = m.units_60 + m.units_85 + m.units_135 + m.units_136_plus
+                        if total_units > 0:
+                            st.markdown("**전용면적별 세대 구성**")
+                            uc1, uc2, uc3, uc4 = st.columns(4)
+                            with uc1:
+                                st.metric("60㎡ 이하", f"{m.units_60:,}세대")
+                            with uc2:
+                                st.metric("60~85㎡", f"{m.units_85:,}세대")
+                            with uc3:
+                                st.metric("85~135㎡", f"{m.units_135:,}세대")
+                            with uc4:
+                                st.metric("135㎡ 초과", f"{m.units_136_plus:,}세대")
+
+                        # 기타 정보
+                        st.caption(
+                            f"단지코드: {m.complex_code or '-'}  |  "
+                            f"지구코드: {m.district_code}  |  "
+                            f"지하층수: {m.base_floor}층  |  "
+                            f"연면적: {m.total_area:,.0f}㎡" if m.total_area else
+                            f"단지코드: {m.complex_code or '-'}  |  지구코드: {m.district_code}"
+                        )
+        except Exception as _e:
+            st.error(f"마스터 DB 조회 오류: {_e}")
+            st.info("API 서버가 실행 중인지 확인하거나 DB 경로를 점검하세요.")

@@ -3,16 +3,19 @@
 
 사용법:
     arch -arm64 .venv/bin/python3.12 scripts/build_apartment_master.py
+    arch -arm64 .venv/bin/python3.12 scripts/build_apartment_master.py --rebuild
 
 특징:
     - 수도권(서울 11·인천 28·경기 41) 단지만 수집
     - 중단 후 재실행 시 DB 기준으로 자동 이어받기 (재시작해도 안전)
+    - --rebuild: 기존 DB를 초기화하고 전체 재수집 (신규 필드 채우기용)
     - data/apartment_master_progress.json 에 실시간 진행상황 기록
 """
 import os
 import sys
 import json
 import logging
+import argparse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -68,22 +71,39 @@ def print_progress_summary():
 
 
 def main():
+    parser = argparse.ArgumentParser(description="수도권 아파트 마스터 DB 구축")
+    parser.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="기존 DB를 초기화하고 전체 재수집 (신규 필드 채우기용)",
+    )
+    args = parser.parse_args()
+
     os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
 
     # 수도권 지구 로드
     metro_districts = load_metro_districts()
     logger.info(f"수도권 대상 지구: {len(metro_districts)}개")
 
-    # 기존 진행상황 확인
+    # 저장소 초기화
     repo = ApartmentMasterRepository(db_path=DB_PATH)
-    existing_count = repo.count()
-    if existing_count > 0:
-        logger.info(f"기존 DB에 {existing_count}건 저장됨 → 이어받기 모드")
-        print("\n[이전 진행상황]")
-        print_progress_summary()
-        print()
+
+    # --rebuild: 기존 DB 삭제 후 전체 재수집
+    if args.rebuild:
+        existing_count = repo.count()
+        logger.info(f"[--rebuild] 기존 DB {existing_count}건 삭제 후 전체 재수집")
+        repo.truncate()
+        logger.info("[--rebuild] DB 초기화 완료 — 전체 수집 시작")
     else:
-        logger.info("첫 실행 — 전체 수집 시작")
+        # 기존 진행상황 확인
+        existing_count = repo.count()
+        if existing_count > 0:
+            logger.info(f"기존 DB에 {existing_count}건 저장됨 → 이어받기 모드")
+            print("\n[이전 진행상황]")
+            print_progress_summary()
+            print()
+        else:
+            logger.info("첫 실행 — 전체 수집 시작")
 
     # 서비스 초기화
     client = ApartmentMasterClient()

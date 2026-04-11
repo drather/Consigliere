@@ -6,17 +6,37 @@ from datetime import datetime, date
 
 @dataclass
 class ApartmentMaster:
-    """아파트 단지 마스터 정보 (공공 API 수집)."""
+    """아파트 단지 마스터 정보 (공동주택 기본정보 API getAphusBassInfoV4 수집)."""
     apt_name: str
     district_code: str           # 5자리 sigunguCd
     complex_code: str            # kaptCode
-    household_count: int         # hhldCnt (세대수)
-    building_count: int          # bdNum (동수)
-    parking_count: int           # 주차대수
-    constructor: str             # 시공사 (kaptBcompany)
-    approved_date: str           # 사용승인일 YYYYMMDD (useAprDay)
-    floor_area_ratio: Optional[float] = None    # vlRat 용적률 (Phase 2)
-    building_coverage_ratio: Optional[float] = None  # bcRat 건폐율 (Phase 2)
+    # 기본 정보
+    household_count: int         # hoCnt (세대수)
+    building_count: int          # kaptDongCnt (동수)
+    parking_count: int           # 주차대수 (API 미제공)
+    constructor: str             # kaptBcompany (시공사)
+    approved_date: str           # kaptUsedate (사용승인일 YYYYMMDD)
+    # 주소
+    road_address: str = ""       # doroJuso (도로명주소)
+    legal_address: str = ""      # kaptAddr (법정동주소)
+    # 건물 구조
+    top_floor: int = 0           # kaptTopFloor (최고층수)
+    base_floor: int = 0          # kaptBaseFloor (지하층수)
+    total_area: float = 0.0      # kaptTarea (연면적 ㎡)
+    # 단지 특성
+    heat_type: str = ""          # codeHeatNm (난방방식)
+    developer: str = ""          # kaptAcompany (시행사)
+    elevator_count: int = 0      # kaptdEcntp (승객용 승강기대수)
+    # 전용면적별 세대수
+    units_60: int = 0            # kaptMparea60 (60㎡ 이하)
+    units_85: int = 0            # kaptMparea85 (60~85㎡)
+    units_135: int = 0           # kaptMparea135 (85~135㎡)
+    units_136_plus: int = 0      # kaptMparea136 (135㎡ 초과)
+    # 행정구역 (API 1: getTotalAptList3 — 시도/시군구/읍면동 필터링용)
+    sido: str = ""               # as1 (시도, 예: 서울특별시)
+    sigungu: str = ""            # as2 (시군구, 예: 서초구)
+    eupmyeondong: str = ""       # as3 (읍면동, 예: 반포동)
+    ri: str = ""                 # as4 (리, 도심지역은 보통 빈값)
     fetched_at: str = ""
 
 class RealEstateTransaction(BaseModel):
