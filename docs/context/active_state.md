@@ -3,8 +3,8 @@
 **Current Active Feature:** —
 
 ## 현재 포커스
-- **Branch:** `master`
-- **Status:** ✅ apt_master_utilization 완료 — master 머지 완료
+- **Branch:** `feature/apt_master_map_integration`
+- **Status:** 🔄 Phase 1 완료 — Phase 2 TDD 진행 중
 
 ## 최근 완료 작업
 - **completed:** 아파트 마스터 DB 필드 전면 확장 + 전체 재수집 (2026-04-11)
