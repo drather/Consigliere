@@ -296,6 +296,12 @@ class ApartmentMasterRepository:
             ).fetchall()
         return [r[0] for r in rows]
 
+    def truncate(self) -> None:
+        """모든 레코드를 삭제한다 (재구축용)."""
+        with sqlite3.connect(self._db_path) as conn:
+            conn.execute("DELETE FROM apartment_master")
+            conn.commit()
+
     def get_distinct_sidos(self) -> List[str]:
         """시도 드롭다운용 목록 반환."""
         with sqlite3.connect(self._db_path) as conn:

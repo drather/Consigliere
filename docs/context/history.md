@@ -1,5 +1,17 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-10
+**Last Updated:** 2026-04-11
+
+## 2026-04-11: 아파트 마스터 DB 필드 전면 확장 + 전체 재수집 완료
+- **Feature:** `ApartmentMaster` dataclass 10→26 필드 확장 (API 가용 정보 완전 수집)
+  - API2 신규: road_address, legal_address, top_floor, base_floor, total_area, heat_type, developer, elevator_count, units_60/85/135/136_plus
+  - API1 신규: sido, sigungu, eupmyeondong, ri (시도/시군구/읍면동/리 — 필터링용)
+  - 제거: floor_area_ratio, building_coverage_ratio (API 미제공 확인)
+- **Migration:** SQLite ALTER TABLE ADD COLUMN 자동 마이그레이션 (`_migrate()`)
+- **Streamlit 탭 강화:** 시도→시군구 cascading 드롭다운, get_distinct_sidos/sigungus 추가
+- **Service 리팩토링:** `_match_name_with_item()` 분리 → API1 list_item(as1~as4) 전달 가능
+- **scripts/build_apartment_master.py:** `--rebuild` 플래그 추가 (truncate → 전체 재수집)
+- **DB 재구축:** 수도권 9,275건 / 0 오류 / 71/71 지구 완료 (신규 16개 필드 완전 수집)
+- 81 tests passed
 
 ## 2026-04-10: 아파트 마스터 데이터 활용 고도화 (1-A + 1-B)
 - **BugFix:** `_enrich_transactions()` early return 버그 수정
