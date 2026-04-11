@@ -3,14 +3,17 @@
 **Current Active Feature:** —
 
 ## 현재 포커스
-- **Branch:** `master` (feature/apt_master_map_integration 머지 대기)
-- **Status:** ✅ Phase 2–3 완료 — Phase 4 Release 대기
+- **Branch:** `master`
+- **Status:** ✅ apt_master_map_integration 완료. ISSUE-01 (지도 깜빡임 근본 해결) 미완 — 다음 세션
 
 ## 최근 완료 작업
-- **completed:** Tab5 아파트 마스터 + 실거래가 지도 통합 (2026-04-11)
+- **completed:** Tab5 아파트 마스터 + 실거래가 지도 통합 + 브라우저 버그 수정 (2026-04-11)
   - render_master_map_view + _build_master_popup_html + get_transactions_by_district_codes
   - Tab5 서브탭 (📋 단지 목록 | 🗺️ 지도 뷰), 지연 로드 + 해시 캐시
+  - MarkerCluster 적용, st_folium key 추가, 지도 100개 제한
+  - BUG-01(districts 미정의), BUG-02(api_key 오타), BUG-03(깜빡임 1차) 수정
   - 23 tests passed
+- **pending:** ISSUE-01 지도 깜빡임 근본 해결 (returned_objects=[], @st.fragment 검토)
 - **completed:** 아파트 마스터 DB 필드 전면 확장 + 전체 재수집 (2026-04-11)
   - ApartmentMaster 10→26 필드 (API 가용 정보 완전 수집)
   - sido/sigungu/eupmyeondong/ri 필드 추가 (Streamlit cascading 필터)

@@ -21,6 +21,21 @@ except ImportError:
     )
     from src.modules.real_estate.models import ApartmentMaster
 
+from folium.plugins import MarkerCluster
+
+
+def _collect_markers(fmap: folium.Map) -> list:
+    """fmap 직접 자식 및 MarkerCluster 내부까지 포함해 folium.Marker 목록 반환."""
+    markers = []
+    for child in fmap._children.values():
+        if isinstance(child, folium.Marker):
+            markers.append(child)
+        elif isinstance(child, MarkerCluster):
+            for sub in child._children.values():
+                if isinstance(sub, folium.Marker):
+                    markers.append(sub)
+    return markers
+
 
 def _make_df():
     return pd.DataFrame([
@@ -83,11 +98,8 @@ def test_marker_count_matches_unique_apts():
     geocoder = _make_geocoder()
     result = render_map_view(df, geocoder)
 
-    # Count markers in the map's children
-    markers = [
-        child for child in result._children.values()
-        if isinstance(child, folium.Marker)
-    ]
+    # MarkerCluster 내부 포함해서 카운트
+    markers = _collect_markers(result)
     # 2 unique apts, both have coordinates → 2 markers
     assert len(markers) == 2
 
@@ -98,10 +110,7 @@ def test_popup_contains_apt_name():
     geocoder = _make_geocoder()
     result = render_map_view(df, geocoder)
 
-    markers = [
-        child for child in result._children.values()
-        if isinstance(child, folium.Marker)
-    ]
+    markers = _collect_markers(result)
     assert len(markers) > 0
 
     # At least one marker popup should contain the apt name
@@ -175,7 +184,7 @@ def test_render_master_map_marker_count():
         _make_master("아크로리버파크", "11650"),
     ]
     fmap = render_master_map_view(masters, pd.DataFrame(), _make_master_geocoder())
-    markers = [c for c in fmap._children.values() if isinstance(c, folium.Marker)]
+    markers = _collect_markers(fmap)
     assert len(markers) == 2
 
 
@@ -185,7 +194,7 @@ def test_render_master_map_no_marker_if_no_coords():
     geocoder = MagicMock()
     geocoder.batch_geocode.return_value = {}  # 좌표 없음
     fmap = render_master_map_view(masters, pd.DataFrame(), geocoder)
-    markers = [c for c in fmap._children.values() if isinstance(c, folium.Marker)]
+    markers = _collect_markers(fmap)
     assert len(markers) == 0
 
 
@@ -193,7 +202,7 @@ def test_render_master_map_blue_marker_when_has_transactions():
     """거래 있는 단지 → 파란색 마커."""
     masters = [_make_master()]
     fmap = render_master_map_view(masters, _make_tx_df(), _make_master_geocoder())
-    markers = [c for c in fmap._children.values() if isinstance(c, folium.Marker)]
+    markers = _collect_markers(fmap)
     assert len(markers) == 1
     icon = list(markers[0]._children.values())[0]
     assert isinstance(icon, folium.Icon)
@@ -205,7 +214,7 @@ def test_render_master_map_gray_marker_when_no_transactions():
     """거래 없는 단지 → 회색 마커."""
     masters = [_make_master()]
     fmap = render_master_map_view(masters, pd.DataFrame(), _make_master_geocoder())
-    markers = [c for c in fmap._children.values() if isinstance(c, folium.Marker)]
+    markers = _collect_markers(fmap)
     assert len(markers) == 1
     icon = list(markers[0]._children.values())[0]
     assert isinstance(icon, folium.Icon)

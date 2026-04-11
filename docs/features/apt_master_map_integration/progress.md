@@ -59,4 +59,10 @@
 
 ## Phase 4: Release
 - [x] 전체 테스트 통과 (23/23 passed)
-- [ ] master 머지 및 push
+- [x] master 머지 완료
+
+## Post-Release: 브라우저 테스트 버그 수정
+- [x] BUG-01: `districts` 미정의 변수 → session_state 참조로 수정
+- [x] BUG-02: `GeocoderService(kakao_api_key=...)` → `api_key=` 수정
+- [x] BUG-03 (1차): 지도 깜빡임 → `key` 파라미터 추가, MarkerCluster 적용, 상위 100개 제한
+- [ ] ISSUE-01: 지도 깜빡임 근본 해결 미완 (다음 세션 이어받기)

@@ -8,6 +8,8 @@ import pandas as pd
 import folium
 
 
+from folium.plugins import MarkerCluster
+
 def _format_price(price: int) -> str:
     """Convert integer KRW price to '억 만원' string format."""
     eok = price // 100_000_000
@@ -39,19 +41,9 @@ def _build_popup_html(apt_name: str, transactions: pd.DataFrame) -> str:
 def render_map_view(df: pd.DataFrame, geocoder) -> folium.Map:
     """
     Render a folium map with one marker per unique apartment.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Columns: apt_name, district_code, deal_date, price, exclusive_area, floor
-    geocoder : GeocoderService
-        Instance with batch_geocode() method.
-
-    Returns
-    -------
-    folium.Map
     """
     fmap = folium.Map(location=[37.5665, 126.9780], zoom_start=11)
+    marker_cluster = MarkerCluster().add_to(fmap)
 
     if df.empty:
         return fmap
@@ -75,7 +67,6 @@ def render_map_view(df: pd.DataFrame, geocoder) -> folium.Map:
             continue
 
         lat, lng = coords
-
         apt_txns = df[(df["apt_name"] == apt_name) & (df["district_code"] == district_code)]
         popup_html = _build_popup_html(apt_name, apt_txns)
 
@@ -83,20 +74,13 @@ def render_map_view(df: pd.DataFrame, geocoder) -> folium.Map:
             location=[lat, lng],
             popup=folium.Popup(popup_html, max_width=350),
             tooltip=apt_name,
-        ).add_to(fmap)
+        ).add_to(marker_cluster)
 
     return fmap
 
 
 def _build_master_popup_html(master, transactions: pd.DataFrame) -> str:
-    """Tab5 전용: 단지 기본정보 + 실거래가 이력 팝업 HTML.
-
-    Parameters
-    ----------
-    master : ApartmentMaster
-    transactions : pd.DataFrame
-        해당 단지의 거래 rows. 빈 DataFrame 허용.
-    """
+    """Tab5 전용: 단지 기본정보 + 실거래가 이력 팝업 HTML."""
     year = (
         master.approved_date[:4]
         if master.approved_date and len(master.approved_date) >= 4
@@ -134,24 +118,9 @@ def render_master_map_view(
     transactions_df: pd.DataFrame,
     geocoder,
 ) -> folium.Map:
-    """Tab5 전용: 마스터 단지 목록 기준으로 마커를 그리고,
-    각 단지의 실거래가 이력을 팝업으로 표시한다.
-
-    Parameters
-    ----------
-    masters : List[ApartmentMaster]
-        ApartmentMasterRepository.search() 결과
-    transactions_df : pd.DataFrame
-        복수 단지의 거래 합산 DataFrame. 빈 DataFrame 허용.
-        컬럼: apt_name, district_code, deal_date, price, exclusive_area, floor
-    geocoder : GeocoderProtocol
-        batch_geocode() 메서드를 가진 지오코딩 서비스
-
-    Returns
-    -------
-    folium.Map
-    """
+    """Tab5 전용: 마스터 단지 목록 기준으로 마커를 그리고 Clustering 적용."""
     fmap = folium.Map(location=[37.5665, 126.9780], zoom_start=11)
+    marker_cluster = MarkerCluster().add_to(fmap)
 
     if not masters:
         return fmap
@@ -190,6 +159,6 @@ def render_master_map_view(
                 icon="home",
                 prefix="fa",
             ),
-        ).add_to(fmap)
+        ).add_to(marker_cluster)
 
     return fmap

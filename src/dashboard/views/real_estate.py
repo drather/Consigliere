@@ -258,7 +258,8 @@ def show_real_estate():
                                     st.error(f"지도 렌더링 오류: {_map_err}")
                                     st.stop()
 
-                        st_folium(st.session_state.cached_fmap, use_container_width=True, height=600)
+                        # 단지가 너무 많으면 브라우저 부하로 깜빡임 발생 가능 → MarkerCluster 적용됨
+                        st_folium(st.session_state.cached_fmap, use_container_width=True, height=600, key="monitor_map")
                     else:
                         st.info("'🗺️ 지도 로드' 버튼을 눌러 지도를 표시합니다.")
 
@@ -889,7 +890,7 @@ def show_real_estate():
             if results:
                 import pandas as _pd
 
-                _code_to_name = {d["code"]: d["name"] for d in districts}
+                _code_to_name = {d["code"]: d["name"] for d in st.session_state.get("districts", [])}
 
                 sub_list, sub_map = st.tabs(["📋 단지 목록", "🗺️ 지도 뷰"])
 
@@ -1021,8 +1022,9 @@ def show_real_estate():
                                     )
                                 # 지도 렌더링
                                 with st.spinner("지도 렌더링 중..."):
-                                    _geocoder = GeocoderService(kakao_api_key=_kakao_key)
-                                    _fmap = render_master_map_view(results, _tx_df, _geocoder)
+                                    _geocoder = GeocoderService(api_key=_kakao_key)
+                                    # 성능을 위해 상위 100개만 지도에 표시
+                                    _fmap = render_master_map_view(results[:100], _tx_df, _geocoder)
                                 # 캐시 저장
                                 st.session_state.master_cached_fmap = _fmap
                                 st.session_state.master_tx_df = _tx_df
@@ -1032,11 +1034,13 @@ def show_real_estate():
                             _tx_df = st.session_state.get("master_tx_df", _pd.DataFrame())
                             _tx_count = len(_tx_df) if not _tx_df.empty else 0
                             st.caption(
-                                f"표시 단지: {len(results)}개  |  "
+                                f"전체 검색: {len(results)}개  |  "
+                                f"지도 표시: {min(len(results), 100)}개 (성능 최적화)  |  "
                                 f"거래 이력: {_tx_count}건  |  "
                                 "파란 마커=거래있음, 회색 마커=거래없음"
                             )
-                            st_folium(_fmap, use_container_width=True, height=620)
+                            # Key 추가하여 리렌더링 시 깜빡임 방지
+                            st_folium(_fmap, use_container_width=True, height=620, key="master_map")
                         else:
                             st.info("지도 로드 버튼을 눌러 단지 위치와 실거래가 이력을 확인하세요.")
 
