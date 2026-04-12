@@ -1,12 +1,25 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-11
-**Current Active Feature:** —
+**Last Updated:** 2026-04-12
+**Current Active Feature:** `real-estate-sqlite-redesign`
 
 ## 현재 포커스
-- **Branch:** `master`
-- **Status:** ✅ apt_master_map_integration 완료. ISSUE-01 (지도 깜빡임 근본 해결) 미완 — 다음 세션
+- **Branch:** `feature/real-estate-sqlite-redesign`
+- **Status:** ✅ 구현 완료 — Phase 4 (머지 + 마이그레이션 실행) 대기 중
 
 ## 최근 완료 작업
+- **completed:** Real Estate 데이터 저장소 재설계 — ChromaDB → SQLite (2026-04-12)
+  - `apartment_repository.py` + `transaction_repository.py` 신규 (real_estate.db 통합)
+  - `complex_code` FK로 apt_name 불일치 문제 근본 해결
+  - `/monitor` API 엔드포인트 SQLite 기반으로 교체
+  - `api_client.py` complex_code 지원, `_render_apt_detail_panel` complex_code 우선 조회
+  - `geocoder.py` road_address 기반 Kakao 검색으로 지도 마커 개선
+  - `scripts/migrate_to_real_estate_db.py` 마이그레이션 스크립트
+  - 24/24 PASS (apt_repo 10 + tx_repo 10 + tab_test 4)
+- **completed:** Tab1+Tab5 통합 — "아파트 탐색" 허브 완성 (2026-04-12)
+  - Tab5(단지 검색) + Tab1(Market Monitor) → "🔍 아파트 탐색" 단일 탭 (탭 5→4)
+  - 마스터 필터 → 단지 목록 클릭 → 상세 + 실거래가 UX
+  - `_render_apt_detail_panel()` SRP 분리, config.yaml Zero Hardcoding
+  - 11 tests passed
 - **completed:** Tab5 아파트 마스터 + 실거래가 지도 통합 + 브라우저 버그 수정 (2026-04-11)
   - render_master_map_view + _build_master_popup_html + get_transactions_by_district_codes
   - Tab5 서브탭 (📋 단지 목록 | 🗺️ 지도 뷰), 지연 로드 + 해시 캐시

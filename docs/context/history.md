@@ -1,5 +1,27 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-11
+**Last Updated:** 2026-04-12
+
+## 2026-04-12: Real Estate 데이터 저장소 재설계 (ChromaDB → SQLite)
+- **Feature:** `feature/real-estate-sqlite-redesign`
+  - **배경:** ChromaDB에 12,085건 거래 데이터를 저장했으나 벡터 검색 미사용, ORDER BY/날짜범위 필터 불가, apt_name 불일치로 조회 실패 등 구조적 한계
+  - **재설계:** `real_estate.db`에 `apartments`(PK: complex_code) + `transactions`(FK: complex_code) 테이블로 통합
+  - **신규 파일:** `apartment_repository.py`, `transaction_repository.py`, `scripts/migrate_to_real_estate_db.py`
+  - **핵심 로직:** `resolve_complex_codes()` — 같은 district_code 내 양방향 substring 매칭으로 FK NULL 자동 해소
+  - **API 교체:** `/dashboard/real-estate/monitor` — ChromaDB GET → SQLite complex_code/district_code 조회
+  - **Dashboard:** `_render_apt_detail_panel` — complex_code 있으면 정확 조회, 없으면 district+fuzzy fallback
+  - **Geocoder 개선:** `address` 파라미터 추가 → road_address 기반 Kakao 검색 (이름 기반 미스 해결)
+  - **트리거:** 모든 아파트에 실거래가 없음 표시 + 지도 마커 0개 → UI 테스트 중 발견
+- 24/24 PASS (test_apartment_repository 10 + test_transaction_repository 10 + test_real_estate_tab5 4)
+
+## 2026-04-12: Tab1+Tab5 통합 — "아파트 탐색" 허브 완성
+- **Feature:** `feature/apt-master-monitor-integration`
+  - Tab1(Market Monitor) + Tab5(단지 검색) → "🔍 아파트 탐색" 단일 탭으로 통합 (탭 5→4)
+  - 마스터 필터(시도/시군구/아파트명/세대수/건설사/준공연도) → 단지 목록 클릭 → 상세 + 실거래가 UX
+  - `_render_apt_detail_panel(m, tx_limit)` 신규 함수 (SRP 분리)
+  - `apt_search_tx_limit`(50), `apt_search_map_limit`(100) → `config.yaml` 이관
+  - `repository.py`, `service.py` namespace package 임포트 문제 수정 (try/except fallback)
+  - `tests/conftest.py` 신규 추가, `tests/test_real_estate_tab5.py` 4개 테스트 통과
+- 11 tests passed (test_real_estate_tab5 4 + test_apt_master_map 7)
 
 ## 2026-04-11: Tab5 아파트 마스터 + 실거래가 지도 통합 완성
 - **Feature:** `feature/apt_master_map_integration`
