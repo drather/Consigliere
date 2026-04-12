@@ -10,12 +10,16 @@ from api.dependencies import (
     get_real_estate_agent,
     get_monitor_service,
     get_news_service,
-    get_chroma_repo
+    get_chroma_repo,
+    get_tx_repo,
+    get_apt_repo,
 )
 from modules.real_estate.service import RealEstateAgent
 from modules.real_estate.monitor.service import TransactionMonitorService
 from modules.real_estate.news.service import NewsService
 from modules.real_estate.repository import ChromaRealEstateRepository
+from modules.real_estate.transaction_repository import TransactionRepository
+from modules.real_estate.apartment_repository import ApartmentRepository
 from core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -129,27 +133,42 @@ def update_policy_knowledge(news_service: NewsService = Depends(get_news_service
 @router.get("/dashboard/real-estate/monitor")
 def get_real_estate_monitor(
     district_code: Optional[str] = None,
-    apt_name: Optional[str] = None,
+    complex_code: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
-    price_min: Optional[int] = None,
-    price_max: Optional[int] = None,
     limit: int = 20,
-    chroma_repo: ChromaRealEstateRepository = Depends(get_chroma_repo)
+    tx_repo: TransactionRepository = Depends(get_tx_repo),
 ):
+    """실거래가 조회 — SQLite transactions 테이블."""
     try:
         limit = min(limit, 500)
-        where_clause = {"district_code": {"$eq": district_code}} if district_code else None
-        transactions = chroma_repo.get_transactions(
-            limit=limit,
-            where=where_clause,
-            date_from=date_from,
-            date_to=date_to,
-            apt_name=apt_name,
-            price_min=price_min,
-            price_max=price_max,
-        )
-        return transactions
+        if complex_code:
+            txs = tx_repo.get_by_complex(
+                complex_code=complex_code, limit=limit,
+                date_from=date_from, date_to=date_to,
+            )
+        elif district_code:
+            txs = tx_repo.get_by_district(
+                district_code=district_code, limit=limit,
+                date_from=date_from, date_to=date_to,
+            )
+        else:
+            txs = tx_repo.get_all(limit=limit)
+
+        return [
+            {
+                "apt_name":      t.apt_name,
+                "district_code": t.district_code,
+                "complex_code":  t.complex_code,
+                "deal_date":     t.deal_date,
+                "price":         t.price,
+                "floor":         t.floor,
+                "exclusive_area": t.exclusive_area,
+                "build_year":    t.build_year,
+                "road_name":     t.road_name,
+            }
+            for t in txs
+        ]
     except Exception as e:
         logger.error(f"Monitor Dashboard API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

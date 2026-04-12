@@ -36,28 +36,30 @@ class DashboardClient:
     @staticmethod
     def get_real_estate_transactions(
         district_code: Optional[str] = None,
-        apt_name: Optional[str] = None,
+        complex_code: Optional[str] = None,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
-        price_min: Optional[int] = None,
-        price_max: Optional[int] = None,
         limit: int = 20,
     ) -> pd.DataFrame:
-        """Fetches transactions for the monitor tab."""
+        """Fetches transactions from SQLite transactions table.
+
+        Args:
+            district_code: 시군구 코드 (5자리). complex_code 없을 때 사용.
+            complex_code: 단지 고유코드 (kaptCode). 있으면 우선 사용.
+            date_from: 조회 시작일 (YYYY-MM-DD).
+            date_to: 조회 종료일 (YYYY-MM-DD).
+            limit: 최대 반환 건수.
+        """
         try:
             params: Dict = {"limit": min(limit, 500)}
-            if district_code:
+            if complex_code:
+                params["complex_code"] = complex_code
+            elif district_code:
                 params["district_code"] = district_code
-            if apt_name:
-                params["apt_name"] = apt_name
             if date_from:
                 params["date_from"] = date_from
             if date_to:
                 params["date_to"] = date_to
-            if price_min is not None:
-                params["price_min"] = price_min
-            if price_max is not None:
-                params["price_max"] = price_max
 
             response = requests.get(f"{API_BASE_URL}/dashboard/real-estate/monitor", params=params)
             response.raise_for_status()
