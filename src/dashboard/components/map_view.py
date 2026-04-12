@@ -126,7 +126,11 @@ def render_master_map_view(
         return fmap
 
     apt_keys = [
-        {"apt_name": m.apt_name, "district_code": m.district_code}
+        {
+            "apt_name": m.apt_name,
+            "district_code": m.district_code,
+            "address": m.road_address or m.legal_address or None,
+        }
         for m in masters
     ]
     coords_map = geocoder.batch_geocode(apt_keys)
@@ -140,9 +144,13 @@ def render_master_map_view(
         lat, lng = coords
 
         if not transactions_df.empty:
+            master_nm = m.apt_name.strip().lower()
             apt_txns = transactions_df[
-                (transactions_df["apt_name"] == m.apt_name)
-                & (transactions_df["district_code"] == m.district_code)
+                (transactions_df["district_code"] == m.district_code)
+                & transactions_df["apt_name"].apply(
+                    lambda x: x.strip().lower() in master_nm
+                    or master_nm in x.strip().lower()
+                )
             ]
         else:
             apt_txns = pd.DataFrame()
