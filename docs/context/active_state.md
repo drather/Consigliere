@@ -1,5 +1,5 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-12
+**Last Updated:** 2026-04-13
 **Current Active Feature:** `real-estate-sqlite-redesign`
 
 ## 현재 포커스
@@ -7,6 +7,14 @@
 - **Status:** ✅ 구현 완료 — Phase 4 (머지 + 마이그레이션 실행) 대기 중
 
 ## 최근 완료 작업
+- **completed:** Playwright E2E 브라우저 테스트 도입 + 지도 로드 버그 수정 (2026-04-13)
+  - Playwright MCP 서버 등록 (`~/.claude.json`)
+  - `tests/e2e/` 디렉토리 신설: conftest.py + 5개 테스트 파일 (28 tests)
+  - `pytest.ini` 추가 — e2e 마커 등록, 기존 단위 테스트와 분리 실행
+  - **버그 수정:** `src/dashboard/main.py`에 `load_dotenv()` 추가
+    - 원인: `.env`의 `KAKAO_API_KEY`가 os.environ에 반영되지 않아 지도 로드 버튼 클릭해도 경고만 표시
+    - 수정: `load_dotenv(dotenv_path=.../.env)` 호출로 환경변수 주입
+  - 28/28 PASS (navigation 7 + real_estate 9 + finance 4 + automation 4 + map_load 4(작성))
 - **completed:** Real Estate 데이터 저장소 재설계 — ChromaDB → SQLite (2026-04-12)
   - `apartment_repository.py` + `transaction_repository.py` 신규 (real_estate.db 통합)
   - `complex_code` FK로 apt_name 불일치 문제 근본 해결

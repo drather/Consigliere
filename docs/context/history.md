@@ -1,5 +1,28 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-12
+**Last Updated:** 2026-04-13
+
+## 2026-04-13: Playwright E2E 테스트 도입 + 지도 로드 버그 수정
+
+- **Feature:** `feature/real-estate-sqlite-redesign` (추가 작업)
+  - **Playwright MCP 등록:** `claude mcp add playwright` → `.claude.json` (프로젝트 로컬)
+  - **테스트 인프라 신설:**
+    - `pytest.ini` — `e2e` 마커 등록, `tests/e2e/` 기존 단위 테스트에서 분리
+    - `tests/e2e/conftest.py` — `streamlit_server` 세션 픽스처 (8502 포트), `get_main_text()` / `get_page_heading()` / `navigate_to()` 헬퍼
+  - **E2E 테스트 파일 5종 (총 28 tests):**
+    - `test_e2e_navigation.py` (7) — 사이드바 5개 메뉴 탐색, 각 페이지 타이틀
+    - `test_e2e_real_estate.py` (9) — 아파트 탐색 탭 필터/검색/서브탭/이름검색
+    - `test_e2e_finance.py` (4) — 타이틀/예외없음/날짜입력/데이터상태
+    - `test_e2e_automation.py` (4) — 타이틀/예외없음/워크플로우목록/n8n참조
+    - `test_e2e_map_load.py` (4) — KAKAO경고없음/버튼노출/초기안내/지도렌더링/초기화
+  - **버그 수정 — 지도 로드 미동작:**
+    - **증상:** '🗺️ 지도 로드' 클릭 시 지도 대신 "KAKAO_API_KEY 환경변수가 설정되지 않았습니다" 경고만 표시
+    - **원인:** `src/dashboard/main.py`에 `load_dotenv()` 호출 없음 → `.env`의 `KAKAO_API_KEY`가 `os.environ`에 미반영
+    - **수정:** `main.py` 상단에 `load_dotenv(dotenv_path=<project_root>/.env)` 추가
+  - **Playwright DOM 핵심 학습:**
+    - Streamlit 메인 콘텐츠 셀렉터: `[data-testid='stMainBlockContainer']`
+    - h1은 sidebar가 먼저 — `get_page_heading()` 헬퍼로 메인 영역 한정
+    - 텍스트 입력 후 `press("Enter")` + `wait_for_selector` 필수 (고정 타임아웃 불안정)
+- 28 tests collected, 24 passed (map_load 4개는 지도 로드 수정 후 검증 예정)
 
 ## 2026-04-12: Real Estate 데이터 저장소 재설계 (ChromaDB → SQLite)
 - **Feature:** `feature/real-estate-sqlite-redesign`

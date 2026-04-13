@@ -1,6 +1,10 @@
 import streamlit as st
 import os
 import sys
+from dotenv import load_dotenv
+
+# .env 파일 로드 — KAKAO_API_KEY 등 환경변수를 os.environ에 반영
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"))
 
 # Ensure proper path setup for imports
 current_file_path = os.path.abspath(__file__)
