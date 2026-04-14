@@ -40,6 +40,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_tx_dedup
     ON transactions(district_code, apt_name, deal_date, floor, price);
 """
 
+def _normalize_name(name: str) -> str:
+    """아파트 이름 정규화: 공백 및 괄호 기호 제거, 내용 보존.
+
+    저장 시 항상 적용하여 데이터 클렌징을 파이프라인에서 보장한다.
+    예) "래미안 대치 팰리스" → "래미안대치팰리스"
+        "경희궁자이(3단지)" → "경희궁자이3단지"
+    """
+    import re as _re
+    n = name.strip()
+    n = _re.sub(r"[()]", "", n)
+    n = n.replace(" ", "")
+    return n
+
+
 _INSERT_SQL = """
 INSERT OR IGNORE INTO transactions
     (complex_code, apt_name, district_code, deal_date, price, floor, exclusive_area, build_year, road_name)
@@ -65,7 +79,7 @@ def _row_to_tx(row: sqlite3.Row) -> RealEstateTransaction:
 def _tx_to_params(tx: RealEstateTransaction) -> dict:
     return {
         "complex_code":   tx.complex_code,
-        "apt_name":       tx.apt_name,
+        "apt_name":       _normalize_name(tx.apt_name),
         "district_code":  tx.district_code,
         "deal_date":      str(tx.deal_date),
         "price":          tx.price,

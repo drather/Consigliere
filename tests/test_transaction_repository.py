@@ -137,3 +137,27 @@ class TestTransactionRepository:
         tx_repo.save(_tx(deal_date="2026-03-01", complex_code="K001"))
         results = tx_repo.get_by_complex("K001")
         assert results[0].deal_date >= results[-1].deal_date
+
+    def test_save_normalizes_apt_name_spaces(self, repos):
+        """저장 시 아파트 이름 공백이 자동으로 제거되어야 한다."""
+        apt_repo, tx_repo = repos
+        # 공백 있는 이름으로 저장
+        apt_repo.save(_apt("A10027800", "래미안 대치 팰리스", "11680"))
+        tx_repo.save(_tx(apt_name="래미안대치팰리스", district_code="11680", complex_code=None))
+        # DB에 저장된 이름은 공백 없이 정규화되어야 한다
+        resolved = tx_repo.resolve_complex_codes(apt_repo)
+        assert resolved == 1
+        results = tx_repo.get_by_complex("A10027800")
+        assert len(results) == 1
+
+    def test_save_normalizes_apt_name_parens(self, repos):
+        """저장 시 괄호 기호가 제거되고 내용이 보존되어야 한다."""
+        apt_repo, tx_repo = repos
+        # "경희궁자이1단지(임대아파트)" → "경희궁자이1단지임대아파트"
+        apt_repo.save(_apt("A10026946", "경희궁자이1단지(임대아파트)", "11110"))
+        # "경희궁자이(1단지)" → "경희궁자이1단지" — 거래 데이터 괄호 스타일
+        tx_repo.save(_tx(apt_name="경희궁자이(1단지)", district_code="11110", complex_code=None))
+        resolved = tx_repo.resolve_complex_codes(apt_repo)
+        assert resolved == 1
+        results = tx_repo.get_by_complex("A10026946")
+        assert len(results) == 1

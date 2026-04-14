@@ -46,6 +46,20 @@ CREATE INDEX IF NOT EXISTS idx_apt_sigungu   ON apartments(sigungu);
 CREATE INDEX IF NOT EXISTS idx_apt_name      ON apartments(apt_name);
 """
 
+def _normalize_name(name: str) -> str:
+    """아파트 이름 정규화: 공백 및 괄호 기호 제거, 내용 보존.
+
+    저장 시 항상 적용하여 데이터 클렌징을 파이프라인에서 보장한다.
+    예) "래미안 대치 팰리스" → "래미안대치팰리스"
+        "경희궁자이1단지(임대아파트)" → "경희궁자이1단지임대아파트"
+    """
+    import re as _re
+    n = name.strip()
+    n = _re.sub(r"[()]", "", n)
+    n = n.replace(" ", "")
+    return n
+
+
 _UPSERT_SQL = """
 INSERT OR REPLACE INTO apartments (
     complex_code, apt_name, district_code,
@@ -132,7 +146,7 @@ class ApartmentRepository:
         with self._conn() as conn:
             conn.execute(_UPSERT_SQL, {
                 "complex_code":   master.complex_code,
-                "apt_name":       master.apt_name,
+                "apt_name":       _normalize_name(master.apt_name),
                 "district_code":  master.district_code,
                 "sido":           master.sido,
                 "sigungu":        master.sigungu,
