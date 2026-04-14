@@ -1,10 +1,10 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-14
-**Current Active Feature:** `transaction-first-master`
+**Last Updated:** 2026-04-15
+**Current Active Feature:** `transaction-first-master` (Phase 4 Release 대기)
 
 ## 현재 포커스
 - **Branch:** `feature/transaction-first-master`
-- **Status:** 🔵 Phase 1 완료 — Phase 2 (TDD 구현) 진행 예정
+- **Status:** ✅ Phase 3 완료 — Phase 4 (master 머지 + push) 사용자 요청 시 수행
 
 ## 선행 브랜치 (미머지)
 - **Branch:** `feature/real-estate-sqlite-redesign`
@@ -16,6 +16,12 @@
   - E2E Playwright 테스트 28개
 
 ## 최근 완료 작업
+- **completed:** Transaction-First 아파트 마스터 재설계 (2026-04-15)
+  - `apt_master` 테이블 신설 (실거래가 파생 마스터 권위 소스)
+  - `AptMasterRepository` + 마이그레이션 스크립트 TDD 구현 (117 tests PASS)
+  - API: `GET /dashboard/real-estate/apt-master`, monitor에 `apt_master_id` 파라미터
+  - 대시보드 Tab1 `AptMasterRepository` 기반으로 완전 교체
+  - 미매핑 거래 ~20.2% → 0% 해결 (apt_master_id 항상 존재)
 - **completed:** Playwright E2E 브라우저 테스트 도입 + 지도 로드 버그 수정 (2026-04-13)
   - Playwright MCP 서버 등록 (`~/.claude.json`)
   - `tests/e2e/` 디렉토리 신설: conftest.py + 5개 테스트 파일 (28 tests)

@@ -300,6 +300,117 @@ class TestBuildFromTransactions:
         assert master_repo.count() == 2  # 중복 삽입 없음
 
 
+# ── 신규 거래 동기화 ─────────────────────────────────────────────────────────────
+
+class TestSyncFromNewTransactions:
+    def _make_tx(self, apt_name, district_code, deal_date, price=100_000_000,
+                 complex_code=None):
+        return RealEstateTransaction(
+            apt_name=apt_name,
+            district_code=district_code,
+            deal_date=deal_date,
+            price=price,
+            floor=5,
+            exclusive_area=84.0,
+            build_year=2010,
+            complex_code=complex_code,
+        )
+
+    def test_sync_inserts_new_entries(self, shared_db_repos):
+        """신규 거래 목록 sync → apt_master에 신규 단지 INSERT."""
+        _, tx_repo, master_repo = shared_db_repos
+        txs = [
+            self._make_tx("래미안퍼스티지", "11650", "2024-01-15"),
+            self._make_tx("힐스테이트", "11650", "2024-01-20"),
+        ]
+        tx_repo.save_batch(txs)
+        count = master_repo.sync_from_new_transactions(txs)
+        assert count == 2
+        assert master_repo.count() == 2
+
+    def test_sync_updates_existing_entry_stats(self, shared_db_repos):
+        """기존 단지에 신규 거래 sync → tx_count / last_traded 갱신, count 0."""
+        _, tx_repo, master_repo = shared_db_repos
+        initial = [self._make_tx("래미안퍼스티지", "11650", "2024-01-01")]
+        tx_repo.save_batch(initial)
+        master_repo.sync_from_new_transactions(initial)
+
+        new_txs = [
+            self._make_tx("래미안퍼스티지", "11650", "2024-02-01"),
+            self._make_tx("래미안퍼스티지", "11650", "2024-03-01"),
+        ]
+        tx_repo.save_batch(new_txs)
+        count = master_repo.sync_from_new_transactions(new_txs)
+
+        assert count == 0  # 신규 삽입 없음
+        entry = master_repo.get_by_name_district("래미안퍼스티지", "11650")
+        assert entry.tx_count == 3  # 합계 갱신
+        assert entry.last_traded == "2024-03-01"
+
+    def test_sync_empty_list_returns_zero(self, shared_db_repos):
+        """빈 리스트 sync → 0 반환, apt_master 변화 없음."""
+        _, tx_repo, master_repo = shared_db_repos
+        count = master_repo.sync_from_new_transactions([])
+        assert count == 0
+        assert master_repo.count() == 0
+
+    def test_sync_mixed_new_and_existing(self, shared_db_repos):
+        """기존 1 + 신규 1 혼합 sync → 신규 1건만 반환."""
+        _, tx_repo, master_repo = shared_db_repos
+        initial = [self._make_tx("래미안퍼스티지", "11650", "2024-01-01")]
+        tx_repo.save_batch(initial)
+        master_repo.sync_from_new_transactions(initial)
+
+        mixed = [
+            self._make_tx("래미안퍼스티지", "11650", "2024-02-01"),
+            self._make_tx("힐스테이트", "11680", "2024-02-15"),
+        ]
+        tx_repo.save_batch(mixed)
+        count = master_repo.sync_from_new_transactions(mixed)
+
+        assert count == 1  # 힐스테이트만 신규
+        assert master_repo.count() == 2
+
+    def test_sync_preserves_existing_complex_code(self, shared_db_repos):
+        """complex_code 있는 단지에 NULL complex_code 거래 sync → complex_code 보존."""
+        _, tx_repo, master_repo = shared_db_repos
+        initial = [self._make_tx("래미안퍼스티지", "11650", "2024-01-01", complex_code="A0001")]
+        tx_repo.save_batch(initial)
+        master_repo.sync_from_new_transactions(initial)
+
+        new_txs = [self._make_tx("래미안퍼스티지", "11650", "2024-02-01", complex_code=None)]
+        tx_repo.save_batch(new_txs)
+        master_repo.sync_from_new_transactions(new_txs)
+
+        entry = master_repo.get_by_name_district("래미안퍼스티지", "11650")
+        assert entry.complex_code == "A0001"  # 보존
+
+    def test_sync_sets_complex_code_from_new_tx(self, shared_db_repos):
+        """complex_code 없던 단지에 complex_code 있는 거래 sync → complex_code 갱신."""
+        _, tx_repo, master_repo = shared_db_repos
+        initial = [self._make_tx("래미안퍼스티지", "11650", "2024-01-01", complex_code=None)]
+        tx_repo.save_batch(initial)
+        master_repo.sync_from_new_transactions(initial)
+
+        new_txs = [self._make_tx("래미안퍼스티지", "11650", "2024-02-01", complex_code="A0001")]
+        tx_repo.save_batch(new_txs)
+        master_repo.sync_from_new_transactions(new_txs)
+
+        entry = master_repo.get_by_name_district("래미안퍼스티지", "11650")
+        assert entry.complex_code == "A0001"
+
+    def test_sync_normalizes_apt_name(self, shared_db_repos):
+        """공백/괄호 있는 아파트명도 정규화 후 올바르게 동기화된다."""
+        _, tx_repo, master_repo = shared_db_repos
+        txs = [self._make_tx("래미안 퍼스티지", "11650", "2024-01-01")]
+        tx_repo.save_batch(txs)
+        count = master_repo.sync_from_new_transactions(txs)
+        assert count == 1
+        # save_batch가 정규화하므로 정규화된 이름으로 조회
+        entry = master_repo.get_by_name_district("래미안퍼스티지", "11650")
+        assert entry is not None
+
+
 # ── refresh_stats ─────────────────────────────────────────────────────────────
 
 class TestRefreshStats:

@@ -263,6 +263,98 @@ class AptMasterRepository:
 
         return after - before
 
+    def sync_from_new_transactions(self, transactions: list) -> int:
+        """신규 수집된 거래 목록을 apt_master에 동기화한다.
+
+        save_batch() 이후에 호출 — transactions 테이블에 이미 저장된 데이터를 기준으로 집계.
+        - 신규 단지: INSERT
+        - 기존 단지: tx_count / first_traded / last_traded 갱신
+                     complex_code는 COALESCE 보존 (기존 값 우선)
+
+        Args:
+            transactions: 방금 수집된 RealEstateTransaction 목록 (정규화 전 원본)
+
+        Returns:
+            신규 삽입된 단지 수
+        """
+        if not transactions:
+            return 0
+
+        import re as _re
+
+        def _norm(name: str) -> str:
+            """TransactionRepository._normalize_name과 동일한 정규화."""
+            n = name.strip()
+            n = _re.sub(r"[()]", "", n)
+            return n.replace(" ", "")
+
+        # transactions 테이블에 저장된 정규화 이름 기준으로 페어 구성
+        pairs = list({(_norm(tx.apt_name), tx.district_code) for tx in transactions})
+        now = datetime.now(timezone.utc).isoformat()
+
+        values_clause = ", ".join("(?, ?)" for _ in pairs)
+        flat_pairs = [v for p in pairs for v in p]
+
+        try:
+            upsert_sql = f"""
+            INSERT INTO apt_master
+                (apt_name, district_code, sido, sigungu, complex_code,
+                 tx_count, first_traded, last_traded, created_at)
+            SELECT
+                t.apt_name,
+                t.district_code,
+                COALESCE(MAX(a.sido),    '') AS sido,
+                COALESCE(MAX(a.sigungu), '') AS sigungu,
+                MAX(t.complex_code)          AS complex_code,
+                COUNT(*)                     AS tx_count,
+                MIN(t.deal_date)             AS first_traded,
+                MAX(t.deal_date)             AS last_traded,
+                ?                            AS created_at
+            FROM transactions t
+            LEFT JOIN apartments a ON t.complex_code = a.complex_code
+            WHERE (t.apt_name, t.district_code) IN (VALUES {values_clause})
+            GROUP BY t.apt_name, t.district_code
+            ON CONFLICT(apt_name, district_code) DO UPDATE SET
+                tx_count     = excluded.tx_count,
+                first_traded = excluded.first_traded,
+                last_traded  = excluded.last_traded,
+                complex_code = COALESCE(excluded.complex_code, apt_master.complex_code),
+                sido    = CASE WHEN excluded.sido    != '' THEN excluded.sido    ELSE apt_master.sido    END,
+                sigungu = CASE WHEN excluded.sigungu != '' THEN excluded.sigungu ELSE apt_master.sigungu END
+            """
+            with self._conn() as conn:
+                before = conn.execute("SELECT COUNT(*) FROM apt_master").fetchone()[0]
+                conn.execute(upsert_sql, [now] + flat_pairs)
+                after = conn.execute("SELECT COUNT(*) FROM apt_master").fetchone()[0]
+        except Exception:
+            # apartments 테이블이 없는 환경 (테스트 등) fallback
+            upsert_sql_plain = f"""
+            INSERT INTO apt_master
+                (apt_name, district_code, sido, sigungu, complex_code,
+                 tx_count, first_traded, last_traded, created_at)
+            SELECT
+                apt_name, district_code, '', '',
+                MAX(complex_code) AS complex_code,
+                COUNT(*)          AS tx_count,
+                MIN(deal_date)    AS first_traded,
+                MAX(deal_date)    AS last_traded,
+                ?                 AS created_at
+            FROM transactions
+            WHERE (apt_name, district_code) IN (VALUES {values_clause})
+            GROUP BY apt_name, district_code
+            ON CONFLICT(apt_name, district_code) DO UPDATE SET
+                tx_count     = excluded.tx_count,
+                first_traded = excluded.first_traded,
+                last_traded  = excluded.last_traded,
+                complex_code = COALESCE(excluded.complex_code, apt_master.complex_code)
+            """
+            with self._conn() as conn:
+                before = conn.execute("SELECT COUNT(*) FROM apt_master").fetchone()[0]
+                conn.execute(upsert_sql_plain, [now] + flat_pairs)
+                after = conn.execute("SELECT COUNT(*) FROM apt_master").fetchone()[0]
+
+        return after - before
+
     def refresh_stats(self) -> None:
         """모든 단지의 tx_count/first_traded/last_traded를 transactions 기준으로 재계산."""
         sql = """

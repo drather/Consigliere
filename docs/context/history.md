@@ -1,5 +1,30 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-04-15
+
+## 2026-04-15: Transaction-First 아파트 마스터 재설계
+
+- **Feature:** `feature/transaction-first-master`
+  - **배경:** 기존 `apartments` (공동주택 기본정보 API) 마스터 구조에서 complex_code NULL 거래가 ~20.2%에 달해 UI dead data 문제 심각. 실거래가를 권위 소스로 역전하는 재설계.
+  - **신규 파일:**
+    - `src/modules/real_estate/apt_master_repository.py` — apt_master CRUD + build/refresh 헬퍼
+    - `scripts/migrate_to_transaction_first.py` — 4단계 마이그레이션 (`--dry-run` 지원)
+    - `tests/modules/real_estate/test_apt_master_repository.py` — 29 tests
+    - `tests/modules/real_estate/test_transaction_apt_master.py` — 7 tests
+    - `docs/features/transaction-first-master/issues.md` — 결정사항 4건
+    - `docs/features/transaction-first-master/result.md` — 전후 비교 + 실행 방법
+  - **변경 파일:**
+    - `models.py`: `AptMasterEntry` dataclass 추가, `RealEstateTransaction`에 `apt_master_id` 필드
+    - `transaction_repository.py`: `apt_master_id` 컬럼 DDL + 자동 마이그레이션, `get_by_apt_master_id()`, `fill_apt_master_ids()`
+    - `api/routers/real_estate.py`: `GET /apt-master` 신규 엔드포인트, monitor에 `apt_master_id` 파라미터
+    - `api/dependencies.py`: `AptMasterRepository` DI 등록
+    - `dashboard/api_client.py`: `apt_master_id` 파라미터 지원
+    - `dashboard/views/real_estate.py`: Tab1 `AptMasterRepository` 기반 완전 교체
+    - `dashboard/components/map_view.py`: `AptMasterEntry` 호환 (getattr 패턴)
+    - `pytest.ini`: `pythonpath = src`, `--import-mode=importlib` 추가
+  - **핵심 결정사항:**
+    - `apartments → apt_details` 리네임 보류 (별도 cleanup PR)
+    - 대시보드 DIP 트레이드오프 허용 (Streamlit 특성상 DI 컨테이너 없이 직접 생성)
+  - **성과:** 117/117 tests PASS (회귀 없음), 미매핑 거래 ~20.2% → 0%
 
 ## 2026-04-13: Playwright E2E 테스트 도입 + 지도 로드 버그 수정
 
