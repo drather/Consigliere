@@ -71,90 +71,129 @@ def _render_tx_dataframe(df: pd.DataFrame, code_to_name: Dict[str, str] = None):
     st.dataframe(df[available].rename(columns=col_map), use_container_width=True, hide_index=True)
 
 
-def _render_apt_detail_panel(m, tx_limit: int = 50) -> None:
-    """선택된 아파트 마스터 레코드의 상세정보 + 실거래가 패널을 렌더링한다."""
-    year_disp = (
-        m.approved_date[:4]
-        if m.approved_date and len(m.approved_date) >= 4
-        else "-"
-    )
+def _render_apt_detail_panel(entry, apt_repo=None, tx_limit: int = 50) -> None:
+    """선택된 단지의 상세정보 + 실거래가 패널을 렌더링한다.
+
+    Args:
+        entry: AptMasterEntry (Transaction-First 마스터) 또는 ApartmentMaster (레거시)
+        apt_repo: ApartmentRepository — complex_code로 상세정보 조회 (optional)
+        tx_limit: 실거래가 최대 표시 건수
+    """
+    from modules.real_estate.models import AptMasterEntry
+
+    is_apt_master_entry = isinstance(entry, AptMasterEntry)
 
     st.markdown("---")
-    st.markdown(f"### 📋 {m.apt_name}")
-    if m.road_address:
-        st.caption(f"📍 {m.road_address}")
-    elif m.legal_address:
-        st.caption(f"📍 {m.legal_address}")
+    st.markdown(f"### 📋 {entry.apt_name}")
 
-    dc1, dc2, dc3, dc4 = st.columns(4)
-    with dc1:
-        st.metric("세대수", f"{m.household_count:,}세대")
-    with dc2:
-        st.metric("동수", f"{m.building_count}개동")
-    with dc3:
-        st.metric("준공연도", f"{year_disp}년")
-    with dc4:
-        st.metric("최고층수", f"{m.top_floor}F" if m.top_floor else "-")
+    # ── 상세정보 (optional) ───────────────────────────────────────────────────
+    details = None
+    if is_apt_master_entry:
+        # AptMasterEntry: complex_code 있으면 apt_details 조회
+        if entry.complex_code and apt_repo is not None:
+            details = apt_repo.get(entry.complex_code)
+        if details is None:
+            # 상세정보 없는 단지 — Transaction-First에서는 정상 케이스
+            st.info("상세정보 없음 (공동주택 기본정보 API 미수록 단지)")
+    else:
+        # 레거시: ApartmentMaster 객체 자체가 상세정보
+        details = entry
 
-    dc5, dc6, dc7, dc8 = st.columns(4)
-    with dc5:
-        st.metric("건설사", m.constructor or "-")
-    with dc6:
-        st.metric("시행사", m.developer or "-")
-    with dc7:
-        st.metric("난방방식", m.heat_type or "-")
-    with dc8:
-        st.metric("승강기", f"{m.elevator_count}대" if m.elevator_count else "-")
+    if details is not None:
+        addr = getattr(details, "road_address", "") or getattr(details, "legal_address", "")
+        if addr:
+            st.caption(f"📍 {addr}")
 
-    total_units = m.units_60 + m.units_85 + m.units_135 + m.units_136_plus
-    if total_units > 0:
-        st.markdown("**전용면적별 세대 구성**")
-        uc1, uc2, uc3, uc4 = st.columns(4)
-        with uc1:
-            st.metric("60㎡ 이하", f"{m.units_60:,}세대")
-        with uc2:
-            st.metric("60~85㎡", f"{m.units_85:,}세대")
-        with uc3:
-            st.metric("85~135㎡", f"{m.units_135:,}세대")
-        with uc4:
-            st.metric("135㎡ 초과", f"{m.units_136_plus:,}세대")
+        approved = getattr(details, "approved_date", "") or ""
+        year_disp = approved[:4] if len(approved) >= 4 else "-"
 
-    st.caption(
-        f"단지코드: {m.complex_code or '-'}  |  지구코드: {m.district_code}"
-        + (f"  |  연면적: {m.total_area:,.0f}㎡" if m.total_area else "")
-    )
+        dc1, dc2, dc3, dc4 = st.columns(4)
+        with dc1:
+            st.metric("세대수", f"{getattr(details, 'household_count', 0):,}세대")
+        with dc2:
+            st.metric("동수", f"{getattr(details, 'building_count', 0)}개동")
+        with dc3:
+            st.metric("준공연도", f"{year_disp}년")
+        with dc4:
+            top_floor = getattr(details, "top_floor", 0)
+            st.metric("최고층수", f"{top_floor}F" if top_floor else "-")
 
-    # 실거래가
+        dc5, dc6, dc7, dc8 = st.columns(4)
+        with dc5:
+            st.metric("건설사", getattr(details, "constructor", "") or "-")
+        with dc6:
+            st.metric("시행사", getattr(details, "developer", "") or "-")
+        with dc7:
+            st.metric("난방방식", getattr(details, "heat_type", "") or "-")
+        with dc8:
+            elev = getattr(details, "elevator_count", 0)
+            st.metric("승강기", f"{elev}대" if elev else "-")
+
+        units = (
+            getattr(details, "units_60", 0) + getattr(details, "units_85", 0)
+            + getattr(details, "units_135", 0) + getattr(details, "units_136_plus", 0)
+        )
+        if units > 0:
+            st.markdown("**전용면적별 세대 구성**")
+            uc1, uc2, uc3, uc4 = st.columns(4)
+            with uc1:
+                st.metric("60㎡ 이하", f"{getattr(details, 'units_60', 0):,}세대")
+            with uc2:
+                st.metric("60~85㎡", f"{getattr(details, 'units_85', 0):,}세대")
+            with uc3:
+                st.metric("85~135㎡", f"{getattr(details, 'units_135', 0):,}세대")
+            with uc4:
+                st.metric("135㎡ 초과", f"{getattr(details, 'units_136_plus', 0):,}세대")
+
+        total_area = getattr(details, "total_area", 0)
+        complex_code = getattr(entry, "complex_code", None) or getattr(details, "complex_code", None)
+        st.caption(
+            f"단지코드: {complex_code or '-'}  |  지구코드: {entry.district_code}"
+            + (f"  |  연면적: {total_area:,.0f}㎡" if total_area else "")
+        )
+
+    # ── 실거래가 ──────────────────────────────────────────────────────────────
     st.markdown("### 📈 최근 실거래가")
-    _tx_cache_key = f"tx__{m.complex_code or m.district_code}__{m.apt_name}"
+
+    # 캐시 키: AptMasterEntry이면 id, 아니면 complex_code/district_code 기반
+    if is_apt_master_entry and getattr(entry, "id", None) is not None:
+        _tx_cache_key = f"tx__master__{entry.id}"
+    else:
+        complex_code = getattr(entry, "complex_code", None)
+        _tx_cache_key = f"tx__{complex_code or entry.district_code}__{entry.apt_name}"
+
     if _tx_cache_key not in st.session_state:
         with st.spinner("실거래가 조회 중..."):
             raw_df = pd.DataFrame()
 
-            if m.complex_code:
-                # complex_code로 정확한 조회 (이름 불일치 없음)
+            if is_apt_master_entry and getattr(entry, "id", None) is not None:
+                # Transaction-First: apt_master_id로 정확 조회 (항상 성공)
                 raw_df = DashboardClient.get_real_estate_transactions(
-                    complex_code=m.complex_code,
+                    apt_master_id=entry.id,
+                    limit=tx_limit,
+                )
+            elif getattr(entry, "complex_code", None):
+                # 레거시: complex_code 조회
+                raw_df = DashboardClient.get_real_estate_transactions(
+                    complex_code=entry.complex_code,
                     limit=tx_limit,
                 )
 
-            # complex_code 조회 결과 없으면 district + fuzzy 이름 매칭 fallback
-            # (FK 미해소 케이스: 거래 API 이름과 마스터 이름이 달라 resolve 실패한 경우)
+            # fallback: district + fuzzy 이름 매칭 (레거시 호환 / apt_master 미구축 단지)
             if raw_df.empty:
                 district_df = DashboardClient.get_real_estate_transactions(
-                    district_code=m.district_code,
+                    district_code=entry.district_code,
                     limit=min(tx_limit * 10, 500),
                 )
                 if not district_df.empty:
-                    master_nm = m.apt_name.strip().lower()
+                    master_nm = entry.apt_name.strip().lower()
 
                     def _fuzzy(tx_name: str) -> bool:
                         tx = tx_name.strip().lower()
                         if tx in master_nm or master_nm in tx:
                             return True
-                        # suffix 4자 이상 공통: 예) 래미안하이베르 ↔ 래미안신당하이베르
                         shorter = tx if len(tx) <= len(master_nm) else master_nm
-                        longer  = master_nm if shorter is tx else tx
+                        longer = master_nm if shorter is tx else tx
                         if len(shorter) >= 4:
                             for n in range(4, len(shorter) + 1):
                                 if shorter[-n:] in longer:
@@ -172,9 +211,10 @@ def _render_apt_detail_panel(m, tx_limit: int = 50) -> None:
         if not tx_df.empty:
             st.caption(f"최근 {len(tx_df)}건 (최대 {tx_limit}건, 최신순)")
     with col_tx_btn:
+        sigungu = getattr(entry, "sigungu", "") or entry.district_code
         if st.button("📥 실거래가 수집", key="collect_tx_for_apt", use_container_width=True):
-            with st.spinner(f"{m.sigungu or m.district_code} 수집 중..."):
-                r = DashboardClient.trigger_fetch_transactions(district_code=m.district_code)
+            with st.spinner(f"{sigungu} 수집 중..."):
+                r = DashboardClient.trigger_fetch_transactions(district_code=entry.district_code)
             if "error" in r:
                 st.error(r["error"])
             else:
@@ -204,19 +244,33 @@ def show_real_estate():
     with tab1:
         try:
             try:
-                from modules.real_estate.apartment_master.repository import ApartmentMasterRepository
+                from modules.real_estate.apt_master_repository import AptMasterRepository
+                from modules.real_estate.apartment_repository import ApartmentRepository
                 from modules.real_estate.config import RealEstateConfig
             except ImportError:
-                from src.modules.real_estate.apartment_master.repository import ApartmentMasterRepository
+                from src.modules.real_estate.apt_master_repository import AptMasterRepository
+                from src.modules.real_estate.apartment_repository import ApartmentRepository
                 from src.modules.real_estate.config import RealEstateConfig
 
             _cfg = RealEstateConfig()
-            _db_path = _cfg.get("apartment_master_db_path", "data/apartment_master.db")
+            _re_db_path = _cfg.get("real_estate_db_path", "data/real_estate.db")
             _tx_limit = int(_cfg.get("apt_search_tx_limit", 50))
             _map_limit = int(_cfg.get("apt_search_map_limit", 100))
-            _repo = ApartmentMasterRepository(db_path=_db_path)
+            _repo = AptMasterRepository(db_path=_re_db_path)
+            _apt_detail_repo = ApartmentRepository(db_path=_re_db_path)
 
-            # ── 필터 섹션 ────────────────────────────────────────────────
+            # apt_master 테이블이 비어 있으면 안내
+            if _repo.count() == 0:
+                st.warning(
+                    "⚠️ apt_master 테이블이 비어 있습니다. "
+                    "먼저 마이그레이션 스크립트를 실행하세요:\n\n"
+                    "```bash\n"
+                    "arch -arm64 .venv/bin/python3.12 scripts/migrate_to_transaction_first.py\n"
+                    "```"
+                )
+                st.stop()
+
+            # ── 필터 섹션 (AptMasterEntry 기준: apt_name / sido / sigungu) ──
             with st.expander("🔍 검색 필터", expanded=True):
                 col_f1, col_f2, col_f3 = st.columns(3)
                 with col_f1:
@@ -233,26 +287,11 @@ def show_real_estate():
                     selected_sigungu = st.selectbox("시군구", sigungu_opts, key="master_sigungu")
                     sigungu_filter = "" if selected_sigungu == "전체" else selected_sigungu
 
-                col_f4, col_f5 = st.columns(2)
-                with col_f4:
-                    min_hh, max_hh = st.slider(
-                        "세대수 범위", min_value=0, max_value=5000,
-                        value=(0, 5000), step=50, key="master_hh_range"
-                    )
-                with col_f5:
-                    constructors_all = ["전체"] + _repo.get_distinct_constructors()
-                    selected_constructor = st.selectbox("건설사", constructors_all, key="master_constructor")
-                    constructor_filter = "" if selected_constructor == "전체" else selected_constructor
-
-                col_f6, col_f7 = st.columns([3, 1])
-                with col_f6:
-                    year_start, year_end = st.slider(
-                        "준공연도 범위", min_value=1970, max_value=2030,
-                        value=(1990, 2025), key="master_year_range"
-                    )
-                with col_f7:
-                    st.write("")
+                col_btn, col_note = st.columns([1, 3])
+                with col_btn:
                     search_btn = st.button("🔍 검색", key="master_search_btn", use_container_width=True)
+                with col_note:
+                    st.caption("💡 세대수·건설사·준공연도 필터는 단지 선택 후 상세정보 패널에서 확인")
 
             # ── 검색 실행 ────────────────────────────────────────────────
             if search_btn or "master_results" not in st.session_state:
@@ -261,11 +300,6 @@ def show_real_estate():
                         apt_name=search_name,
                         sido=sido_filter,
                         sigungu=sigungu_filter,
-                        min_household=min_hh if min_hh > 0 else 0,
-                        max_household=max_hh if max_hh < 5000 else 99999,
-                        constructor=constructor_filter,
-                        approved_year_start=year_start,
-                        approved_year_end=year_end,
                     )
 
             results = st.session_state.get("master_results", [])
@@ -289,23 +323,17 @@ def show_real_estate():
 
                     rows = []
                     for m in results:
-                        year_str = (
-                            m.approved_date[:4]
-                            if m.approved_date and len(m.approved_date) >= 4
-                            else "-"
-                        )
                         rows.append({
-                            "아파트명": m.apt_name,
-                            "시군구": m.sigungu or _code_to_name.get(m.district_code, m.district_code),
-                            "세대수": m.household_count,
-                            "건설사": m.constructor or "-",
-                            "준공연도": year_str,
-                            "최고층": f"{m.top_floor}F" if m.top_floor else "-",
-                            "난방": m.heat_type or "-",
+                            "아파트명":   m.apt_name,
+                            "시군구":    m.sigungu or _code_to_name.get(m.district_code, m.district_code),
+                            "거래건수":   m.tx_count,
+                            "최근거래":   m.last_traded or "-",
+                            "첫거래":    m.first_traded or "-",
+                            "상세정보":   "✅" if m.complex_code else "—",
                         })
 
                     df_master = pd.DataFrame(rows)
-                    display_cols = ["아파트명", "시군구", "세대수", "건설사", "준공연도", "최고층", "난방"]
+                    display_cols = ["아파트명", "시군구", "거래건수", "최근거래", "첫거래", "상세정보"]
 
                     selection = st.dataframe(
                         df_master[display_cols],
@@ -319,7 +347,11 @@ def show_real_estate():
                     # ── 단지 선택 시: 상세 정보 + 실거래가 ────────────────
                     selected_rows = selection.get("selection", {}).get("rows", [])
                     if selected_rows:
-                        _render_apt_detail_panel(results[selected_rows[0]], tx_limit=_tx_limit)
+                        _render_apt_detail_panel(
+                            results[selected_rows[0]],
+                            apt_repo=_apt_detail_repo,
+                            tx_limit=_tx_limit,
+                        )
 
             # ── 🗺️ 지도 뷰 탭 ───────────────────────────────────────────
             with map_tab:

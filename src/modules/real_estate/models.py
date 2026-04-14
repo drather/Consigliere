@@ -40,6 +40,25 @@ class ApartmentMaster:
     fetched_at: str = ""
 
 @dataclass
+class AptMasterEntry:
+    """apt_master 테이블 레코드 — 실거래가 기반 단지 마스터.
+
+    Transaction-First 아키텍처의 핵심 엔티티.
+    실거래가에 등장한 모든 단지가 존재하며, apt_details(공동주택 기본정보)는 optional 조인.
+    """
+    apt_name: str
+    district_code: str
+    sido: str = ""
+    sigungu: str = ""
+    complex_code: Optional[str] = None      # FK → apartments/apt_details (nullable)
+    tx_count: int = 0                        # 보유 거래 건수 (캐싱)
+    first_traded: Optional[str] = None      # 최초 거래일 YYYY-MM-DD
+    last_traded: Optional[str] = None       # 최근 거래일 YYYY-MM-DD
+    created_at: str = ""
+    id: Optional[int] = None                # auto-increment PK (신규 삽입 시 None)
+
+
+@dataclass
 class RealEstateTransaction:
     """아파트 실거래가 레코드 (국토부 실거래가 API 수집)."""
     apt_name: str
@@ -51,6 +70,7 @@ class RealEstateTransaction:
     build_year: int = 0
     road_name: str = ""
     complex_code: Optional[str] = None   # FK → apartments.complex_code (수집 시 자동 해소)
+    apt_master_id: Optional[int] = None  # FK → apt_master.id (Transaction-First 아키텍처)
 
     def dedup_key(self) -> str:
         """중복 제거용 복합 키."""

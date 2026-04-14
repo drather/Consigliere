@@ -13,6 +13,7 @@ from api.dependencies import (
     get_chroma_repo,
     get_tx_repo,
     get_apt_repo,
+    get_apt_master_repo,
 )
 from modules.real_estate.service import RealEstateAgent
 from modules.real_estate.monitor.service import TransactionMonitorService
@@ -20,6 +21,7 @@ from modules.real_estate.news.service import NewsService
 from modules.real_estate.repository import ChromaRealEstateRepository
 from modules.real_estate.transaction_repository import TransactionRepository
 from modules.real_estate.apartment_repository import ApartmentRepository
+from modules.real_estate.apt_master_repository import AptMasterRepository
 from core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -134,15 +136,24 @@ def update_policy_knowledge(news_service: NewsService = Depends(get_news_service
 def get_real_estate_monitor(
     district_code: Optional[str] = None,
     complex_code: Optional[str] = None,
+    apt_master_id: Optional[int] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     limit: int = 20,
     tx_repo: TransactionRepository = Depends(get_tx_repo),
 ):
-    """실거래가 조회 — SQLite transactions 테이블."""
+    """실거래가 조회 — SQLite transactions 테이블.
+
+    우선순위: apt_master_id > complex_code > district_code > 전체
+    """
     try:
         limit = min(limit, 500)
-        if complex_code:
+        if apt_master_id is not None:
+            txs = tx_repo.get_by_apt_master_id(
+                apt_master_id=apt_master_id, limit=limit,
+                date_from=date_from, date_to=date_to,
+            )
+        elif complex_code:
             txs = tx_repo.get_by_complex(
                 complex_code=complex_code, limit=limit,
                 date_from=date_from, date_to=date_to,
@@ -157,20 +168,61 @@ def get_real_estate_monitor(
 
         return [
             {
-                "apt_name":      t.apt_name,
-                "district_code": t.district_code,
-                "complex_code":  t.complex_code,
-                "deal_date":     t.deal_date,
-                "price":         t.price,
-                "floor":         t.floor,
+                "apt_name":       t.apt_name,
+                "district_code":  t.district_code,
+                "complex_code":   t.complex_code,
+                "apt_master_id":  t.apt_master_id,
+                "deal_date":      t.deal_date,
+                "price":          t.price,
+                "floor":          t.floor,
                 "exclusive_area": t.exclusive_area,
-                "build_year":    t.build_year,
-                "road_name":     t.road_name,
+                "build_year":     t.build_year,
+                "road_name":      t.road_name,
             }
             for t in txs
         ]
     except Exception as e:
         logger.error(f"Monitor Dashboard API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/dashboard/real-estate/apt-master")
+def get_apt_master(
+    apt_name: Optional[str] = None,
+    sido: Optional[str] = None,
+    sigungu: Optional[str] = None,
+    limit: int = 500,
+    apt_master_repo: AptMasterRepository = Depends(get_apt_master_repo),
+):
+    """Transaction-First 단지 마스터 검색.
+
+    실거래가에 등장한 모든 단지를 반환한다.
+    apt_details(공동주택 기본정보) 보유 단지는 complex_code가 NULL이 아니다.
+    """
+    try:
+        limit = min(limit, 2000)
+        entries = apt_master_repo.search(
+            apt_name=apt_name or "",
+            sido=sido or "",
+            sigungu=sigungu or "",
+            limit=limit,
+        )
+        return [
+            {
+                "id":            e.id,
+                "apt_name":      e.apt_name,
+                "district_code": e.district_code,
+                "sido":          e.sido,
+                "sigungu":       e.sigungu,
+                "complex_code":  e.complex_code,
+                "tx_count":      e.tx_count,
+                "first_traded":  e.first_traded,
+                "last_traded":   e.last_traded,
+            }
+            for e in entries
+        ]
+    except Exception as e:
+        logger.error(f"AptMaster Dashboard API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/dashboard/real-estate/macro-history")

@@ -37,6 +37,7 @@ class DashboardClient:
     def get_real_estate_transactions(
         district_code: Optional[str] = None,
         complex_code: Optional[str] = None,
+        apt_master_id: Optional[int] = None,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
         limit: int = 20,
@@ -44,15 +45,18 @@ class DashboardClient:
         """Fetches transactions from SQLite transactions table.
 
         Args:
-            district_code: 시군구 코드 (5자리). complex_code 없을 때 사용.
-            complex_code: 단지 고유코드 (kaptCode). 있으면 우선 사용.
+            district_code: 시군구 코드 (5자리). complex_code / apt_master_id 없을 때 사용.
+            complex_code: 단지 고유코드 (kaptCode).
+            apt_master_id: apt_master PK. 있으면 가장 우선 사용 (Transaction-First).
             date_from: 조회 시작일 (YYYY-MM-DD).
             date_to: 조회 종료일 (YYYY-MM-DD).
             limit: 최대 반환 건수.
         """
         try:
             params: Dict = {"limit": min(limit, 500)}
-            if complex_code:
+            if apt_master_id is not None:
+                params["apt_master_id"] = apt_master_id
+            elif complex_code:
                 params["complex_code"] = complex_code
             elif district_code:
                 params["district_code"] = district_code

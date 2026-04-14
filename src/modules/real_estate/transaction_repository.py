@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 _DDL = """
 CREATE TABLE IF NOT EXISTS transactions (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    apt_master_id  INTEGER,
     complex_code   TEXT,
     apt_name       TEXT NOT NULL,
     district_code  TEXT NOT NULL,
@@ -31,13 +32,21 @@ CREATE TABLE IF NOT EXISTS transactions (
     exclusive_area REAL NOT NULL DEFAULT 0.0,
     build_year     INTEGER NOT NULL DEFAULT 0,
     road_name      TEXT NOT NULL DEFAULT '',
-    FOREIGN KEY (complex_code) REFERENCES apartments(complex_code)
+    FOREIGN KEY (complex_code)  REFERENCES apartments(complex_code),
+    FOREIGN KEY (apt_master_id) REFERENCES apt_master(id)
 );
-CREATE INDEX IF NOT EXISTS idx_tx_complex  ON transactions(complex_code);
-CREATE INDEX IF NOT EXISTS idx_tx_district ON transactions(district_code);
-CREATE INDEX IF NOT EXISTS idx_tx_date     ON transactions(deal_date);
+CREATE INDEX IF NOT EXISTS idx_tx_apt_master ON transactions(apt_master_id);
+CREATE INDEX IF NOT EXISTS idx_tx_complex    ON transactions(complex_code);
+CREATE INDEX IF NOT EXISTS idx_tx_district   ON transactions(district_code);
+CREATE INDEX IF NOT EXISTS idx_tx_date       ON transactions(deal_date);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tx_dedup
     ON transactions(district_code, apt_name, deal_date, floor, price);
+"""
+
+# 기존 DB에 apt_master_id 컬럼이 없을 경우 자동 마이그레이션
+_MIGRATE_ADD_APT_MASTER_ID = """
+ALTER TABLE transactions ADD COLUMN apt_master_id INTEGER
+    REFERENCES apt_master(id);
 """
 
 def _normalize_name(name: str) -> str:
@@ -56,9 +65,9 @@ def _normalize_name(name: str) -> str:
 
 _INSERT_SQL = """
 INSERT OR IGNORE INTO transactions
-    (complex_code, apt_name, district_code, deal_date, price, floor, exclusive_area, build_year, road_name)
+    (apt_master_id, complex_code, apt_name, district_code, deal_date, price, floor, exclusive_area, build_year, road_name)
 VALUES
-    (:complex_code, :apt_name, :district_code, :deal_date, :price, :floor, :exclusive_area, :build_year, :road_name)
+    (:apt_master_id, :complex_code, :apt_name, :district_code, :deal_date, :price, :floor, :exclusive_area, :build_year, :road_name)
 """
 
 
@@ -77,7 +86,9 @@ def _row_to_tx(row: sqlite3.Row) -> RealEstateTransaction:
 
 
 def _tx_to_params(tx: RealEstateTransaction) -> dict:
+    apt_master_id = getattr(tx, "apt_master_id", None)
     return {
+        "apt_master_id":  apt_master_id,
         "complex_code":   tx.complex_code,
         "apt_name":       _normalize_name(tx.apt_name),
         "district_code":  tx.district_code,
@@ -110,9 +121,19 @@ class TransactionRepository:
         conn.row_factory = sqlite3.Row
         return conn
 
-    def _init_db(self):
+    def _init_db(self) -> None:
         conn = self._conn()
         conn.executescript(_DDL)
+        # 기존 DB에 apt_master_id 컬럼이 없으면 자동 추가
+        existing = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(transactions)").fetchall()
+        }
+        if "apt_master_id" not in existing:
+            try:
+                conn.execute(_MIGRATE_ADD_APT_MASTER_ID)
+            except Exception:
+                pass  # 이미 존재하거나 :memory: 새 DB인 경우 무시
         conn.commit()
 
     # ── CRUD ──────────────────────────────────────────────────────────────────
@@ -238,6 +259,61 @@ class TransactionRepository:
             if shorter[-suffix_len:] in longer:
                 return True
         return False
+
+    def get_by_apt_master_id(
+        self,
+        apt_master_id: int,
+        limit: int = 50,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> List[RealEstateTransaction]:
+        """apt_master_id FK로 조회 (최신순). Transaction-First 단지 상세 패널용."""
+        clauses = ["apt_master_id = ?"]
+        params: list = [apt_master_id]
+        if date_from:
+            clauses.append("deal_date >= ?")
+            params.append(date_from)
+        if date_to:
+            clauses.append("deal_date <= ?")
+            params.append(date_to)
+        params.append(limit)
+        sql = (
+            f"SELECT * FROM transactions WHERE {' AND '.join(clauses)}"
+            " ORDER BY deal_date DESC LIMIT ?"
+        )
+        with self._conn() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [_row_to_tx(r) for r in rows]
+
+    def fill_apt_master_ids(self, apt_master_repo: "AptMasterRepository") -> int:  # type: ignore[name-defined]
+        """apt_master_id가 NULL인 거래를 apt_master_repo 기준으로 채운다.
+
+        (apt_name, district_code) 정확 매칭으로 apt_master.id를 조회해 설정.
+        반환: 채워진 건수
+        """
+        from typing import TYPE_CHECKING
+        with self._conn() as conn:
+            null_rows = conn.execute(
+                "SELECT id, apt_name, district_code FROM transactions WHERE apt_master_id IS NULL"
+            ).fetchall()
+
+        if not null_rows:
+            return 0
+
+        filled = 0
+        with self._conn() as conn:
+            for row in null_rows:
+                entry = apt_master_repo.get_by_name_district(
+                    row["apt_name"], row["district_code"]
+                )
+                if entry is not None:
+                    conn.execute(
+                        "UPDATE transactions SET apt_master_id = ? WHERE id = ?",
+                        (entry.id, row["id"]),
+                    )
+                    filled += 1
+
+        return filled
 
     def resolve_complex_codes(self, apt_repo: "ApartmentRepository") -> int:
         """complex_code가 NULL인 거래를 apt_repo 기준으로 fuzzy 매칭하여 채움.
