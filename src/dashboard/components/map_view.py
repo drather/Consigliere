@@ -80,23 +80,35 @@ def render_map_view(df: pd.DataFrame, geocoder) -> folium.Map:
 
 
 def _build_master_popup_html(master, transactions: pd.DataFrame) -> str:
-    """Tab5 전용: 단지 기본정보 + 실거래가 이력 팝업 HTML."""
-    year = (
-        master.approved_date[:4]
-        if master.approved_date and len(master.approved_date) >= 4
-        else "-"
-    )
-    addr = master.road_address or master.legal_address or ""
+    """단지 기본정보 + 실거래가 이력 팝업 HTML.
+
+    ApartmentMaster / AptMasterEntry 두 타입을 모두 지원 (getattr로 optional 필드 접근).
+    """
+    approved = getattr(master, "approved_date", "") or ""
+    year = approved[:4] if len(approved) >= 4 else "-"
+    addr = (getattr(master, "road_address", "") or
+            getattr(master, "legal_address", "") or "")
+    household = getattr(master, "household_count", 0)
+    constructor = getattr(master, "constructor", "") or "-"
 
     lines: list[str] = [f"<b>{master.apt_name}</b>"]
     if addr:
         lines.append(f"<br><small>{addr}</small>")
     lines.append("<hr>")
-    lines.append(
-        f"세대수: {master.household_count:,}세대 &nbsp;|&nbsp; "
-        f"준공: {year}년 &nbsp;|&nbsp; "
-        f"건설사: {master.constructor or '-'}"
-    )
+
+    if household:
+        lines.append(
+            f"세대수: {household:,}세대 &nbsp;|&nbsp; "
+            f"준공: {year}년 &nbsp;|&nbsp; "
+            f"건설사: {constructor}"
+        )
+    else:
+        # AptMasterEntry: tx_count 표시
+        tx_count = getattr(master, "tx_count", 0)
+        last_traded = getattr(master, "last_traded", "") or "-"
+        lines.append(
+            f"거래건수: {tx_count:,}건 &nbsp;|&nbsp; 최근거래: {last_traded}"
+        )
     lines.append("<hr>")
 
     if transactions.empty:
@@ -126,7 +138,15 @@ def render_master_map_view(
         return fmap
 
     apt_keys = [
-        {"apt_name": m.apt_name, "district_code": m.district_code}
+        {
+            "apt_name":     m.apt_name,
+            "district_code": m.district_code,
+            "address": (
+                getattr(m, "road_address", None) or
+                getattr(m, "legal_address", None) or
+                None
+            ),
+        }
         for m in masters
     ]
     coords_map = geocoder.batch_geocode(apt_keys)
@@ -140,9 +160,13 @@ def render_master_map_view(
         lat, lng = coords
 
         if not transactions_df.empty:
+            master_nm = m.apt_name.strip().lower()
             apt_txns = transactions_df[
-                (transactions_df["apt_name"] == m.apt_name)
-                & (transactions_df["district_code"] == m.district_code)
+                (transactions_df["district_code"] == m.district_code)
+                & transactions_df["apt_name"].apply(
+                    lambda x: x.strip().lower() in master_nm
+                    or master_nm in x.strip().lower()
+                )
             ]
         else:
             apt_txns = pd.DataFrame()
@@ -150,10 +174,16 @@ def render_master_map_view(
         popup_html = _build_master_popup_html(m, apt_txns)
         has_transactions = not apt_txns.empty
 
+        household = getattr(m, "household_count", 0)
+        tooltip_text = (
+            f"{m.apt_name} ({household:,}세대)"
+            if household
+            else f"{m.apt_name} ({getattr(m, 'tx_count', 0)}건)"
+        )
         folium.Marker(
             location=[lat, lng],
             popup=folium.Popup(popup_html, max_width=380),
-            tooltip=f"{m.apt_name} ({m.household_count:,}세대)",
+            tooltip=tooltip_text,
             icon=folium.Icon(
                 color="blue" if has_transactions else "gray",
                 icon="home",

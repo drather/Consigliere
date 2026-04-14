@@ -7,7 +7,10 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from modules.real_estate.models import ApartmentMaster
+try:
+    from modules.real_estate.models import ApartmentMaster
+except ImportError:
+    from src.modules.real_estate.models import ApartmentMaster
 from .client import ApartmentMasterClient
 from .repository import ApartmentMasterRepository
 

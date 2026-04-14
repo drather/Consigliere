@@ -83,11 +83,16 @@ class GeocoderService:
 
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def geocode(self, apt_name: str, district_code: str) -> Optional[tuple[float, float]]:
+    def geocode(
+        self,
+        apt_name: str,
+        district_code: str,
+        address: Optional[str] = None,
+    ) -> Optional[tuple[float, float]]:
         """
-        Returns (lat, lng) for the given apartment name, using SQLite cache.
-        Falls back to Kakao keyword search API on cache miss.
-        Returns None on failure or empty result.
+        Returns (lat, lng) for the given apartment.
+        Cache key: district_code__apt_name.
+        Query priority: address (road/legal) → apt_name.
         """
         cache_key = f"{district_code}__{apt_name}"
 
@@ -95,11 +100,12 @@ class GeocoderService:
         if cached is not None:
             return cached
 
+        query = address.strip() if address else apt_name
         try:
             resp = requests.get(
                 _KAKAO_KEYWORD_URL,
                 headers={"Authorization": f"KakaoAK {self._api_key}"},
-                params={"query": apt_name, "size": 1},
+                params={"query": query, "size": 1},
                 timeout=5,
             )
             resp.raise_for_status()
@@ -114,21 +120,23 @@ class GeocoderService:
             return (lat, lng)
 
         except Exception as exc:
-            logger.warning("geocode failed for %s: %s", apt_name, exc)
+            logger.warning("geocode failed for %s: %s", query, exc)
             return None
 
     def batch_geocode(self, apt_keys: list[dict]) -> dict[str, tuple[float, float]]:
         """
         Geocode multiple apartments.
 
-        apt_keys: [{"apt_name": str, "district_code": str}, ...]
+        apt_keys: [{"apt_name": str, "district_code": str, "address": str (optional)}, ...]
         Returns: {"district_code__apt_name": (lat, lng), ...}
+        address 필드가 있으면 Kakao 검색 쿼리로 우선 사용 (cache key는 항상 apt_name 기준).
         """
         result: dict[str, tuple[float, float]] = {}
         for item in apt_keys:
             apt_name = item["apt_name"]
             district_code = item["district_code"]
-            coords = self.geocode(apt_name, district_code)
+            address = item.get("address")
+            coords = self.geocode(apt_name, district_code, address=address)
             if coords is not None:
                 cache_key = f"{district_code}__{apt_name}"
                 result[cache_key] = coords

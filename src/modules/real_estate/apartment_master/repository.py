@@ -8,7 +8,10 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from modules.real_estate.models import ApartmentMaster
+try:
+    from modules.real_estate.models import ApartmentMaster
+except ImportError:
+    from src.modules.real_estate.models import ApartmentMaster
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS apartment_master (

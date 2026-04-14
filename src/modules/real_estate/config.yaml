@@ -6,8 +6,11 @@ bok_codes:
   loan_rate: "121Y002"
 
 geocode_cache_path: "data/geocode_cache.db"
+real_estate_db_path: "data/real_estate.db"
 apartment_master_db_path: "data/apartment_master.db"
 apartment_master_rate_limit_sec: 0.3
+apt_search_tx_limit: 50        # 단지 선택 시 조회할 최근 실거래가 건수
+apt_search_map_limit: 100      # 지도 뷰에 표시할 최대 단지 수 (성능 최적화)
 
 financial_defaults:
   tax_rate_multiplier: 0.03

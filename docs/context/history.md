@@ -1,5 +1,75 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-11
+**Last Updated:** 2026-04-15
+
+## 2026-04-15: Transaction-First 아파트 마스터 재설계
+
+- **Feature:** `feature/transaction-first-master`
+  - **배경:** 기존 `apartments` (공동주택 기본정보 API) 마스터 구조에서 complex_code NULL 거래가 ~20.2%에 달해 UI dead data 문제 심각. 실거래가를 권위 소스로 역전하는 재설계.
+  - **신규 파일:**
+    - `src/modules/real_estate/apt_master_repository.py` — apt_master CRUD + build/refresh 헬퍼
+    - `scripts/migrate_to_transaction_first.py` — 4단계 마이그레이션 (`--dry-run` 지원)
+    - `tests/modules/real_estate/test_apt_master_repository.py` — 29 tests
+    - `tests/modules/real_estate/test_transaction_apt_master.py` — 7 tests
+    - `docs/features/transaction-first-master/issues.md` — 결정사항 4건
+    - `docs/features/transaction-first-master/result.md` — 전후 비교 + 실행 방법
+  - **변경 파일:**
+    - `models.py`: `AptMasterEntry` dataclass 추가, `RealEstateTransaction`에 `apt_master_id` 필드
+    - `transaction_repository.py`: `apt_master_id` 컬럼 DDL + 자동 마이그레이션, `get_by_apt_master_id()`, `fill_apt_master_ids()`
+    - `api/routers/real_estate.py`: `GET /apt-master` 신규 엔드포인트, monitor에 `apt_master_id` 파라미터
+    - `api/dependencies.py`: `AptMasterRepository` DI 등록
+    - `dashboard/api_client.py`: `apt_master_id` 파라미터 지원
+    - `dashboard/views/real_estate.py`: Tab1 `AptMasterRepository` 기반 완전 교체
+    - `dashboard/components/map_view.py`: `AptMasterEntry` 호환 (getattr 패턴)
+    - `pytest.ini`: `pythonpath = src`, `--import-mode=importlib` 추가
+  - **핵심 결정사항:**
+    - `apartments → apt_details` 리네임 보류 (별도 cleanup PR)
+    - 대시보드 DIP 트레이드오프 허용 (Streamlit 특성상 DI 컨테이너 없이 직접 생성)
+  - **성과:** 117/117 tests PASS (회귀 없음), 미매핑 거래 ~20.2% → 0%
+
+## 2026-04-13: Playwright E2E 테스트 도입 + 지도 로드 버그 수정
+
+- **Feature:** `feature/real-estate-sqlite-redesign` (추가 작업)
+  - **Playwright MCP 등록:** `claude mcp add playwright` → `.claude.json` (프로젝트 로컬)
+  - **테스트 인프라 신설:**
+    - `pytest.ini` — `e2e` 마커 등록, `tests/e2e/` 기존 단위 테스트에서 분리
+    - `tests/e2e/conftest.py` — `streamlit_server` 세션 픽스처 (8502 포트), `get_main_text()` / `get_page_heading()` / `navigate_to()` 헬퍼
+  - **E2E 테스트 파일 5종 (총 28 tests):**
+    - `test_e2e_navigation.py` (7) — 사이드바 5개 메뉴 탐색, 각 페이지 타이틀
+    - `test_e2e_real_estate.py` (9) — 아파트 탐색 탭 필터/검색/서브탭/이름검색
+    - `test_e2e_finance.py` (4) — 타이틀/예외없음/날짜입력/데이터상태
+    - `test_e2e_automation.py` (4) — 타이틀/예외없음/워크플로우목록/n8n참조
+    - `test_e2e_map_load.py` (4) — KAKAO경고없음/버튼노출/초기안내/지도렌더링/초기화
+  - **버그 수정 — 지도 로드 미동작:**
+    - **증상:** '🗺️ 지도 로드' 클릭 시 지도 대신 "KAKAO_API_KEY 환경변수가 설정되지 않았습니다" 경고만 표시
+    - **원인:** `src/dashboard/main.py`에 `load_dotenv()` 호출 없음 → `.env`의 `KAKAO_API_KEY`가 `os.environ`에 미반영
+    - **수정:** `main.py` 상단에 `load_dotenv(dotenv_path=<project_root>/.env)` 추가
+  - **Playwright DOM 핵심 학습:**
+    - Streamlit 메인 콘텐츠 셀렉터: `[data-testid='stMainBlockContainer']`
+    - h1은 sidebar가 먼저 — `get_page_heading()` 헬퍼로 메인 영역 한정
+    - 텍스트 입력 후 `press("Enter")` + `wait_for_selector` 필수 (고정 타임아웃 불안정)
+- 28 tests collected, 24 passed (map_load 4개는 지도 로드 수정 후 검증 예정)
+
+## 2026-04-12: Real Estate 데이터 저장소 재설계 (ChromaDB → SQLite)
+- **Feature:** `feature/real-estate-sqlite-redesign`
+  - **배경:** ChromaDB에 12,085건 거래 데이터를 저장했으나 벡터 검색 미사용, ORDER BY/날짜범위 필터 불가, apt_name 불일치로 조회 실패 등 구조적 한계
+  - **재설계:** `real_estate.db`에 `apartments`(PK: complex_code) + `transactions`(FK: complex_code) 테이블로 통합
+  - **신규 파일:** `apartment_repository.py`, `transaction_repository.py`, `scripts/migrate_to_real_estate_db.py`
+  - **핵심 로직:** `resolve_complex_codes()` — 같은 district_code 내 양방향 substring 매칭으로 FK NULL 자동 해소
+  - **API 교체:** `/dashboard/real-estate/monitor` — ChromaDB GET → SQLite complex_code/district_code 조회
+  - **Dashboard:** `_render_apt_detail_panel` — complex_code 있으면 정확 조회, 없으면 district+fuzzy fallback
+  - **Geocoder 개선:** `address` 파라미터 추가 → road_address 기반 Kakao 검색 (이름 기반 미스 해결)
+  - **트리거:** 모든 아파트에 실거래가 없음 표시 + 지도 마커 0개 → UI 테스트 중 발견
+- 24/24 PASS (test_apartment_repository 10 + test_transaction_repository 10 + test_real_estate_tab5 4)
+
+## 2026-04-12: Tab1+Tab5 통합 — "아파트 탐색" 허브 완성
+- **Feature:** `feature/apt-master-monitor-integration`
+  - Tab1(Market Monitor) + Tab5(단지 검색) → "🔍 아파트 탐색" 단일 탭으로 통합 (탭 5→4)
+  - 마스터 필터(시도/시군구/아파트명/세대수/건설사/준공연도) → 단지 목록 클릭 → 상세 + 실거래가 UX
+  - `_render_apt_detail_panel(m, tx_limit)` 신규 함수 (SRP 분리)
+  - `apt_search_tx_limit`(50), `apt_search_map_limit`(100) → `config.yaml` 이관
+  - `repository.py`, `service.py` namespace package 임포트 문제 수정 (try/except fallback)
+  - `tests/conftest.py` 신규 추가, `tests/test_real_estate_tab5.py` 4개 테스트 통과
+- 11 tests passed (test_real_estate_tab5 4 + test_apt_master_map 7)
 
 ## 2026-04-11: Tab5 아파트 마스터 + 실거래가 지도 통합 완성
 - **Feature:** `feature/apt_master_map_integration`

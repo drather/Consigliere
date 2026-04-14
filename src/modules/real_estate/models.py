@@ -39,58 +39,42 @@ class ApartmentMaster:
     ri: str = ""                 # as4 (리, 도심지역은 보통 빈값)
     fetched_at: str = ""
 
-class RealEstateTransaction(BaseModel):
+@dataclass
+class AptMasterEntry:
+    """apt_master 테이블 레코드 — 실거래가 기반 단지 마스터.
+
+    Transaction-First 아키텍처의 핵심 엔티티.
+    실거래가에 등장한 모든 단지가 존재하며, apt_details(공동주택 기본정보)는 optional 조인.
     """
-    Represents a single apartment transaction record from the government API.
-    """
-    deal_date: date = Field(..., description="Transaction date (contract date)")
-    district_code: str = Field(..., description="District code (Legal dong code)")
-    apt_name: str = Field(..., description="Name of the apartment")
-    exclusive_area: float = Field(..., description="Exclusive area in m2")
-    floor: int = Field(..., description="Floor number")
-    price: int = Field(..., description="Transaction price in KRW (converted from 10k units)")
-    build_year: int = Field(..., description="Year the apartment was built")
-    road_name: Optional[str] = Field(None, description="Road name address")
-    cancel_deal_date: Optional[date] = Field(None, description="Date the deal was cancelled (if applicable)")
+    apt_name: str
+    district_code: str
+    sido: str = ""
+    sigungu: str = ""
+    complex_code: Optional[str] = None      # FK → apartments/apt_details (nullable)
+    tx_count: int = 0                        # 보유 거래 건수 (캐싱)
+    first_traded: Optional[str] = None      # 최초 거래일 YYYY-MM-DD
+    last_traded: Optional[str] = None       # 최근 거래일 YYYY-MM-DD
+    created_at: str = ""
+    id: Optional[int] = None                # auto-increment PK (신규 삽입 시 None)
 
-    @property
-    def naver_map_url(self) -> str:
-        """Generates a Naver Map search URL for the apartment."""
-        # URL encode the search query (e.g., "분당구 시범단지삼성한신")
-        import urllib.parse
-        query = urllib.parse.quote(f"{self.apt_name}")
-        return f"https://map.naver.com/v5/search/{query}"
 
-    def to_chroma_format(self) -> Dict[str, Any]:
-        """
-        Converts transaction to ChromaDB compatible format.
-        ID: Unique composite key.
-        Document: Natural language summary for search.
-        Metadata: Structured fields.
-        """
-        txn_id = f"txn_{self.deal_date}_{self.apt_name}_{self.floor}_{self.price}"
-        
-        doc_text = (
-            f"{self.deal_date} 거래. "
-            f"{self.apt_name} {self.floor}층. "
-            f"전용 {self.exclusive_area}m². "
-            f"거래금액 {self.price // 10000}만원."
-        )
-        
-        # Pydantic date/datetime needs to be string for Chroma metadata
-        metadata = self.model_dump()
-        metadata["deal_date"] = str(self.deal_date)
-        metadata["deal_date_int"] = int(self.deal_date.strftime("%Y%m%d"))
-        if self.cancel_deal_date:
-            metadata["cancel_deal_date"] = str(self.cancel_deal_date)
-            
-        return {
-            "id": txn_id,
-            "document": doc_text,
-            "metadata": metadata
-        }
+@dataclass
+class RealEstateTransaction:
+    """아파트 실거래가 레코드 (국토부 실거래가 API 수집)."""
+    apt_name: str
+    district_code: str          # 5자리 시군구 코드
+    deal_date: str              # YYYY-MM-DD
+    price: int                  # 원 단위
+    floor: int = 0
+    exclusive_area: float = 0.0
+    build_year: int = 0
+    road_name: str = ""
+    complex_code: Optional[str] = None   # FK → apartments.complex_code (수집 시 자동 해소)
+    apt_master_id: Optional[int] = None  # FK → apt_master.id (Transaction-First 아키텍처)
 
-    model_config = {"extra": "allow"}
+    def dedup_key(self) -> str:
+        """중복 제거용 복합 키."""
+        return f"{self.district_code}__{self.apt_name}__{self.deal_date}__{self.floor}__{self.price}"
 
 class NewsArticle(BaseModel):
     """

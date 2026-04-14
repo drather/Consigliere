@@ -22,6 +22,9 @@ from .persona_manager import PersonaManager, PreferenceRulesManager
 from .apartment_master.client import ApartmentMasterClient
 from .apartment_master.repository import ApartmentMasterRepository
 from .apartment_master.service import ApartmentMasterService
+from .apartment_repository import ApartmentRepository
+from .transaction_repository import TransactionRepository
+from .apt_master_repository import AptMasterRepository
 
 logger = get_logger(__name__)
 
@@ -48,7 +51,7 @@ class RealEstateAgent:
         self.news_service = NewsService()
         self.calculator = FinancialCalculator()
 
-        # Apartment Master
+        # Apartment Master (legacy — apartment_master.db, 빌드 스크립트용)
         apt_master_db = self.config.get("apartment_master_db_path", "data/apartment_master.db")
         apt_master_rate = float(self.config.get("apartment_master_rate_limit_sec", 0.3))
         self.apt_master_service = ApartmentMasterService(
@@ -56,6 +59,12 @@ class RealEstateAgent:
             repository=ApartmentMasterRepository(db_path=apt_master_db),
             rate_limit_sec=apt_master_rate,
         )
+
+        # New SQLite repositories (real_estate.db)
+        re_db = self.config.get("real_estate_db_path", "data/real_estate.db")
+        self.apt_repo = ApartmentRepository(db_path=re_db)
+        self.tx_repo = TransactionRepository(db_path=re_db)
+        self.apt_master_repo = AptMasterRepository(db_path=re_db)
 
     def log_tour(self, user_text: str) -> str:
         return self.tour_service.log_tour(user_text)
@@ -161,7 +170,7 @@ class RealEstateAgent:
             logger.info(f"[Job1] cutoff({cutoff_3days}) ← 이전 달 포함: {fetch_months}")
 
         # Step 0: 1년 이상 된 데이터 삭제
-        deleted = self.repository.delete_old_transactions(cutoff_1year)
+        deleted = self.tx_repo.delete_before(cutoff_1year)
 
         # Step 1: 비동기 병렬 fetch (월별로 순차 실행, 지구별 병렬)
         molit_client = MOLITClient()
@@ -183,19 +192,45 @@ class RealEstateAgent:
         finally:
             loop.close()
 
-        # Step 2: 직렬 ChromaDB save (onnxruntime 임베딩 동시 실행 시 OOM)
+        # Step 2: SQLite 저장
         total_fetched, total_saved, results = 0, 0, []
+        all_new_txs: list = []
         for name, code, txs in fetched_results:
             total_fetched += len(txs)
             if not txs:
                 continue
             try:
-                saved = self.repository.save_transactions_batch(txs)
+                saved = self.tx_repo.save_batch(txs)
                 total_saved += saved
+                all_new_txs.extend(txs)
                 results.append({"district": name, "fetched": len(txs), "saved": saved})
                 logger.info(f"[Job1] {name}({code}): {len(txs)}건(7일) 수집, {saved}건 저장")
             except Exception as e:
                 logger.error(f"[Job1] Save 실패 {name}({code}): {e}")
+
+        # Step 3: apt_master 동기화 (신규 단지 INSERT + 기존 단지 통계 갱신)
+        master_synced = 0
+        if all_new_txs:
+            try:
+                master_synced = self.apt_master_repo.sync_from_new_transactions(all_new_txs)
+                logger.info(f"[Job1] apt_master 동기화: {master_synced}건 신규 단지")
+            except Exception as e:
+                logger.error(f"[Job1] apt_master sync 실패: {e}")
+
+        # Step 4: transactions.apt_master_id FK 채우기
+        apt_master_filled = 0
+        if all_new_txs:
+            try:
+                apt_master_filled = self.tx_repo.fill_apt_master_ids(self.apt_master_repo)
+                if apt_master_filled:
+                    logger.info(f"[Job1] apt_master_id 채우기: {apt_master_filled}건")
+            except Exception as e:
+                logger.error(f"[Job1] fill_apt_master_ids 실패: {e}")
+
+        # Step 5: NULL complex_code 해소
+        resolved = self.tx_repo.resolve_complex_codes(self.apt_repo)
+        if resolved:
+            logger.info(f"[Job1] complex_code 해소: {resolved}건")
 
         return {
             "fetched_count": total_fetched,
@@ -203,6 +238,9 @@ class RealEstateAgent:
             "district_count": len(targets),
             "year_month": target_ym,
             "deleted_old_count": deleted,
+            "master_synced_count": master_synced,
+            "apt_master_id_filled": apt_master_filled,
+            "resolved_count": resolved,
             "details": results,
         }
 

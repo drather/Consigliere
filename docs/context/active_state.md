@@ -1,12 +1,48 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-11
-**Current Active Feature:** —
+**Last Updated:** 2026-04-15
+**Current Active Feature:** `transaction-first-master` (Phase 4 Release 대기)
 
 ## 현재 포커스
-- **Branch:** `master`
-- **Status:** ✅ apt_master_map_integration 완료. ISSUE-01 (지도 깜빡임 근본 해결) 미완 — 다음 세션
+- **Branch:** `feature/transaction-first-master`
+- **Status:** ✅ Phase 3 완료 — Phase 4 (master 머지 + push) 사용자 요청 시 수행
+
+## 선행 브랜치 (미머지)
+- **Branch:** `feature/real-estate-sqlite-redesign`
+- **Status:** ✅ 구현 완료 — 본 브랜치 완료 후 함께 머지 예정
+- **완료 내용:**
+  - ChromaDB → SQLite 마이그레이션
+  - 데이터 클렌징 (`cleanse_apartment_names.py`) — complex_code 매핑 75.6% → 79.8%
+  - `ApartmentRepository`, `TransactionRepository` normalize-on-save 적용
+  - E2E Playwright 테스트 28개
 
 ## 최근 완료 작업
+- **completed:** Transaction-First 아파트 마스터 재설계 (2026-04-15)
+  - `apt_master` 테이블 신설 (실거래가 파생 마스터 권위 소스)
+  - `AptMasterRepository` + 마이그레이션 스크립트 TDD 구현 (117 tests PASS)
+  - API: `GET /dashboard/real-estate/apt-master`, monitor에 `apt_master_id` 파라미터
+  - 대시보드 Tab1 `AptMasterRepository` 기반으로 완전 교체
+  - 미매핑 거래 ~20.2% → 0% 해결 (apt_master_id 항상 존재)
+- **completed:** Playwright E2E 브라우저 테스트 도입 + 지도 로드 버그 수정 (2026-04-13)
+  - Playwright MCP 서버 등록 (`~/.claude.json`)
+  - `tests/e2e/` 디렉토리 신설: conftest.py + 5개 테스트 파일 (28 tests)
+  - `pytest.ini` 추가 — e2e 마커 등록, 기존 단위 테스트와 분리 실행
+  - **버그 수정:** `src/dashboard/main.py`에 `load_dotenv()` 추가
+    - 원인: `.env`의 `KAKAO_API_KEY`가 os.environ에 반영되지 않아 지도 로드 버튼 클릭해도 경고만 표시
+    - 수정: `load_dotenv(dotenv_path=.../.env)` 호출로 환경변수 주입
+  - 28/28 PASS (navigation 7 + real_estate 9 + finance 4 + automation 4 + map_load 4(작성))
+- **completed:** Real Estate 데이터 저장소 재설계 — ChromaDB → SQLite (2026-04-12)
+  - `apartment_repository.py` + `transaction_repository.py` 신규 (real_estate.db 통합)
+  - `complex_code` FK로 apt_name 불일치 문제 근본 해결
+  - `/monitor` API 엔드포인트 SQLite 기반으로 교체
+  - `api_client.py` complex_code 지원, `_render_apt_detail_panel` complex_code 우선 조회
+  - `geocoder.py` road_address 기반 Kakao 검색으로 지도 마커 개선
+  - `scripts/migrate_to_real_estate_db.py` 마이그레이션 스크립트
+  - 24/24 PASS (apt_repo 10 + tx_repo 10 + tab_test 4)
+- **completed:** Tab1+Tab5 통합 — "아파트 탐색" 허브 완성 (2026-04-12)
+  - Tab5(단지 검색) + Tab1(Market Monitor) → "🔍 아파트 탐색" 단일 탭 (탭 5→4)
+  - 마스터 필터 → 단지 목록 클릭 → 상세 + 실거래가 UX
+  - `_render_apt_detail_panel()` SRP 분리, config.yaml Zero Hardcoding
+  - 11 tests passed
 - **completed:** Tab5 아파트 마스터 + 실거래가 지도 통합 + 브라우저 버그 수정 (2026-04-11)
   - render_master_map_view + _build_master_popup_html + get_transactions_by_district_codes
   - Tab5 서브탭 (📋 단지 목록 | 🗺️ 지도 뷰), 지연 로드 + 해시 캐시
