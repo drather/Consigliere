@@ -1,10 +1,19 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-13
-**Current Active Feature:** `real-estate-sqlite-redesign`
+**Last Updated:** 2026-04-14
+**Current Active Feature:** `transaction-first-master`
 
 ## 현재 포커스
+- **Branch:** `feature/transaction-first-master`
+- **Status:** 🔵 Phase 1 완료 — Phase 2 (TDD 구현) 진행 예정
+
+## 선행 브랜치 (미머지)
 - **Branch:** `feature/real-estate-sqlite-redesign`
-- **Status:** ✅ 구현 완료 — Phase 4 (머지 + 마이그레이션 실행) 대기 중
+- **Status:** ✅ 구현 완료 — 본 브랜치 완료 후 함께 머지 예정
+- **완료 내용:**
+  - ChromaDB → SQLite 마이그레이션
+  - 데이터 클렌징 (`cleanse_apartment_names.py`) — complex_code 매핑 75.6% → 79.8%
+  - `ApartmentRepository`, `TransactionRepository` normalize-on-save 적용
+  - E2E Playwright 테스트 28개
 
 ## 최근 완료 작업
 - **completed:** Playwright E2E 브라우저 테스트 도입 + 지도 로드 버그 수정 (2026-04-13)
