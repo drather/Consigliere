@@ -123,3 +123,77 @@ def take_screenshot(page, name: str) -> None:
     """실패 디버깅용 스크린샷 저장."""
     path = os.path.join(SCREENSHOT_DIR, f"{name}.png")
     page.screenshot(path=path)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 부동산 탭 전용 헬퍼
+# ──────────────────────────────────────────────────────────────────────────────
+
+def go_to_real_estate(page, base_url: str) -> None:
+    """Real Estate 탭으로 이동하고 h1 렌더링까지 조건 대기.
+
+    blind wait_for_timeout 대신 DOM 조건으로 대기하여 flaky 방지.
+    """
+    page.goto(base_url)
+    wait_for_streamlit(page)
+    navigate_to(page, "🏢 Real Estate")
+    page.wait_for_selector(
+        "[data-testid='stMainBlockContainer'] h1",
+        timeout=8_000,
+    )
+
+
+def click_real_estate_tab(page, tab_name: str, wait_ms: int = 800) -> None:
+    """Real Estate 페이지 내 탭을 부분 텍스트로 클릭하고 재렌더 대기.
+
+    Args:
+        tab_name: 탭 레이블 부분 문자열 (이모지 불필요, 예: "Insight", "아파트 탐색")
+        wait_ms:  클릭 후 Streamlit 재렌더 대기 시간 (ms)
+
+    Note:
+        4개 주 탭 + Insight 3개 서브탭이 모두 role=tab으로 DOM에 존재한다.
+        filter(has_text=...) 부분 매칭이므로 이모지 프리픽스 없이도 동작한다.
+    """
+    import pytest as _pytest  # noqa: F401
+
+    tab = page.get_by_role("tab").filter(has_text=tab_name).first
+    tab.wait_for(state="visible", timeout=5_000)
+    tab.click()
+    page.wait_for_timeout(wait_ms)
+
+
+def wait_for_search_results(page, timeout: int = 12_000) -> None:
+    """'N건 검색됨' 캡션 또는 empty/warning 상태가 나타날 때까지 대기.
+
+    st.caption("**N건** 검색됨") → Streamlit이 <strong> 래핑.
+    filter(has_text=...) 는 자식 텍스트 노드 전체를 검사하므로
+    "건 검색됨" 부분 매칭이 동작한다.
+
+    우선순위:
+    1. stCaptionContainer 내 "건 검색됨" 텍스트 대기
+    2. fallback: stAlertInfo/stAlertWarning (empty state / apt_master 비어있음 / DB 오류)
+    """
+    try:
+        page.locator("[data-testid='stCaptionContainer']").filter(
+            has_text="건 검색됨"
+        ).first.wait_for(state="visible", timeout=timeout)
+    except Exception:
+        # apt_master 빈 DB, API 오류, 검색 결과 없음 등 모든 alert 수용
+        page.locator(
+            "[data-testid='stAlertInfo'], [data-testid='stAlertWarning'], [data-testid='stAlertError']"
+        ).first.wait_for(state="visible", timeout=3_000)
+
+
+def assert_no_streamlit_exception(page, context_name: str = "") -> None:
+    """현재 페이지에 stException 박스가 없음을 단언한다.
+
+    실패 시 스크린샷을 저장하고 pytest.fail()로 에러 텍스트를 출력한다.
+    """
+    import pytest as _pytest
+
+    error_boxes = page.locator("[data-testid='stException']")
+    if error_boxes.count() > 0:
+        take_screenshot(page, f"exception_{context_name or 'unknown'}")
+        _pytest.fail(
+            f"Streamlit 예외 발생 ({context_name}):\n{error_boxes.first.inner_text()}"
+        )
