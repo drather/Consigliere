@@ -2,15 +2,11 @@
 InsightOrchestrator — 부동산 인사이트 리포트 파이프라인 오케스트레이터
 
 흐름:
-  1. Python: 예산 필터 → preference_rules 필터 → area_intel enrich
-  2. LLM #1 (경량): 뉴스 → 호재 JSON (HoreaAnalyst)
-  3. Python: 5개 기준 가중치 점수 계산 → 상위 N개 선정
-  4. LLM #2 (단일): scored 결과 → 리포트 서술 (ReportSynthesizer)
-
-모든 임계값·기준·목적지는 config/persona에서 읽는다. Zero Hardcoding.
+  1. Python: preference_rules 필터
+  2. Python: ScoringEngine → 상위 N개 선정
+  3. LLM #1 (단일): macro_summary + horea_text + scored 결과 → 리포트 서술
 """
 import json
-import os
 from datetime import date
 from typing import Any, Dict, List, Optional
 
@@ -48,22 +44,24 @@ class InsightOrchestrator:
         preference_rules: List[Dict[str, Any]],
         scoring_config: Dict[str, Any],
         report_config: Dict[str, Any],
-        news_text: str = "",
-        interest_areas: List[str] = None,
+        horea_data: Dict[str, Any] = None,
+        macro_summary: str = "",
+        horea_text: str = "",
     ) -> Dict[str, Any]:
         """
         Args:
-            candidates: 예산 필터 + enrich 완료된 거래 목록
-            budget_plan: BudgetPlan 인스턴스
-            persona_data: persona.yaml user 섹션
+            candidates:       예산 필터 + enrich 완료된 거래 목록
+            budget_plan:      BudgetPlan 인스턴스
+            persona_data:     persona.yaml user 섹션
             preference_rules: preference_rules.yaml rules 목록
-            scoring_config: config.yaml scoring 섹션
-            report_config: config.yaml report 섹션
-            news_text: Job2 뉴스 텍스트 (없으면 빈 문자열)
-            interest_areas: 관심 지역 목록
+            scoring_config:   config.yaml scoring 섹션
+            report_config:    config.yaml report 섹션
+            horea_data:       Python으로 사전 추출된 호재 데이터 dict
+            macro_summary:    Python으로 사전 포맷팅된 거시경제 요약 문자열
+            horea_text:       Python으로 사전 변환된 호재 텍스트 문자열
         """
-        interest_areas = interest_areas or []
-        top_n = report_config.get("top_n", 10)
+        horea_data = horea_data or {}
+        top_n = report_config.get("top_n", 5)
 
         # Step 1: preference_rules 필터 (Python 코드)
         filtered = CandidateFilter(preference_rules).apply(candidates)
@@ -73,48 +71,25 @@ class InsightOrchestrator:
             logger.warning("[Orchestrator] 필터 후 후보 없음 — 빈 리포트 반환")
             return self._empty_report()
 
-        # Step 2: LLM #1 — 뉴스 호재 분석 (경량)
-        horea_data = {}
-        if news_text.strip():
-            horea_data = self._analyze_horea(news_text, interest_areas)
-            logger.info(f"[Orchestrator] 호재 분석 완료: {list(horea_data.keys())}")
-
-        # Step 3: 점수 계산 (Python 수식)
+        # Step 2: 점수 계산 (Python 수식)
         priority_weights = persona_data.get("priority_weights", {})
         engine = ScoringEngine(weights=priority_weights, config=scoring_config)
         scored = engine.score_all(filtered, horea_data=horea_data)
         top_candidates = scored[:top_n]
         logger.info(f"[Orchestrator] 상위 {len(top_candidates)}개 선정 (전체 {len(scored)}개 중)")
 
-        # Step 4: LLM #2 — 리포트 서술 (단일 호출)
-        report_json = self._synthesize_report(
+        # Step 3: LLM 단일 호출 — 리포트 서술
+        return self._synthesize_report(
             target_date=target_date,
             top_candidates=top_candidates,
             budget_plan=budget_plan,
             persona_data=persona_data,
             top_n=top_n,
+            macro_summary=macro_summary,
+            horea_text=horea_text,
         )
-        return report_json
 
-    # ── LLM #1: 호재 분석 ─────────────────────────────────────────────
-
-    def _analyze_horea(self, news_text: str, interest_areas: List[str]) -> Dict[str, Any]:
-        """뉴스 텍스트 → 지역별 호재 JSON. 실패 시 빈 dict 반환."""
-        try:
-            _, prompt = self.prompt_loader.load(
-                "horea_analyst",
-                variables={
-                    "interest_areas": json.dumps(interest_areas, ensure_ascii=False),
-                    "news_text": news_text[:1500],
-                },
-            )
-            result = self.llm.generate_json(prompt)
-            return result if isinstance(result, dict) else {}
-        except Exception as e:
-            logger.warning(f"[Orchestrator] 호재 분석 실패 (무시): {e}")
-            return {}
-
-    # ── LLM #2: 리포트 서술 ───────────────────────────────────────────
+    # ── LLM 단일 호출: 리포트 서술 ────────────────────────────────────
 
     def _synthesize_report(
         self,
@@ -123,8 +98,10 @@ class InsightOrchestrator:
         budget_plan: Any,
         persona_data: Dict,
         top_n: int,
+        macro_summary: str = "",
+        horea_text: str = "",
     ) -> Dict[str, Any]:
-        """scored 상위 목록 → Slack Block Kit JSON 리포트."""
+        """scored 상위 목록 + 거시경제 요약 + 호재 텍스트 → Slack Block Kit JSON 리포트."""
         pw = persona_data.get("priority_weights", {})
         total_w = sum(pw.values()) or 1
         label_map = {
@@ -148,6 +125,8 @@ class InsightOrchestrator:
                     "budget_reasoning": getattr(budget_plan, "reasoning", ""),
                     "priority_weights_desc": priority_desc,
                     "top_n": top_n,
+                    "macro_summary": macro_summary or "거시경제 데이터 없음",
+                    "horea_text": horea_text or "호재 정보 없음",
                     "ranked_candidates": json.dumps(
                         top_candidates, ensure_ascii=False, default=str
                     ),

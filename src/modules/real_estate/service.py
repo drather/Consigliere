@@ -399,7 +399,6 @@ class RealEstateAgent:
         horea_text = self._horea_data_to_text(horea_data)
 
         # 9. 오케스트레이터에 위임
-        # macro_summary and horea_text are wired in Task 5 after orchestrator signature update
         preference_rules = PreferenceRulesManager().get()
         report_json = self.insight_orchestrator.generate_strategy(
             target_date=target_date,
@@ -409,8 +408,9 @@ class RealEstateAgent:
             preference_rules=preference_rules,
             scoring_config=self.config.get("scoring", {}),
             report_config=self.config.get("report", {}),
-            news_text=news_str,
-            interest_areas=interest_areas,
+            horea_data=horea_data,
+            macro_summary=macro_summary,
+            horea_text=horea_text,
         )
 
         self._save_report(report_json, target_date, len(candidates))
