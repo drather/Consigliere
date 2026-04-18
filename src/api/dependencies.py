@@ -58,3 +58,13 @@ def get_automation_service() -> AutomationService:
 
 def get_slack_sender() -> SlackSender:
     return _slack_sender
+
+
+from modules.macro.service import MacroCollectionService
+
+_macro_db_path = _re_config.get("macro_db_path", "data/macro.db")
+_macro_service = MacroCollectionService(db_path=_macro_db_path)
+
+
+def get_macro_service() -> MacroCollectionService:
+    return _macro_service

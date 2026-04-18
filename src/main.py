@@ -10,6 +10,7 @@ from api.routers.finance import router as finance_router
 from api.routers.real_estate import router as real_estate_router
 from api.routers.automation import router as automation_router
 from api.routers.notify import router as notify_router
+from api.routers.macro import router as macro_router
 
 logger = get_logger(__name__)
 
@@ -22,6 +23,7 @@ app.include_router(finance_router)
 app.include_router(real_estate_router)
 app.include_router(automation_router)
 app.include_router(notify_router)
+app.include_router(macro_router)
 
 if __name__ == "__main__":
     import uvicorn

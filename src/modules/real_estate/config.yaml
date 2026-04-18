@@ -182,3 +182,4 @@ districts:
     name: "인천 계양구"
   - code: "28260"
     name: "인천 서구"
+macro_db_path: "data/macro.db"
