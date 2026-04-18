@@ -70,10 +70,30 @@ docker compose restart api
 
 ## Phase 4: Release
 
+### 4-1. 백엔드 단위 테스트
+```bash
+arch -arm64 .venv/bin/python3.12 -m pytest tests/ -v
+```
+
+### 4-2. E2E 화면단 검증 (하드 블로킹) ⭐
+```bash
+arch -arm64 .venv/bin/python3.12 scripts/e2e_health_check.py
+```
+
+> exit 0 → 계속 진행  
+> exit 1 → 머지 중단, 실패 테스트 수정 후 재실행
+
+> **면제 조건:** 화면 변경 없는 작업은 `result.md`에 아래 섹션 기록 시 Phase 4-2 스킵 허용
+> ```markdown
+> ## E2E 검증 면제
+> - **사유:** 화면단 변경 없음 (예: 백엔드 리팩토링만 포함)
+> - **변경 범위:** src/modules/...
+> ```
+
+### 4-3. 머지 및 푸시
 ```bash
 git checkout master
 git merge feature/{feature_name}
-arch -arm64 .venv/bin/python3.12 -m pytest tests/ -v
 git push origin master
 ```
 
@@ -87,3 +107,4 @@ git push origin master
 | `progress.md` | 할 일 체크리스트 | Phase 1 생성, Phase 2 실시간 업데이트 |
 | `issues.md` | 버그, 의사결정, 트레이드오프 | Phase 2~3 |
 | `result.md` | 구현 결과, walkthrough, 검증 증거 | Phase 3 완료 시 |
+| `result.md` | E2E 검증 결과 또는 면제 사유 | Phase 4-2 완료 시 자동 기록 |
