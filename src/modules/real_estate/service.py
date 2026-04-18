@@ -15,7 +15,7 @@ from .config import RealEstateConfig
 from .tour_service import TourService
 from .insight_orchestrator import InsightOrchestrator
 from .presenter import RealEstatePresenter
-from .macro.bok_service import MacroService
+from .macro.service import MacroService
 from .news.service import NewsService
 from .calculator import FinancialCalculator
 from .persona_manager import PersonaManager, PreferenceRulesManager
@@ -300,19 +300,20 @@ class RealEstateAgent:
         return {"success": success, "report_date": datetime.now().strftime("%Y-%m-%d"), "summary": result[:200]}
 
     def fetch_macro_data(self) -> Dict[str, Any]:
-        """Job 3: Fetch macro data from BOK and save to data/real_estate/macro/{date}_macro.json."""
-        logger.info("[Job3] Fetching macro data from BOK...")
-        macro_data = self.macro_service.fetch_latest_macro_data()
-        macro_dict = macro_data.model_dump()
+        """Job 3: 거시경제 지표 수집 → macro.db 저장 + JSON 백업."""
+        logger.info("[Job3] Fetching macro data via MacroCollectionService...")
+        result = self.macro_service.collect_real_estate_indicators()
 
+        macro_dict = self.macro_service.fetch_latest_macro_data()
         macro_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "macro")
         os.makedirs(macro_dir, exist_ok=True)
         today = datetime.now().strftime("%Y-%m-%d")
-        filename = os.path.join(macro_dir, f"{today}_macro.json")
-        with open(filename, "w", encoding="utf-8") as f:
+        macro_path = os.path.join(macro_dir, f"{today}_macro.json")
+        with open(macro_path, "w", encoding="utf-8") as f:
             json.dump(macro_dict, f, ensure_ascii=False, indent=2)
-        logger.info(f"[Job3] Macro saved: {filename}")
-        return {"success": True, "date": today, "macro": macro_dict}
+
+        logger.info(f"[Job3] Saved macro backup: {macro_path}")
+        return {"macro": macro_dict, "collect_result": result}
 
     def build_apartment_master(self) -> Dict[str, Any]:
         """Job 0: 수도권 아파트 마스터 DB 전수 구축.

@@ -227,7 +227,7 @@ def get_apt_master(
 
 @router.get("/dashboard/real-estate/macro-history")
 def get_macro_history(agent: RealEstateAgent = Depends(get_real_estate_agent)):
-    """거시경제 지표 시계열 데이터 (최근 10개월)."""
+    """거시경제 지표 시계열 데이터. macro.db에서 조회 (기존 응답 포맷 유지)."""
     try:
         return agent.macro_service.fetch_macro_history()
     except Exception as e:

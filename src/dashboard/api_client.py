@@ -174,6 +174,47 @@ class DashboardClient:
             return {}
 
     @staticmethod
+    def get_macro_latest(domain: str = "real_estate") -> list:
+        """지표별 최신값 (카테고리별 그룹화 용도)."""
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/dashboard/macro/latest",
+                params={"domain": domain},
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching macro latest: {e}")
+            return []
+
+    @staticmethod
+    def get_macro_indicator_history(indicator_id: int, months: int = 24) -> dict:
+        """단일 지표 시계열."""
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/dashboard/macro/history/{indicator_id}",
+                params={"months": months},
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching macro history {indicator_id}: {e}")
+            return {}
+
+    @staticmethod
+    def trigger_collect_macro(domain: str = "real_estate") -> dict:
+        """거시경제 수집 Job 트리거."""
+        try:
+            response = requests.post(
+                f"{API_BASE_URL}/jobs/macro/collect",
+                params={"domain": domain},
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            return {"error": str(e)}
+
+    @staticmethod
     def trigger_update_policy() -> Dict:
         """정책 팩트 수집: AdvancedScraper → ChromaDB policy_knowledge."""
         try:
