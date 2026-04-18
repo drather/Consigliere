@@ -444,72 +444,48 @@ def show_real_estate():
         with news_tab0:
             st.subheader("거시경제 지표")
 
-            if "macro_history" not in st.session_state:
+            if "macro_latest" not in st.session_state:
                 with st.spinner("한국은행 지표 로딩 중..."):
-                    st.session_state.macro_history = DashboardClient.get_macro_history()
+                    st.session_state.macro_latest = DashboardClient.get_macro_latest(domain="real_estate")
 
-            history = st.session_state.macro_history
-            base_series = history.get("base_rate", [])
-            loan_series = history.get("loan_rate", [])
+            items = st.session_state.macro_latest
 
-            # 최신값 요약 카드
-            if base_series or loan_series:
-                latest_base = base_series[-1] if base_series else {}
-                latest_loan = loan_series[-1] if loan_series else {}
-                prev_base = base_series[-2] if len(base_series) >= 2 else latest_base
-                prev_loan = loan_series[-2] if len(loan_series) >= 2 else latest_loan
-
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    delta_b = round(latest_base.get("value", 0) - prev_base.get("value", 0), 2)
-                    st.metric(
-                        "🏦 한국은행 기준금리",
-                        f"{latest_base.get('value', '-')}%",
-                        delta=f"{delta_b:+.2f}%p" if delta_b != 0 else "변동 없음",
-                        help=f"기준월: {latest_base.get('date', '-')} | 출처: 한국은행 ECOS"
-                    )
-                with c2:
-                    delta_l = round(latest_loan.get("value", 0) - prev_loan.get("value", 0), 2)
-                    st.metric(
-                        "🏠 주택담보대출 금리",
-                        f"{latest_loan.get('value', '-')}%",
-                        delta=f"{delta_l:+.2f}%p" if delta_l != 0 else "변동 없음",
-                        help=f"기준월: {latest_loan.get('date', '-')} | 예금은행 가중평균(신규취급액) | ⚠️ 시중은행 실제 금리와 다를 수 있음"
-                    )
-                with c3:
-                    st.caption("📊 데이터 출처")
-                    st.caption("한국은행 ECOS Open API")
-                    st.caption(f"기준: 예금은행 가중평균금리 (신규취급액, 월별)")
-                    st.caption("⚠️ 시중은행 광고 금리와 차이 있음")
-
-                st.markdown("---")
-
-                # 시계열 차트
-                if base_series and loan_series:
-                    # 두 시리즈를 같은 날짜 기준으로 DataFrame 생성
-                    base_map = {r["date"]: r["value"] for r in base_series}
-                    loan_map = {r["date"]: r["value"] for r in loan_series}
-                    all_dates = sorted(set(base_map) | set(loan_map))
-
-                    chart_df = pd.DataFrame({
-                        "기준금리(%)": [base_map.get(d) for d in all_dates],
-                        "주담대금리(%)": [loan_map.get(d) for d in all_dates],
-                    }, index=all_dates)
-
-                    st.markdown("**금리 추이 (최근 10개월)**")
-                    st.line_chart(chart_df, height=280)
-                    st.caption("기준금리: 한국은행 722Y001 / 주담대금리: 예금은행 가중평균 121Y002")
-                elif base_series:
-                    df_b = pd.DataFrame({"기준금리(%)": [r["value"] for r in base_series]},
-                                        index=[r["date"] for r in base_series])
-                    st.line_chart(df_b, height=280)
-
-            else:
+            if not items:
                 st.info("거시경제 데이터를 불러올 수 없습니다.")
-                st.caption("BOK API 응답 없음 — 네트워크 확인 또는 '📋 Report Archive' 탭에서 거시경제 수집을 실행하세요.")
+                st.caption("수집 Job을 먼저 실행하거나 '📋 Report Archive' 탭에서 거시경제 수집을 실행하세요.")
+            else:
+                from collections import defaultdict
+                by_category: dict = defaultdict(list)
+                for item in items:
+                    by_category[item.get("category", "기타")].append(item)
+
+                cat_tabs = st.tabs([f"📊 {cat}" for cat in by_category])
+                for cat_tab, (cat_name, cat_items) in zip(cat_tabs, by_category.items()):
+                    with cat_tab:
+                        cols = st.columns(min(len(cat_items), 3))
+                        for col, item in zip(cols, cat_items):
+                            with col:
+                                st.metric(
+                                    label=item["name"],
+                                    value=f"{item['value']}{item['unit']}",
+                                    help=f"기준기간: {item['period']} | 수집: {item['collected_at'][:10]}",
+                                )
+
+                        st.markdown("---")
+
+                        first = cat_items[0]
+                        chart_data = DashboardClient.get_macro_indicator_history(
+                            indicator_id=first["id"], months=24
+                        )
+                        records = chart_data.get("records", [])
+                        if records:
+                            chart_df = pd.DataFrame(records).set_index("period")
+                            st.markdown(f"**{first['name']} 추이 (최근 24개월)**")
+                            st.line_chart(chart_df["value"], height=250)
+                            st.caption(f"출처: 한국은행 ECOS | 단위: {first['unit']}")
 
             if st.button("🔄 새로고침", key="macro_refresh"):
-                st.session_state.pop("macro_history", None)
+                st.session_state.pop("macro_latest", None)
                 st.rerun()
 
         # ── 뉴스 리포트 ──
@@ -615,15 +591,13 @@ def show_real_estate():
             with mc1:
                 if st.button("📈 거시경제 수집", use_container_width=True):
                     with st.spinner("한국은행 API 조회 중..."):
-                        r = DashboardClient.trigger_fetch_macro()
+                        r = DashboardClient.trigger_collect_macro(domain="real_estate")
                     if "error" in r:
                         st.error(r["error"])
                     else:
-                        macro = r.get("macro", {})
-                        br = (macro.get("base_rate") or {})
-                        lr = (macro.get("loan_rate") or {})
-                        st.success(f"✅ 기준금리 {br.get('value', '-')}% | 주담대 {lr.get('value', '-')}%")
-                        st.caption(f"출처: 한국은행 ECOS | 예금은행 가중평균금리(신규취급액) | 기준월: {lr.get('date', '-')} | ⚠️ 시중은행 실제 금리와 차이 있음")
+                        collected = r.get("collected", [])
+                        st.success(f"✅ {len(collected)}개 지표 수집 완료")
+                        st.session_state.pop("macro_latest", None)
 
             with mc2:
                 if st.button("📊 리포트 생성", use_container_width=True):
