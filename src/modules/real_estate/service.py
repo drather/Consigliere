@@ -686,6 +686,54 @@ class RealEstateAgent:
     def _load_persona(self) -> Dict[str, Any]:
         return PersonaManager().load()
 
+    def _format_macro_summary(self, macro_data: Optional[Dict[str, Any]]) -> str:
+        if not macro_data:
+            return ""
+        lines = []
+        entry = macro_data.get("base_rate")
+        if entry and entry.get("value") is not None:
+            lines.append(f"- 기준금리: {entry['value']}% ({entry.get('date', '')})")
+        entry = macro_data.get("loan_rate")
+        if entry and entry.get("value") is not None:
+            lines.append(f"- 주담대금리(주택담보대출): {entry['value']}% ({entry.get('date', '')})")
+        entry = macro_data.get("m2_growth")
+        if entry and entry.get("value") is not None:
+            lines.append(f"- M2 통화량: {entry['value']:,}{entry.get('unit', '')} ({entry.get('date', '')})")
+        return "\n".join(lines)
+
+    def _extract_horea_data(self, news_text: str, interest_areas: List[str]) -> Dict[str, Any]:
+        GTX_KW = ["GTX", "광역급행철도"]
+        HOREA_KW = ["재건축", "재개발", "정비사업", "지구지정", "개발사업", "신도시", "택지지구",
+                    "학군", "학교신설", "착공", "개통", "노선"]
+        result: Dict[str, Any] = {}
+        sentences = [s.strip() for s in news_text.replace("\n", ".").split(".") if s.strip()]
+        for area in interest_areas:
+            items, has_gtx = [], False
+            for idx, sent in enumerate(sentences):
+                context = " ".join(sentences[max(0, idx - 1):idx + 2])
+                if area not in sent and area not in context:
+                    continue
+                if area not in sent:
+                    continue
+                if any(kw in context for kw in GTX_KW):
+                    has_gtx = True
+                    items.append(sent)
+                elif any(kw in context for kw in HOREA_KW):
+                    items.append(sent)
+            if items:
+                result[area] = {"gtx": has_gtx, "items": items[:5]}
+        return result
+
+    def _horea_data_to_text(self, horea_data: Dict[str, Any]) -> str:
+        if not horea_data:
+            return "호재 정보 없음"
+        lines = []
+        for area, info in horea_data.items():
+            gtx_tag = " [GTX 수혜]" if info.get("gtx") else ""
+            for item in info.get("items", []):
+                lines.append(f"- {area}{gtx_tag}: {item}")
+        return "\n".join(lines) if lines else "호재 정보 없음"
+
     def get_persona(self) -> Dict[str, Any]:
         """현재 persona.yaml을 dict로 반환."""
         return PersonaManager().load()
