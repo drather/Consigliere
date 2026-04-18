@@ -1,7 +1,7 @@
 # Software Architecture Snapshot
 
 **Status:** Active
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-04-18
 
 ## 1. Architectural Pattern
 The Consigliere codebase follows a **Modular Layered Architecture**. It emphasizes separation of concerns by isolating domain logic into distinct modules, which interact via defined interfaces (Services/Repositories).
@@ -86,6 +86,13 @@ graph TD
     - `service.py`: `RealEstateAgent`.
     - `monitor/`: Sub-module for transaction monitoring (ChromaDB integration).
     - `news/`: Sub-module for news analysis (Naver API + LLM).
+- **Macro (`src/modules/macro/`):** ← 2026-04-18 추가
+    - `models.py`: `MacroIndicatorDef`, `MacroRecord` 데이터클래스
+    - `repository.py`: `MacroRepository` — SQLite CRUD (`data/macro.db`)
+    - `bok_client.py`: `BOKClient` — BOK ECOS Open API 클라이언트
+    - `service.py`: `MacroCollectionService` — 수집 오케스트레이션 (due-check, collect_all)
+    - **도메인 중립 공유 패키지** — real_estate/finance 모두 활용 가능
+
 - **Automation (`src/modules/automation/`):**
     - `service.py`: `AutomationService` (n8n API Integration).
 
