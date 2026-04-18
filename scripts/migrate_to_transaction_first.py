@@ -110,12 +110,14 @@ def migrate(db_path: str, dry_run: bool = False) -> dict:
             """
             print("  → apartments 테이블 없음: sido/sigungu 빈 값으로 적재")
 
-        before = conn.execute("SELECT COUNT(*) FROM apt_master").fetchone()[0]
-        if not dry_run:
+        if dry_run:
+            inserted = unique_pairs
+        else:
+            before = conn.execute("SELECT COUNT(*) FROM apt_master").fetchone()[0]
             conn.execute(insert_sql)
             conn.commit()
-        after = conn.execute("SELECT COUNT(*) FROM apt_master").fetchone()[0]
-        inserted = after - before if not dry_run else unique_pairs
+            after = conn.execute("SELECT COUNT(*) FROM apt_master").fetchone()[0]
+            inserted = after - before
 
         results["step2_inserted"] = inserted
         print(f"  → apt_master {inserted:,}건 신규 삽입")
@@ -132,27 +134,26 @@ def migrate(db_path: str, dry_run: bool = False) -> dict:
         )
         WHERE complex_code IS NULL
         """
-        null_before = conn.execute(
-            "SELECT COUNT(*) FROM apt_master WHERE complex_code IS NULL"
-        ).fetchone()[0]
-
-        if not dry_run:
+        if dry_run:
+            # dry-run: apt_master 미존재 — transactions에서 직접 추정
+            total_pairs = unique_pairs
+            fillable = conn.execute("""
+                SELECT COUNT(DISTINCT apt_name || '||' || district_code)
+                FROM transactions
+                WHERE complex_code IS NOT NULL
+            """).fetchone()[0]
+            filled = fillable
+            null_after = total_pairs - filled
+        else:
+            null_before = conn.execute(
+                "SELECT COUNT(*) FROM apt_master WHERE complex_code IS NULL"
+            ).fetchone()[0]
             conn.execute(fill_sql)
             conn.commit()
             null_after = conn.execute(
                 "SELECT COUNT(*) FROM apt_master WHERE complex_code IS NULL"
             ).fetchone()[0]
             filled = null_before - null_after
-        else:
-            # dry-run: transactions에서 complex_code가 있는 단지 추정
-            fillable = conn.execute("""
-                SELECT COUNT(DISTINCT am.id) FROM apt_master am
-                JOIN transactions t
-                  ON t.apt_name = am.apt_name AND t.district_code = am.district_code
-                WHERE t.complex_code IS NOT NULL AND am.complex_code IS NULL
-            """).fetchone()[0]
-            filled = fillable
-            null_after = null_before - filled
 
         results["step3_complex_code_filled"] = filled
         results["step3_still_null"] = null_after
@@ -189,20 +190,20 @@ def migrate(db_path: str, dry_run: bool = False) -> dict:
         )
         WHERE apt_master_id IS NULL
         """
-        null_tx_before = conn.execute(
-            "SELECT COUNT(*) FROM transactions WHERE apt_master_id IS NULL"
-        ).fetchone()[0]
-
-        if not dry_run:
+        if dry_run:
+            # dry-run: 컬럼 미존재 — 전체 트랜잭션 수를 채울 대상으로 추정
+            tx_filled = tx_count
+            null_tx_after = 0
+        else:
+            null_tx_before = conn.execute(
+                "SELECT COUNT(*) FROM transactions WHERE apt_master_id IS NULL"
+            ).fetchone()[0]
             conn.execute(fill_id_sql)
             conn.commit()
             null_tx_after = conn.execute(
                 "SELECT COUNT(*) FROM transactions WHERE apt_master_id IS NULL"
             ).fetchone()[0]
             tx_filled = null_tx_before - null_tx_after
-        else:
-            tx_filled = null_tx_before
-            null_tx_after = 0
 
         results["step4_tx_filled"] = tx_filled
         results["step4_tx_still_null"] = null_tx_after
@@ -213,13 +214,18 @@ def migrate(db_path: str, dry_run: bool = False) -> dict:
         print("=" * 60)
         print("마이그레이션 완료" if not dry_run else "Dry-run 시뮬레이션 완료")
         print("=" * 60)
-        apt_master_total = conn.execute("SELECT COUNT(*) FROM apt_master").fetchone()[0]
+        if dry_run:
+            apt_master_total = results["step2_inserted"]
+        else:
+            apt_master_total = conn.execute("SELECT COUNT(*) FROM apt_master").fetchone()[0]
         tx_total = conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
         print(f"  apt_master 총 단지:    {apt_master_total:>8,}개")
         print(f"  transactions 총 거래:  {tx_total:>8,}건")
-        print(f"  complex_code 매핑률:   "
-              f"{(apt_master_total - results['step3_still_null']) / apt_master_total * 100:.1f}%"
-              if apt_master_total > 0 else "  complex_code 매핑률: N/A")
+        mapping_rate = (
+            f"{(apt_master_total - results['step3_still_null']) / apt_master_total * 100:.1f}%"
+            if apt_master_total > 0 else "N/A"
+        )
+        print(f"  complex_code 매핑률:   {mapping_rate}")
         print(f"  apt_master_id NULL:    {results['step4_tx_still_null']:>8,}건")
 
         results["apt_master_total"] = apt_master_total

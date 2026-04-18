@@ -1,10 +1,10 @@
 # Project Consigliere: Active State
 **Last Updated:** 2026-04-15
-**Current Active Feature:** `transaction-first-master` (Phase 4 Release 대기)
+**Current Active Feature:** `e2e-real-estate-scenarios` (Phase 2 진행 중)
 
 ## 현재 포커스
-- **Branch:** `feature/transaction-first-master`
-- **Status:** ✅ Phase 3 완료 — Phase 4 (master 머지 + push) 사용자 요청 시 수행
+- **Branch:** `feature/e2e-real-estate-scenarios`
+- **Status:** 🔄 Phase 2 진행 중 — 부동산 탭 E2E 시나리오 18개 + 헬스체크 워크플로우 구축
 
 ## 선행 브랜치 (미머지)
 - **Branch:** `feature/real-estate-sqlite-redesign`
@@ -60,7 +60,16 @@
 
 ## 다음 작업 로드맵
 
-### 1순위 — 1-C. 마스터 DB 주기적 갱신
+### 1순위 — E2E 테스트 코드 업데이트
+- **목표:** Transaction-First 전환 이후 변경된 Tab1(아파트 탐색) UX에 맞게 E2E 테스트 정비
+- **배경:** `test_e2e_real_estate.py`가 `ApartmentMasterRepository` 기반 UI를 테스트하고 있어 `AptMasterRepository` 전환 후 깨질 가능성 있음
+- **작업:**
+  - 기존 `tests/e2e/test_e2e_real_estate.py` 검토 및 Tab1 시나리오 업데이트
+  - apt_master 기반 단지 탐색 흐름 (필터 → 목록 → 상세 패널) E2E 커버
+  - apt_master 미구축 시 마이그레이션 안내 화면 테스트
+- **선행 조건:** `scripts/migrate_to_transaction_first.py` 실제 DB에 실행 완료
+
+### 2순위 — 1-C. 마스터 DB 주기적 갱신
 - **목표:** 신규 단지 등록 시 자동 보완
 - **방식:** `build_apartment_master` Job을 월 1회 n8n 스케줄 등록
 - **이어받기:** 기존 `build_initial`의 skipped 로직으로 신규 단지만 추가

@@ -24,3 +24,8 @@ json-repair>=0.28.0
 beautifulsoup4>=4.12.0
 folium>=0.14.0
 streamlit-folium>=0.15.0
+
+# Testing
+pytest>=9.0.0
+pytest-playwright>=0.7.0
+pytest-json-report>=1.5.0

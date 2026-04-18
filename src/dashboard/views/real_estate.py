@@ -301,6 +301,7 @@ def show_real_estate():
                         sido=sido_filter,
                         sigungu=sigungu_filter,
                     )
+                st.session_state.pop("selected_apt_idx", None)  # 새 검색 시 선택 초기화
 
             results = st.session_state.get("master_results", [])
 
@@ -310,7 +311,7 @@ def show_real_estate():
             with list_tab:
                 st.caption(
                     f"**{len(results)}건** 검색됨 (최대 500건) "
-                    "— 단지를 클릭하면 상세정보와 실거래가를 확인할 수 있습니다."
+                    "— 아파트명을 클릭하면 실거래가를 확인할 수 있습니다."
                 )
 
                 if not results:
@@ -321,34 +322,40 @@ def show_real_estate():
                         for d in st.session_state.get("districts", [])
                     }
 
-                    rows = []
-                    for m in results:
-                        rows.append({
-                            "아파트명":   m.apt_name,
-                            "시군구":    m.sigungu or _code_to_name.get(m.district_code, m.district_code),
-                            "거래건수":   m.tx_count,
-                            "최근거래":   m.last_traded or "-",
-                            "첫거래":    m.first_traded or "-",
-                            "상세정보":   "✅" if m.complex_code else "—",
-                        })
+                    # ── 테이블 헤더 ────────────────────────────────────────
+                    _hc = st.columns([4, 2, 1, 2, 2, 1])
+                    for _col, _lbl in zip(_hc, ["아파트명", "시군구", "거래건수", "최근거래", "첫거래", "상세"]):
+                        _col.markdown(f"**{_lbl}**")
+                    st.divider()
 
-                    df_master = pd.DataFrame(rows)
-                    display_cols = ["아파트명", "시군구", "거래건수", "최근거래", "첫거래", "상세정보"]
+                    # ── 행 목록 (아파트명 버튼 클릭으로 선택) ──────────────
+                    _row_limit = 100
+                    for _i, _m in enumerate(results[:_row_limit]):
+                        _is_sel = st.session_state.get("selected_apt_idx") == _i
+                        _rc = st.columns([4, 2, 1, 2, 2, 1])
+                        with _rc[0]:
+                            if st.button(
+                                _m.apt_name,
+                                key=f"apt_row_{_i}",
+                                use_container_width=True,
+                                type="primary" if _is_sel else "secondary",
+                            ):
+                                st.session_state.selected_apt_idx = _i
+                        _sigungu = _m.sigungu or _code_to_name.get(_m.district_code, _m.district_code)
+                        _rc[1].caption(_sigungu)
+                        _rc[2].caption(str(_m.tx_count))
+                        _rc[3].caption(_m.last_traded or "-")
+                        _rc[4].caption(_m.first_traded or "-")
+                        _rc[5].caption("✅" if _m.complex_code else "—")
 
-                    selection = st.dataframe(
-                        df_master[display_cols],
-                        use_container_width=True,
-                        hide_index=True,
-                        on_select="rerun",
-                        selection_mode="single-row",
-                        key="master_table",
-                    )
+                    if len(results) > _row_limit:
+                        st.caption(f"상위 {_row_limit}건 표시 중 — 더 보려면 필터를 좁혀 검색하세요.")
 
                     # ── 단지 선택 시: 상세 정보 + 실거래가 ────────────────
-                    selected_rows = selection.get("selection", {}).get("rows", [])
-                    if selected_rows:
+                    _sel_idx = st.session_state.get("selected_apt_idx")
+                    if _sel_idx is not None and _sel_idx < len(results):
                         _render_apt_detail_panel(
-                            results[selected_rows[0]],
+                            results[_sel_idx],
                             apt_repo=_apt_detail_repo,
                             tx_limit=_tx_limit,
                         )
@@ -416,7 +423,7 @@ def show_real_estate():
                                 "파란 마커=거래있음, 회색 마커=거래없음"
                             )
                             st_folium(_fmap, use_container_width=True, height=620,
-                                      key="master_map")
+                                      key="master_map", returned_objects=[])
                         else:
                             st.info(
                                 "'🗺️ 지도 로드' 버튼을 눌러 단지 위치와 "

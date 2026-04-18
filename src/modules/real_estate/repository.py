@@ -219,4 +219,5 @@ class ChromaRealEstateRepository:
                     "content": results["documents"][0][i],
                     "metadata": results["metadatas"][0][i]
                 })
+        items.sort(key=lambda x: x["metadata"].get("date", ""), reverse=True)
         return items
