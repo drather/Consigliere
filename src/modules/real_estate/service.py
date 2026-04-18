@@ -713,8 +713,6 @@ class RealEstateAgent:
                 context = " ".join(sentences[max(0, idx - 1):idx + 2])
                 if area not in sent and area not in context:
                     continue
-                if area not in sent:
-                    continue
                 if any(kw in context for kw in GTX_KW):
                     has_gtx = True
                     items.append(sent)
