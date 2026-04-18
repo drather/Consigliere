@@ -1,10 +1,10 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-18
-**Current Active Feature:** 없음 (master 브랜치 안정 상태)
+**Last Updated:** 2026-04-19
+**Current Active Feature:** `feature/report-generation-overhaul`
 
 ## 현재 포커스
-- **Branch:** `master`
-- **Status:** ✅ 거시경제 지표 수집 시스템 구축 완료 — 8개 지표 실데이터 수집 중
+- **Branch:** `feature/report-generation-overhaul`
+- **Status:** 🔧 구현 중 — 리포트 생성 전면 점검 (ChromaDB→SQLite, LLM 1회 통합, macro 반영)
 
 ## 선행 브랜치 (미머지)
 - **Branch:** `feature/real-estate-sqlite-redesign`
