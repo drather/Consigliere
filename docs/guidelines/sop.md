@@ -1,6 +1,6 @@
 # Standard Operating Procedure (SOP)
 
-**Last Updated:** 2026-03-31
+**Last Updated:** 2026-04-18
 
 > **"No code without a spec. No merge without a result doc."**
 
@@ -81,7 +81,8 @@ arch -arm64 .venv/bin/python3.12 scripts/e2e_health_check.py
 ```
 
 > exit 0 → 계속 진행  
-> exit 1 → 머지 중단, 실패 테스트 수정 후 재실행
+> exit 1 → 머지 중단, 실패 테스트 수정 후 재실행  
+> exit 2 → `pytest-json-report` 미설치, `.venv` 환경 점검 후 재실행
 
 > **면제 조건:** 화면 변경 없는 작업은 `result.md`에 아래 섹션 기록 시 Phase 4-2 스킵 허용
 > ```markdown
@@ -107,4 +108,4 @@ git push origin master
 | `progress.md` | 할 일 체크리스트 | Phase 1 생성, Phase 2 실시간 업데이트 |
 | `issues.md` | 버그, 의사결정, 트레이드오프 | Phase 2~3 |
 | `result.md` | 구현 결과, walkthrough, 검증 증거 | Phase 3 완료 시 |
-| `result.md` | E2E 검증 결과 또는 면제 사유 | Phase 4-2 완료 시 자동 기록 |
+| `result.md` | E2E 검증 결과 또는 면제 사유 | Phase 4-2 완료 시 자동 기록 (`result.md`가 있는 경우) |
