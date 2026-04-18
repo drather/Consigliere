@@ -10,6 +10,7 @@ from core.prompt_loader import PromptLoader
 from core.llm import LLMClient
 from core.llm_pipeline import build_llm_pipeline
 from core.logger import get_logger
+from core.policy_fetcher import fetch_latest_financial_policies
 from .repository import ChromaRealEstateRepository
 from .config import RealEstateConfig
 from .tour_service import TourService
@@ -343,7 +344,6 @@ class RealEstateAgent:
         macro_data = self._load_stored_macro(target_date) or {}
 
         # 2. 주담대금리 추출 → 예산 계산
-        from core.policy_fetcher import fetch_latest_financial_policies
         policy_context = fetch_latest_financial_policies()
         persona_data = self._load_persona()
 
@@ -362,7 +362,7 @@ class RealEstateAgent:
 
         # 4. SQLite tx_repo에서 실거래가 조회
         recent_days = self.config.get("report", {}).get("recent_days", 7)
-        cutoff = (date.today() - timedelta(days=recent_days)).isoformat()
+        cutoff = (target_date - timedelta(days=recent_days)).isoformat()
         all_txs: List[Dict[str, Any]] = []
         for code in target_codes:
             try:
@@ -372,10 +372,10 @@ class RealEstateAgent:
                 logger.error(f"[Job4] tx_repo 조회 실패 {code}: {e}")
 
         # 5. 중복 제거
-        seen_keys: set = set()
+        seen_keys: set[str] = set()
         deduped_txs = []
         for tx in all_txs:
-            key = f"{tx.get('apt_name')}_{tx.get('exclusive_area')}_{tx.get('deal_date')}_{tx.get('floor')}"
+            key = f"{tx.get('apt_name')}_{tx.get('exclusive_area')}_{tx.get('deal_date')}_{tx.get('floor')}_{tx.get('price', 0)}"
             if key not in seen_keys:
                 seen_keys.add(key)
                 deduped_txs.append(tx)
@@ -393,13 +393,13 @@ class RealEstateAgent:
 
         # 8. Python 데이터 준비
         interest_areas = persona_data.get("user", {}).get("interest_areas", [])
-        news_str = news_text if isinstance(news_text, str) else ""
+        news_str = news_text
         horea_data = self._extract_horea_data(news_str, interest_areas) if news_str.strip() else {}
         macro_summary = self._format_macro_summary(macro_data)
         horea_text = self._horea_data_to_text(horea_data)
 
         # 9. 오케스트레이터에 위임
-        # NOTE: generate_strategy() は news_text/interest_areas シグネチャ使用 (Task 5 前)
+        # macro_summary and horea_text are wired in Task 5 after orchestrator signature update
         preference_rules = PreferenceRulesManager().get()
         report_json = self.insight_orchestrator.generate_strategy(
             target_date=target_date,
