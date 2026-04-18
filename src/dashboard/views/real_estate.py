@@ -465,9 +465,17 @@ def show_real_estate():
                         cols = st.columns(min(len(cat_items), 3))
                         for col, item in zip(cols, cat_items):
                             with col:
+                                unit = item["unit"]
+                                val = item["value"]
+                                if unit == "지수":
+                                    disp = f"{val:,.3f}".rstrip("0").rstrip(".")
+                                elif unit == "십억원":
+                                    disp = f"{val / 1_000_000:,.1f}조원"
+                                else:
+                                    disp = f"{val}{unit}"
                                 st.metric(
                                     label=item["name"],
-                                    value=f"{item['value']}{item['unit']}",
+                                    value=disp,
                                     help=f"기준기간: {item['period']} | 수집: {item['collected_at'][:10]}",
                                 )
 
