@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from pydantic import BaseModel
 from core.logger import get_logger
 
@@ -39,7 +39,7 @@ class FinancialCalculator:
         self,
         persona: Dict[str, Any],
         policy: Dict[str, Any],
-        mortgage_rate: float = None,
+        mortgage_rate: Optional[float] = None,
     ) -> BudgetPlan:
         try:
             data = persona.get("user", persona)

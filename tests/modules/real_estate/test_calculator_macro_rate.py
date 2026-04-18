@@ -31,4 +31,4 @@ def test_calculate_budget_default_rate_unchanged():
 def test_calculate_budget_reasoning_includes_rate():
     calc = FinancialCalculator()
     plan = calc.calculate_budget(PERSONA, POLICY, mortgage_rate=0.042)
-    assert "4.2%" in plan.reasoning or "0.042" in plan.reasoning or "주담대" in plan.reasoning
+    assert "4.2%" in plan.reasoning
