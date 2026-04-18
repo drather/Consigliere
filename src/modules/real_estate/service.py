@@ -599,14 +599,14 @@ class RealEstateAgent:
             # ── 아파트 마스터 정보 enrich (세대수, 동수, 건설사, 사용승인일) ──
             # area_intel 유무와 무관하게 항상 실행
             try:
-                master = self.apt_master_service.get_or_fetch(apt_name, district_code)
-                if master:
-                    tx["household_count"] = master.household_count
-                    tx["building_count"] = master.building_count
-                    tx["constructor"] = master.constructor
-                    tx["approved_date"] = master.approved_date
+                detail = self._lookup_apt_details(apt_name, district_code)
+                if detail:
+                    tx["household_count"] = detail.household_count
+                    tx["building_count"] = detail.building_count
+                    tx["constructor"] = detail.constructor
+                    tx["approved_date"] = detail.approved_date
             except Exception as e:
-                logger.warning(f"[Enrich] 마스터 조회 실패 {apt_name}: {e}")
+                logger.warning(f"[Enrich] apt_details 조회 실패 {apt_name}: {e}")
 
             if not area_intel:
                 enriched.append(tx)
@@ -685,6 +685,21 @@ class RealEstateAgent:
 
     def _load_persona(self) -> Dict[str, Any]:
         return PersonaManager().load()
+
+    def _lookup_apt_details(self, apt_name: str, district_code: str) -> Optional[Any]:
+        """apt_master_repo + apt_repo 2-step lookup to return ApartmentMaster.
+
+        1) apt_master_repo → complex_code
+        2) complex_code → apt_repo.get() (exact)
+        3) Fallback: apt_repo.search() (partial match by apt_name + district_code)
+        """
+        entry = self.apt_master_repo.get_by_name_district(apt_name, district_code)
+        if entry and entry.complex_code:
+            detail = self.apt_repo.get(entry.complex_code)
+            if detail:
+                return detail
+        results = self.apt_repo.search(apt_name=apt_name, district_code=district_code, limit=1)
+        return results[0] if results else None
 
     def _format_macro_summary(self, macro_data: Optional[Dict[str, Any]]) -> str:
         if not macro_data:
