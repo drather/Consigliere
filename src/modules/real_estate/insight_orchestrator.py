@@ -19,8 +19,6 @@ from .presenter import RealEstatePresenter
 
 logger = get_logger(__name__)
 
-_억 = 100_000_000
-
 
 class InsightOrchestrator:
     def __init__(
@@ -44,7 +42,7 @@ class InsightOrchestrator:
         preference_rules: List[Dict[str, Any]],
         scoring_config: Dict[str, Any],
         report_config: Dict[str, Any],
-        horea_data: Dict[str, Any] = None,
+        horea_data: Optional[Dict[str, Any]] = None,
         macro_summary: str = "",
         horea_text: str = "",
     ) -> Dict[str, Any]:
