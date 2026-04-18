@@ -470,7 +470,7 @@ def show_real_estate():
                                 if unit == "지수":
                                     disp = f"{val:,.3f}".rstrip("0").rstrip(".")
                                 elif unit == "십억원":
-                                    disp = f"{val / 1_000_000:,.1f}조원"
+                                    disp = f"{val / 1_000:,.0f}조원"
                                 else:
                                     disp = f"{val}{unit}"
                                 st.metric(
