@@ -25,15 +25,15 @@ INDICATORS = [
                       name="예금은행 주택담보대출 금리", unit="%",    frequency="M",
                       collect_every_days=30, domain="real_estate",   category="금리",
                       is_active=True, last_collected_at=None, created_at=NOW),
-    MacroIndicatorDef(id=None, code="121Y013",  item_code="BECBBA",        # 📋 COFIX 신규취급액
+    MacroIndicatorDef(id=None, code="121Y013",  item_code="BECBBA",        # ❌ BOK ECOS 미제공(비활성)
                       name="COFIX 신규취급액 기준금리", unit="%",    frequency="M",
                       collect_every_days=30, domain="real_estate",   category="금리",
-                      is_active=True, last_collected_at=None, created_at=NOW),
-    MacroIndicatorDef(id=None, code="101Y001",  item_code="BBGS00",        # 📋 M2 계절조정
+                      is_active=False, last_collected_at=None, created_at=NOW),
+    MacroIndicatorDef(id=None, code="161Y007",  item_code="BBGS00",        # ✅ M2 말잔 계절조정
                       name="M2 통화량(기말, 계절조정)", unit="십억원", frequency="M",
                       collect_every_days=30, domain="common",        category="유동성",
                       is_active=True, last_collected_at=None, created_at=NOW),
-    MacroIndicatorDef(id=None, code="600Y001",  item_code="?",             # 📋 전체 항목 조회
+    MacroIndicatorDef(id=None, code="151Y001",  item_code="1000000",       # ✅ 가계신용 총계(분기)
                       name="가계신용 총량",              unit="십억원", frequency="Q",
                       collect_every_days=90, domain="common",        category="유동성",
                       is_active=True, last_collected_at=None, created_at=NOW),
@@ -45,11 +45,11 @@ INDICATORS = [
                       name="전세가격지수(전국)",          unit="지수",  frequency="M",
                       collect_every_days=30, domain="real_estate",   category="주택시장",
                       is_active=True, last_collected_at=None, created_at=NOW),
-    MacroIndicatorDef(id=None, code="902Y009",  item_code="0",             # 📋 총지수
+    MacroIndicatorDef(id=None, code="901Y009",  item_code="0",             # ✅ 총지수
                       name="소비자물가지수(CPI)",         unit="지수",  frequency="M",
                       collect_every_days=30, domain="common",        category="물가",
                       is_active=True, last_collected_at=None, created_at=NOW),
-    MacroIndicatorDef(id=None, code="200Y001",  item_code="10101",         # 📋 실질GDP 전기비
+    MacroIndicatorDef(id=None, code="200Y102",  item_code="10211",         # ✅ 전년동기비 성장률
                       name="실질GDP 성장률",              unit="%",    frequency="Q",
                       collect_every_days=90, domain="common",        category="경기",
                       is_active=True, last_collected_at=None, created_at=NOW),

@@ -34,6 +34,10 @@ class BOKClient:
         if frequency == "D":
             start_date = start_dt.strftime("%Y%m%d")
             end_date = end_dt.strftime("%Y%m%d")
+        elif frequency == "Q":
+            # BOK ECOS quarterly format: YYYYQ# (e.g. "2023Q1")
+            start_date = f"{start_dt.year}Q{(start_dt.month - 1) // 3 + 1}"
+            end_date = f"{end_dt.year}Q{(end_dt.month - 1) // 3 + 1}"
         else:
             start_date = start_dt.strftime("%Y%m")
             end_date = end_dt.strftime("%Y%m")
