@@ -33,6 +33,10 @@
 2. 최소 로직 구현 (Green)
 3. 테스트 통과 확인: `arch -arm64 .venv/bin/python3.12 -m pytest tests/ -v`
 4. `progress.md` 체크리스트 실시간 업데이트
+5. **화면 변경이 있는 경우:** `tests/e2e/test_e2e_{feature_name}.py`에 E2E 시나리오 추가 (MANDATORY ⭐)
+   - 신규 탭/페이지: 해당 탭 전체 시나리오 작성
+   - 기존 화면 수정: 변경된 컴포넌트를 검증하는 시나리오 추가 또는 기존 시나리오 업데이트
+   - 헬퍼 함수(`conftest.py`) 활용: `go_to_real_estate`, `click_real_estate_tab`, `wait_for_search_results` 등
 
 ---
 
