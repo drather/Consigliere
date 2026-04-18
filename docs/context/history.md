@@ -1,5 +1,23 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-15
+**Last Updated:** 2026-04-18
+
+## 2026-04-18: 거시경제 지표 수집 시스템 구축 + BOK 코드 정정
+
+- **Feature:** `feature/macro-indicator-system` → master 머지
+  - **배경:** 대시보드 Insight 탭에 거시경제 지표 섹션 추가 및 BOK ECOS 데이터 자동 수집
+  - **신규 패키지:** `src/modules/macro/` — MacroIndicatorDef, MacroRecord 모델, MacroRepository(SQLite), BOKClient, MacroCollectionService
+  - **신규 API:** `POST /jobs/macro/collect`, `GET /dashboard/macro/latest`, `GET /dashboard/macro/history/{id}`
+  - **대시보드:** Insight 탭 → 거시경제 서브탭에 카테고리별 지표 + 시계열 차트
+  - **버그 수정 (동일 세션):** `st.stop()` in `with tab1:` 전체 스크립트 종료 이슈 → `_render_apt_search_tab()` 헬퍼 함수로 분리 + `return` 교체
+  - **BOK stat_code 정정 (2026-04-18):**
+    - BOKClient Q frequency 날짜 포맷 버그 (`%Y%m` → `{Y}Q{n}`) 수정
+    - M2: `101Y001` → `161Y007` (신지표 계열)
+    - 가계신용: `600Y001/?` → `151Y001/1000000/Q`
+    - CPI: `902Y009` → `901Y009`
+    - GDP: `200Y001/10101` → `200Y102/10211/Q` (전년동기비 성장률)
+    - COFIX: BOK ECOS 미제공 확인 → `is_active=False`
+  - **성과:** 20/20 테스트 PASS, 8개 지표 실데이터 수집 완료
+  - **핵심 학습:** BOK ECOS Q frequency는 `2023Q1` 형식 사용; sample 키로는 722Y001(기준금리)만 조회 가능; COFIX는 은행연합회 발표이므로 BOK ECOS 외부
 
 ## 2026-04-15: Transaction-First 아파트 마스터 재설계
 

@@ -1,10 +1,10 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-15
-**Current Active Feature:** `e2e-real-estate-scenarios` (Phase 2 진행 중)
+**Last Updated:** 2026-04-18
+**Current Active Feature:** 없음 (master 브랜치 안정 상태)
 
 ## 현재 포커스
-- **Branch:** `feature/e2e-real-estate-scenarios`
-- **Status:** 🔄 Phase 2 진행 중 — 부동산 탭 E2E 시나리오 18개 + 헬스체크 워크플로우 구축
+- **Branch:** `master`
+- **Status:** ✅ 거시경제 지표 수집 시스템 구축 완료 — 8개 지표 실데이터 수집 중
 
 ## 선행 브랜치 (미머지)
 - **Branch:** `feature/real-estate-sqlite-redesign`
@@ -16,6 +16,12 @@
   - E2E Playwright 테스트 28개
 
 ## 최근 완료 작업
+- **completed:** 거시경제 지표 수집 시스템 구축 (2026-04-18)
+  - `src/modules/macro/` 신규 패키지 (models, repo, bok_client, service)
+  - API 3개 (`/jobs/macro/collect`, `/dashboard/macro/latest`, `/dashboard/macro/history/{id}`)
+  - 대시보드 Insight 탭 거시경제 서브탭 확장
+  - BOKClient 분기 날짜 포맷 버그 수정 (`%Y%m` → `{Y}Q{n}`)
+  - 8개 지표 실데이터 수집 완료 (기준금리, 주담대, M2, 가계신용, 주택매매, 전세, CPI, GDP)
 - **completed:** Transaction-First 아파트 마스터 재설계 (2026-04-15)
   - `apt_master` 테이블 신설 (실거래가 파생 마스터 권위 소스)
   - `AptMasterRepository` + 마이그레이션 스크립트 TDD 구현 (117 tests PASS)
