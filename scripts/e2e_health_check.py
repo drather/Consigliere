@@ -181,18 +181,19 @@ def _get_current_branch() -> str:
             text=True,
             timeout=5,
         )
-        return result.stdout.strip()
+        if result.returncode == 0:
+            return result.stdout.strip()
+        return ""
     except Exception:
         return ""
 
 
-def _get_feature_result_md() -> Path:
+def _get_feature_result_md() -> "Path | None":
     """현재 브랜치에 대응하는 docs/features/{feature_name}/result.md 경로를 반환한다."""
     branch = _get_current_branch()
-    if not branch:
-        feature_name = "unknown"
-    else:
-        feature_name = branch.removeprefix("feature/")
+    if not branch or not branch.startswith("feature/"):
+        return None
+    feature_name = branch.removeprefix("feature/")
     return PROJECT_ROOT / "docs" / "features" / feature_name / "result.md"
 
 
@@ -223,7 +224,7 @@ def _build_result_section(parsed: dict, run_ts: str, report_path: Path) -> str:
     if failures:
         lines.append("- **실패 목록:**")
         for fail in failures:
-            lines.append(f"  - {fail['test_name']}")
+            lines.append(f"  - {fail.get('test_name', '<unknown>')}")
 
     lines.append("")
 
@@ -237,10 +238,12 @@ def append_result_md(parsed: dict, run_ts: str, report_path: Path) -> "Path | No
         append된 result.md Path, 또는 파일이 없으면 None
     """
     result_md = _get_feature_result_md()
+    if result_md is None:
+        print("[WARNING] append_result_md: not on a feature branch, skipping result.md update")
+        return None
 
     if not result_md.exists():
-        print(f"\n[WARNING] result.md를 찾을 수 없습니다: {result_md}")
-        print("  result.md 없이 e2e_health_report.md에만 결과를 저장합니다.")
+        print(f"[WARNING] append_result_md: {result_md} not found, skipping")
         return None
 
     section = _build_result_section(parsed, run_ts, report_path)

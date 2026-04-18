@@ -99,4 +99,50 @@ def test_get_feature_result_md_non_feature_branch(tmp_path):
         with patch("e2e_health_check.PROJECT_ROOT", tmp_path):
             path = _get_feature_result_md()
 
-    assert path == tmp_path / "docs" / "features" / "main" / "result.md"
+    assert path is None
+
+
+# ── _get_current_branch ────────────────────────────────────────────────────────
+
+def test_get_current_branch_returns_empty_on_nonzero_returncode():
+    """returncode != 0 이면 빈 문자열 반환."""
+    import subprocess
+    from unittest.mock import patch, MagicMock
+    from e2e_health_check import _get_current_branch
+
+    mock_result = MagicMock()
+    mock_result.returncode = 128
+    mock_result.stdout = ""
+    with patch("subprocess.run", return_value=mock_result):
+        assert _get_current_branch() == ""
+
+
+def test_get_current_branch_returns_empty_on_exception():
+    """subprocess 예외 시 빈 문자열 반환."""
+    from unittest.mock import patch
+    from e2e_health_check import _get_current_branch
+
+    with patch("subprocess.run", side_effect=FileNotFoundError):
+        assert _get_current_branch() == ""
+
+
+def test_get_feature_result_md_returns_none_for_non_feature_branch(tmp_path):
+    """feature/ 접두사 없는 브랜치는 None 반환."""
+    from unittest.mock import patch
+    from e2e_health_check import _get_feature_result_md
+
+    with patch("e2e_health_check._get_current_branch", return_value="main"):
+        with patch("e2e_health_check.PROJECT_ROOT", tmp_path):
+            result = _get_feature_result_md()
+    assert result is None
+
+
+def test_get_feature_result_md_returns_none_for_empty_branch(tmp_path):
+    """빈 브랜치명은 None 반환."""
+    from unittest.mock import patch
+    from e2e_health_check import _get_feature_result_md
+
+    with patch("e2e_health_check._get_current_branch", return_value=""):
+        with patch("e2e_health_check.PROJECT_ROOT", tmp_path):
+            result = _get_feature_result_md()
+    assert result is None
