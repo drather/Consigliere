@@ -332,43 +332,46 @@ class RealEstateAgent:
         return {**stats, "elapsed_seconds": elapsed}
 
     def generate_report(self, district_code: Optional[str] = None, target_date: Optional[date] = None) -> Dict[str, Any]:
-        """Job 4: Generate insight report using stored data (macro from file, txs from ChromaDB).
-
-        district_code=None → persona.interest_areas 기반 구 동시 수집
-        district_code 지정 → 해당 구만 수집
-        """
+        """Job 4: SQLite tx_repo 기반 인사이트 리포트 생성."""
+        from dataclasses import asdict
         if target_date is None:
             target_date = date.today()
         logger.info(f"[Job4] Generating report for {target_date}, district_code={district_code}")
 
-        # Load news summary (Job2 결과)
+        # 1. 뉴스/거시경제 로드
         news_text = self._load_stored_news(target_date)
+        macro_data = self._load_stored_macro(target_date) or {}
 
-        # Load persona + policy context
-        persona_data = self._load_persona()
+        # 2. 주담대금리 추출 → 예산 계산
         from core.policy_fetcher import fetch_latest_financial_policies
         policy_context = fetch_latest_financial_policies()
+        persona_data = self._load_persona()
 
-        # 예산 계산
-        budget_plan = self.calculator.calculate_budget(persona_data, policy_context)
+        mortgage_rate = None
+        loan_entry = macro_data.get("loan_rate", {})
+        if loan_entry and loan_entry.get("value") is not None:
+            mortgage_rate = float(loan_entry["value"]) / 100.0
+            logger.info(f"[Job4] 주담대금리 {loan_entry['value']}% 적용")
+
+        budget_plan = self.calculator.calculate_budget(persona_data, policy_context, mortgage_rate=mortgage_rate)
         budget_ceiling = budget_plan.final_max_price
 
-        # Resolve target districts
+        # 3. 관심 지역 코드 목록
         target_codes = self._resolve_interest_districts(persona_data, district_code)
         logger.info(f"[Job4] districts: {target_codes}")
 
-        # Load transactions from ChromaDB
+        # 4. SQLite tx_repo에서 실거래가 조회
         recent_days = self.config.get("report", {}).get("recent_days", 7)
+        cutoff = (date.today() - timedelta(days=recent_days)).isoformat()
         all_txs: List[Dict[str, Any]] = []
         for code in target_codes:
             try:
-                where_clause = {"district_code": {"$eq": code}}
-                txs = self.repository.get_transactions(limit=50, where=where_clause)
-                all_txs.extend(txs)
+                rows = self.tx_repo.get_by_district(code, limit=200, date_from=cutoff)
+                all_txs.extend(asdict(tx) for tx in rows)
             except Exception as e:
-                logger.error(f"[Job4] ChromaDB query failed for {code}: {e}")
+                logger.error(f"[Job4] tx_repo 조회 실패 {code}: {e}")
 
-        # Dedup
+        # 5. 중복 제거
         seen_keys: set = set()
         deduped_txs = []
         for tx in all_txs:
@@ -377,18 +380,27 @@ class RealEstateAgent:
                 seen_keys.add(key)
                 deduped_txs.append(tx)
 
-        # 예산 이하 필터 (코드 레벨)
-        candidates = [tx for tx in deduped_txs if tx.get("price", 0) <= budget_ceiling]
-        logger.info(f"[Job4] 예산({budget_ceiling/1e8:.1f}억) 이하 후보: {len(candidates)}건")
+        # 6. 가격 ±band 필터 (예산과 관련성 높은 매물만)
+        band = self.config.get("report", {}).get("budget_band_ratio", 0.1)
+        lo, hi = budget_ceiling * (1 - band), budget_ceiling * (1 + band)
+        candidates = [tx for tx in deduped_txs if lo <= tx.get("price", 0) <= hi]
+        logger.info(f"[Job4] 예산 {budget_ceiling/1e8:.1f}억 ±{band*100:.0f}% → {len(candidates)}건 (전체 {len(deduped_txs)}건)")
 
-        # area_intel enrich (일괄, per-apt ChromaDB 호출 없음)
+        # 7. area_intel enrich
         area_intel = self._load_area_intel()
         workplace_station = persona_data.get("commute", {}).get("workplace_station", "")
         candidates = self._enrich_transactions(candidates, area_intel, workplace_station)
 
-        # 오케스트레이터에 위임
-        preference_rules = PreferenceRulesManager().get()
+        # 8. Python 데이터 준비
         interest_areas = persona_data.get("user", {}).get("interest_areas", [])
+        news_str = news_text if isinstance(news_text, str) else ""
+        horea_data = self._extract_horea_data(news_str, interest_areas) if news_str.strip() else {}
+        macro_summary = self._format_macro_summary(macro_data)
+        horea_text = self._horea_data_to_text(horea_data)
+
+        # 9. 오케스트레이터에 위임
+        # NOTE: generate_strategy() は news_text/interest_areas シグネチャ使用 (Task 5 前)
+        preference_rules = PreferenceRulesManager().get()
         report_json = self.insight_orchestrator.generate_strategy(
             target_date=target_date,
             candidates=candidates,
@@ -397,7 +409,7 @@ class RealEstateAgent:
             preference_rules=preference_rules,
             scoring_config=self.config.get("scoring", {}),
             report_config=self.config.get("report", {}),
-            news_text=news_text,
+            news_text=news_str,
             interest_areas=interest_areas,
         )
 
