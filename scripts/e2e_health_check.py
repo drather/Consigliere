@@ -168,6 +168,90 @@ def parse_report(json_path: Path, run_start: float) -> dict:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# 3-B. result.md 자동 섹션 append
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _get_current_branch() -> str:
+    """현재 git 브랜치명을 반환한다. 실패 시 빈 문자열."""
+    try:
+        result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return ""
+
+
+def _get_feature_result_md() -> Path:
+    """현재 브랜치에 대응하는 docs/features/{feature_name}/result.md 경로를 반환한다."""
+    branch = _get_current_branch()
+    if not branch:
+        feature_name = "unknown"
+    else:
+        feature_name = branch.removeprefix("feature/")
+    return PROJECT_ROOT / "docs" / "features" / feature_name / "result.md"
+
+
+def _build_result_section(parsed: dict, run_ts: str, report_path: Path) -> str:
+    """파싱된 결과로 result.md에 append할 E2E 검증 결과 섹션을 생성한다."""
+    summary = parsed["summary"]
+    n_pass = summary.get("passed", 0)
+    n_fail = summary.get("failed", 0)
+    n_total = summary.get("total", 0)
+
+    if n_fail == 0:
+        result_line = f"✅ PASS ({n_pass}/{n_total})"
+    else:
+        result_line = f"❌ FAIL ({n_pass}/{n_total}, {n_fail}개 실패)"
+
+    lines = [
+        "",
+        "---",
+        "",
+        "## E2E 검증 결과",
+        "",
+        f"- **실행일시:** {run_ts}",
+        f"- **결과:** {result_line}",
+        f"- **리포트:** {report_path}",
+    ]
+
+    failures = parsed.get("failures", [])
+    if failures:
+        lines.append("- **실패 목록:**")
+        for fail in failures:
+            lines.append(f"  - {fail['test_name']}")
+
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def append_result_md(parsed: dict, run_ts: str, report_path: Path) -> "Path | None":
+    """현재 브랜치의 result.md에 E2E 검증 결과 섹션을 append한다.
+
+    Returns:
+        append된 result.md Path, 또는 파일이 없으면 None
+    """
+    result_md = _get_feature_result_md()
+
+    if not result_md.exists():
+        print(f"\n[WARNING] result.md를 찾을 수 없습니다: {result_md}")
+        print("  result.md 없이 e2e_health_report.md에만 결과를 저장합니다.")
+        return None
+
+    section = _build_result_section(parsed, run_ts, report_path)
+    with open(result_md, "a", encoding="utf-8") as f:
+        f.write(section)
+
+    print(f"\n[INFO] E2E 결과 섹션 추가됨: {result_md}")
+    return result_md
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # 3. 마크다운 리포트 생성
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -335,6 +419,9 @@ def main():
     md_content = build_markdown(parsed, run_ts, args.test_path)
 
     MD_REPORT_PATH.write_text(md_content, encoding="utf-8")
+
+    # result.md 자동 섹션 append
+    append_result_md(parsed, run_ts, MD_REPORT_PATH)
 
     summary = parsed["summary"]
     n_pass = summary.get("passed", 0)
