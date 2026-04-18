@@ -22,6 +22,7 @@ from .persona_manager import PersonaManager, PreferenceRulesManager
 from .apartment_master.client import ApartmentMasterClient
 from .apartment_master.repository import ApartmentMasterRepository
 from .apartment_master.service import ApartmentMasterService
+from .models import ApartmentMaster
 from .apartment_repository import ApartmentRepository
 from .transaction_repository import TransactionRepository
 from .apt_master_repository import AptMasterRepository
@@ -686,7 +687,7 @@ class RealEstateAgent:
     def _load_persona(self) -> Dict[str, Any]:
         return PersonaManager().load()
 
-    def _lookup_apt_details(self, apt_name: str, district_code: str) -> Optional[Any]:
+    def _lookup_apt_details(self, apt_name: str, district_code: str) -> Optional[ApartmentMaster]:
         """apt_master_repo + apt_repo 2-step lookup to return ApartmentMaster.
 
         1) apt_master_repo → complex_code
