@@ -25,10 +25,29 @@ from .apartment_master.repository import ApartmentMasterRepository
 from .apartment_master.service import ApartmentMasterService
 from .models import ApartmentMaster
 from .apartment_repository import ApartmentRepository
-from .transaction_repository import TransactionRepository
+from .transaction_repository import TransactionRepository, _normalize_name
 from .apt_master_repository import AptMasterRepository
 
 logger = get_logger(__name__)
+
+
+def _make_dedup_key(tx: dict) -> str:
+    """중복 제거 키 — apt_name은 정규화하여 표기 차이를 무시한다."""
+    return (
+        f"{_normalize_name(tx.get('apt_name', ''))}"
+        f"_{tx.get('exclusive_area')}"
+        f"_{tx.get('deal_date')}"
+        f"_{tx.get('floor', 0)}"
+        f"_{tx.get('price', 0)}"
+    )
+
+
+def _area_matches(area: str, text: str) -> bool:
+    """전체 지명 또는 공백 분리 토큰(2자 이상) 중 하나라도 포함되면 True."""
+    if area in text:
+        return True
+    return any(token in text for token in area.split() if len(token) >= 2)
+
 
 class RealEstateAgent:
     """
@@ -375,7 +394,7 @@ class RealEstateAgent:
         seen_keys: set[str] = set()
         deduped_txs = []
         for tx in all_txs:
-            key = f"{tx.get('apt_name')}_{tx.get('exclusive_area')}_{tx.get('deal_date')}_{tx.get('floor')}_{tx.get('price', 0)}"
+            key = _make_dedup_key(tx)
             if key not in seen_keys:
                 seen_keys.add(key)
                 deduped_txs.append(tx)
@@ -706,6 +725,7 @@ class RealEstateAgent:
         2) complex_code → apt_repo.get() (exact)
         3) Fallback: apt_repo.search() (partial match by apt_name + district_code)
         """
+        apt_name = _normalize_name(apt_name)
         entry = self.apt_master_repo.get_by_name_district(apt_name, district_code)
         if entry and entry.complex_code:
             detail = self.apt_repo.get(entry.complex_code)
@@ -739,7 +759,7 @@ class RealEstateAgent:
             items, has_gtx = [], False
             for idx, sent in enumerate(sentences):
                 context = " ".join(sentences[max(0, idx - 1):idx + 2])
-                if area not in sent and area not in context:
+                if not _area_matches(area, sent) and not _area_matches(area, context):
                     continue
                 if any(kw in context for kw in GTX_KW):
                     has_gtx = True
