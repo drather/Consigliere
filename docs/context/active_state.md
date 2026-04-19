@@ -1,10 +1,10 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-19
+**Last Updated:** 2026-04-20
 **Current Active Feature:** `feature/report-generation-overhaul`
 
 ## 현재 포커스
 - **Branch:** `feature/report-generation-overhaul`
-- **Status:** 🔧 진행 중 — Phase 3.5 실행 결과 점검 (ISSUE-01~03 수정 중)
+- **Status:** ✅ 구현 완료 — Phase 4 대기 (master 머지 필요)
 
 ## 선행 브랜치 (미머지)
 - **Branch:** `feature/real-estate-sqlite-redesign`
@@ -16,13 +16,13 @@
   - E2E Playwright 테스트 28개
 
 ## 최근 완료 작업
-- **completed:** 리포트 생성 전면 점검 (2026-04-19)
-  - ChromaDB → tx_repo SQLite 전환
-  - apt_master enrich SQLite 직접 조회 (household_count 복구)
-  - 거시경제 주담대금리 예산 산출 반영
-  - LLM 2회→1회 통합 (horea_analyst 제거)
-  - 가격 ±10% 필터
-  - report_synthesizer.md macro_summary/horea_text 섹션 추가
+- **completed:** 리포트 생성 전면 점검 + LLM 할루시네이션 수정 (2026-04-19~20)
+  - ChromaDB → tx_repo SQLite 전환, dedup normalize, apt_master enrich
+  - 거시경제 주담대금리(2.83%) 예산 산출 반영
+  - LLM 2회→1회 통합 (horea_analyst 제거), horea_validator 단계 추가
+  - 가격 ±10% 필터, data_absent_neutral=50
+  - `_format_candidates_for_llm()` — LLM 점수 재계산/가격 오변환/phantom 후보 방지
+  - 178 tests PASS, Job4 실행 검증 완료
 - **completed:** 거시경제 지표 수집 시스템 구축 (2026-04-18)
   - `src/modules/macro/` 신규 패키지 (models, repo, bok_client, service)
   - API 3개 (`/jobs/macro/collect`, `/dashboard/macro/latest`, `/dashboard/macro/history/{id}`)
