@@ -25,7 +25,7 @@ def _make_budget_plan():
 
 
 def test_generate_strategy_calls_llm_exactly_once():
-    """LLM은 정확히 1번만 호출된다 (horea_analyst 제거 확인)."""
+    """news_articles=None이면 LLM은 synthesizer 1번만 호출된다."""
     orch, llm = _make_orchestrator()
     candidates = [{"apt_name": "테스트아파트", "price": 800_000_000, "district_code": "11680",
                    "exclusive_area": 84.0, "deal_date": "2026-04-15", "floor": 10}]
@@ -35,16 +35,18 @@ def test_generate_strategy_calls_llm_exactly_once():
         candidates=candidates,
         budget_plan=_make_budget_plan(),
         persona_data={"priority_weights": {"commute": 3, "liquidity": 2, "price_potential": 2,
-                                           "living_convenience": 2, "school": 1}},
+                                           "living_convenience": 2, "school": 1},
+                      "user": {"interest_areas": []}},
         preference_rules=[],
-        scoring_config={},
+        scoring_config={"data_absent_neutral": 50, "reconstruction_score_map": {"UNKNOWN": 50}},
         report_config={"top_n": 5},
         horea_data={},
         macro_summary="- 기준금리: 3.0%\n- 주담대금리: 4.2%",
         horea_text="호재 정보 없음",
+        news_articles=None,
     )
 
-    assert llm.generate_json.call_count == 1
+    assert llm.generate_json.call_count == 1  # news_articles=None → horea_validator 스킵
 
 
 def test_generate_strategy_prompt_includes_macro_summary():
@@ -58,13 +60,15 @@ def test_generate_strategy_prompt_includes_macro_summary():
         candidates=candidates,
         budget_plan=_make_budget_plan(),
         persona_data={"priority_weights": {"commute": 3, "liquidity": 2, "price_potential": 2,
-                                           "living_convenience": 2, "school": 1}},
+                                           "living_convenience": 2, "school": 1},
+                      "user": {"interest_areas": []}},
         preference_rules=[],
-        scoring_config={},
+        scoring_config={"data_absent_neutral": 50, "reconstruction_score_map": {"UNKNOWN": 50}},
         report_config={"top_n": 5},
         horea_data={},
         macro_summary="기준금리 3.0%",
         horea_text="호재 없음",
+        news_articles=None,
     )
 
     call_args = orch.prompt_loader.load.call_args
@@ -79,13 +83,15 @@ def test_generate_strategy_empty_candidates_returns_empty_report():
         target_date=date(2026, 4, 19),
         candidates=[],
         budget_plan=_make_budget_plan(),
-        persona_data={"priority_weights": {}},
+        persona_data={"priority_weights": {},
+                      "user": {"interest_areas": []}},
         preference_rules=[],
-        scoring_config={},
+        scoring_config={"data_absent_neutral": 50, "reconstruction_score_map": {"UNKNOWN": 50}},
         report_config={"top_n": 5},
         horea_data={},
         macro_summary="",
         horea_text="",
+        news_articles=None,
     )
     assert "blocks" in result
     llm.generate_json.assert_not_called()
