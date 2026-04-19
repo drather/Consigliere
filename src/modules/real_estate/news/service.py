@@ -104,8 +104,9 @@ class NewsService:
             **analysis
         )
         
+        self._save_articles_json(articles, today)
         self._save_report(report)
-        
+
         return report.to_markdown()
 
     def _get_last_report_summary(self) -> str:
@@ -127,13 +128,34 @@ class NewsService:
         except Exception as e:
             return f"Error loading context: {str(e)}"
 
+    def _save_articles_json(self, articles: list, today: str) -> None:
+        """Job2 수집 기사 목록을 JSON으로 저장 (horea_validator 입력용)."""
+        if not os.path.exists(self.report_dir):
+            os.makedirs(self.report_dir)
+        filename = os.path.join(self.report_dir, f"{today}_News_articles.json")
+        data = {
+            "date": today,
+            "articles": [
+                {
+                    "title": a.title,
+                    "url": a.link,
+                    "description": a.description,
+                    "pub_date": a.pub_date,
+                }
+                for a in articles
+            ],
+        }
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        logger.info(f"✅ [News] Articles JSON saved: {filename}")
+
     def _save_report(self, report: NewsAnalysisReport) -> None:
         """
         Saves the markdown report to file.
         """
         if not os.path.exists(self.report_dir):
             os.makedirs(self.report_dir)
-            
+
         filename = f"{self.report_dir}/{report.date}_News.md"
         with open(filename, "w") as f:
             f.write(report.to_markdown())

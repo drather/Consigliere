@@ -369,6 +369,7 @@ class RealEstateAgent:
         # 1. 뉴스/거시경제 로드
         news_text = self._load_stored_news(target_date)
         macro_data = self._load_stored_macro(target_date) or {}
+        news_articles = self._load_stored_news_articles(target_date)
 
         # 2. 주담대금리 추출 → 예산 계산
         policy_context = fetch_latest_financial_policies()
@@ -438,6 +439,7 @@ class RealEstateAgent:
             horea_data=horea_data,
             macro_summary=macro_summary,
             horea_text=horea_text,
+            news_articles=news_articles,
         )
 
         self._save_report(report_json, target_date, len(candidates))
@@ -721,6 +723,20 @@ class RealEstateAgent:
                     return json.load(f)
             except Exception as e:
                 logger.warning(f"[Job4] Failed to parse macro JSON {filename}: {e}")
+        return None
+
+    def _load_stored_news_articles(self, target_date: date) -> Optional[List[Dict[str, Any]]]:
+        """당일 Job2 기사 JSON 로드. 없으면 None 반환."""
+        news_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "news")
+        filename = os.path.join(news_dir, f"{target_date.isoformat()}_News_articles.json")
+        if os.path.exists(filename):
+            try:
+                with open(filename, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                logger.info(f"[Job4] Loaded news articles: {filename}")
+                return data.get("articles", [])
+            except Exception as e:
+                logger.error(f"[Job4] Failed to load news articles: {e}")
         return None
 
     def _load_persona(self) -> Dict[str, Any]:
