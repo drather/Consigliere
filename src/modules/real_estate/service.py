@@ -643,6 +643,7 @@ class RealEstateAgent:
             try:
                 detail = self._lookup_apt_details(apt_name, district_code)
                 if detail:
+                    tx["apt_name"] = detail.apt_name  # 표기 정규화 (이매촌(청구) → 이매촌청구)
                     tx["household_count"] = detail.household_count
                     tx["building_count"] = detail.building_count
                     tx["constructor"] = detail.constructor
