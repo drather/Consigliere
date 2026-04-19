@@ -193,14 +193,12 @@ class InsightOrchestrator:
             total = c.get("total_score", 0)
             district = c.get("district_name", "")
 
-            # 가격 포맷
+            # 가격 포맷 — DB 단위(만원)를 그대로 표기해 LLM 단위 변환 방지
             price_man = int(c.get("price", 0))
-            price_eok = price_man // 10000
-            price_cheon = (price_man % 10000) // 1000
-            price_str = f"{price_eok}억" + (f" {price_cheon}천만원" if price_cheon else "원")
+            price_str = f"{price_man:,}만원"
             deal_info = (
-                f"{price_str} ({c.get('deal_date', '')}, "
-                f"{c.get('exclusive_area', '')}㎡, {c.get('floor', '')}층)"
+                f"{price_str} | {c.get('deal_date', '')} | "
+                f"{c.get('exclusive_area', '')}㎡ | {c.get('floor', '')}층"
             )
 
             # 단지 정보
@@ -223,8 +221,15 @@ class InsightOrchestrator:
             commute_score = scores.get("commute", 50)
             commute_min = c.get("commute_minutes")
             stations = c.get("nearest_stations") or []
+            station_str = ""
+            if stations:
+                s = stations[0]
+                if isinstance(s, dict):
+                    station_str = f"{s.get('name', '')} ({s.get('line', '')})"
+                else:
+                    station_str = str(s)
             commute_detail = (
-                f" ({commute_min}분, {stations[0]})" if commute_min and stations else ""
+                f" | {commute_min}분 | {station_str}" if commute_min and station_str else ""
             )
 
             # 환금성

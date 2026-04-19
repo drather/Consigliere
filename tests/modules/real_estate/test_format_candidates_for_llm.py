@@ -107,4 +107,11 @@ def test_price_formatting():
     orch = _make_orchestrator()
     c = _candidate(price=93000)
     text = orch._format_candidates_for_llm([c])
-    assert "9억 3천만원" in text
+    assert "93,000만원" in text  # DB 단위(만원) 그대로 표기
+
+
+def test_price_formatting_round_eok():
+    orch = _make_orchestrator()
+    c = _candidate(price=90000)
+    text = orch._format_candidates_for_llm([c])
+    assert "90,000만원" in text  # LLM 단위 변환 방지
