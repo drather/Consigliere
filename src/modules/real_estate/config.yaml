@@ -36,7 +36,8 @@ scoring:
     MEDIUM: 60
     LOW: 20
     COMPLETED: 50
-    UNKNOWN: 10
+    UNKNOWN: 50
+  data_absent_neutral: 50
 
 districts:
   # ── 서울특별시 (25개 구) ──────────────────────
