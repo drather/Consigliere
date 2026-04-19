@@ -25,6 +25,7 @@ from .apartment_master.repository import ApartmentMasterRepository
 from .apartment_master.service import ApartmentMasterService
 from .models import ApartmentMaster
 from .apartment_repository import ApartmentRepository
+# NOTE: _normalize_name is also defined in apartment_repository.py — extract to shared utils when refactoring
 from .transaction_repository import TransactionRepository, _normalize_name
 from .apt_master_repository import AptMasterRepository
 
@@ -32,11 +33,18 @@ logger = get_logger(__name__)
 
 
 def _make_dedup_key(tx: dict) -> str:
-    """중복 제거 키 — apt_name은 정규화하여 표기 차이를 무시한다."""
+    """중복 제거 키 — apt_name은 정규화하여 표기 차이를 무시한다.
+
+    exclusive_area 또는 deal_date가 없는 불완전 레코드는 uuid로 처리해 dedup 대상에서 제외한다.
+    """
+    import uuid as _uuid
+    area = tx.get("exclusive_area")
+    deal = tx.get("deal_date")
+    if area is None or deal is None:
+        return str(_uuid.uuid4())
     return (
         f"{_normalize_name(tx.get('apt_name', ''))}"
-        f"_{tx.get('exclusive_area')}"
-        f"_{tx.get('deal_date')}"
+        f"_{area}_{deal}"
         f"_{tx.get('floor', 0)}"
         f"_{tx.get('price', 0)}"
     )

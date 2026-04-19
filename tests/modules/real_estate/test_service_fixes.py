@@ -81,3 +81,17 @@ def test_extract_horea_data_compound_area():
     result = agent._extract_horea_data(news, ["성남시 분당구"])
     assert "성남시 분당구" in result
     assert len(result["성남시 분당구"]["items"]) > 0
+
+
+def test_dedup_key_none_fields_not_equal():
+    """exclusive_area 또는 deal_date가 None이면 uuid를 반환해 dedup되지 않는다."""
+    tx1 = {"apt_name": "아파트A", "exclusive_area": None, "deal_date": None, "floor": 5, "price": 80000}
+    tx2 = {"apt_name": "아파트A", "exclusive_area": None, "deal_date": None, "floor": 5, "price": 80000}
+    # 불완전 레코드는 동일해 보여도 별개 키로 처리
+    assert _make_dedup_key(tx1) != _make_dedup_key(tx2)
+
+
+def test_area_matches_excludes_single_char_token():
+    """1자 토큰(예: '구')은 필터링되어 잘못 매칭되지 않는다."""
+    # "마 구"에서 "구"는 1자라서 제외 → "강남구"와 매칭 안 됨
+    assert _area_matches("마 구", "강남구 재건축") is False
