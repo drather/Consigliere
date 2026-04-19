@@ -100,3 +100,29 @@
 - **원인 후보 1:** `_extract_horea_data()`의 `interest_areas`가 "송파구" 같은 구(區) 단위인데, 뉴스 문장에 구 이름이 직접 언급되지 않으면 매칭 실패
 - **원인 후보 2:** 오늘 수집된 뉴스(`2026-04-19_News.md`)에 관심 지역 호재 키워드 자체가 없을 수 있음
 - **해결:** horea_validator LLM 단계 도입 (InsightOrchestrator Step 2), 복합 지명 매칭 `_area_matches()`, 기본값 50(중립).
+
+---
+
+## LLM 할루시네이션 이슈 (2026-04-20 수정)
+
+### ISSUE-04: LLM 점수 재계산 — 잘못된 기준 점수 출력
+- **현상:** LLM이 `scores.liquidity=50`을 무시하고 `household_count=null`을 직접 읽어 20점으로 재계산; `reconstruction_potential=UNKNOWN` → 10점 재계산
+- **원인:** `ranked_candidates` 변수로 raw JSON을 전달하면 LLM이 raw 필드 값을 읽어 점수를 직접 추론. LLM이 instruction보다 데이터에서 패턴을 인식하는 경향
+- **해결:** `InsightOrchestrator._format_candidates_for_llm()` 도입. 후보 목록을 LLM에 전달하기 전에 `"출퇴근점수: 100점 (19분, 잠실역)"` 형태의 명시적 텍스트로 pre-format. raw JSON 제거.
+- **효과:** LLM이 점수를 읽기만 하고 재계산 불가. `test_format_candidates_for_llm.py` 9개 테스트 커버.
+
+### ISSUE-05: LLM 가격 단위 오변환 — "9억원" → "90000억원"
+- **현상:** 가격 "9억원"이 "90000억원" (9경원)으로 출력됨
+- **원인:** LLM이 "9억원"을 읽고 9억 = 90,000만원임을 인지 → 90,000을 추출 → "억원" 단위를 붙여 "90,000억원" 오변환. 한국 부동산 단위 혼동.
+- **해결:** 가격 표기를 DB 원본 단위인 `"90,000만원"` 형식으로 유지. LLM에게 만원→억원 변환 지시 추가. LLM이 이미 "알고 있는" 숫자(90,000)와 일치시켜 재변환 불필요.
+
+### ISSUE-06: nearest_stations dict raw 노출
+- **현상:** 출퇴근 정보가 `{'name': '잠실역', 'line': '2호선·8호선', 'walk_minutes': 5}` Python dict repr으로 출력
+- **원인:** `_format_candidates_for_llm()`에서 `stations[0]`을 직접 문자열화 — dict 타입이면 `repr()` 출력
+- **해결:** `isinstance(s, dict)` 분기 → `name`/`line` 필드 추출 후 `"잠실역 (2호선·8호선)"` 형식으로 포맷
+
+### ISSUE-07: LLM 후보 수 초과 출력 — 없는 4위 단지 생성
+- **현상:** Python 파이프라인 결과 3개 단지 → LLM이 이매촌(청구)을 4위로 생성
+- **원인:** apt_name 정규화 전 raw JSON에는 "이매촌청구"와 "이매촌(청구)" 두 표기가 존재 → LLM이 다른 단지로 인식해 별도 항목 생성
+- **해결 1:** `_enrich_transactions()`에서 `tx["apt_name"] = detail.apt_name` 덮어쓰기로 apt_master 기준 이름으로 정규화
+- **해결 2:** pre-format 텍스트 첫 줄에 `"총 N개 단지 (이 목록 외 단지는 절대 출력하지 마십시오)"` 명시

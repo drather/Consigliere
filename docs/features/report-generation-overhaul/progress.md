@@ -50,7 +50,14 @@
 - [x] ISSUE-02: 세대수 미확인 단지 보강 — _lookup_apt_details normalize + ScoringEngine 중립값
 - [x] ISSUE-03: 가격상승가능성 전체 10점 — horea_validator LLM + _area_matches + 중립값 50
 
+## Phase 3.6: LLM 할루시네이션 수정 (2026-04-20)
+- [x] ISSUE-04: LLM 점수 재계산 — `_format_candidates_for_llm()` 도입, 점수를 텍스트로 pre-format
+- [x] ISSUE-05: LLM 가격 단위 오변환 — 가격을 만원 단위(90,000만원)로 표기
+- [x] ISSUE-06: nearest_stations dict raw 노출 — name/line 필드 추출 텍스트 변환
+- [x] ISSUE-07: phantom 후보 생성 — 후보 수 명시 헤더("총 N개 단지") 추가
+- [x] 최종 검증: Job4 재실행 — 3개 단지, 점수/가격/역 정보 모두 정확
+
 ## Phase 4: Release
-- [ ] 단위 테스트 전체 통과
-- [ ] result.md E2E 면제 기록 (화면 변경 없음)
+- [x] 단위 테스트 전체 통과 (178 passed)
+- [x] result.md 작성 + E2E 면제 기록 (화면 변경 없음)
 - [ ] master 머지
