@@ -80,3 +80,23 @@
 ### Decision 5: Price ±10% filter (budget_band_ratio)
 - **Rationale:** Without a price filter, candidates include properties far outside the user's budget, distorting scoring. A ±10% band keeps candidates relevant.
 - **Config path:** `config.yaml` → `report.budget_band_ratio`
+
+---
+
+## 실행 결과 이슈 (2026-04-19 Job4 첫 실행 후 발견)
+
+### ISSUE-01: 중복 단지 출현 — 이매촌청구 vs 이매촌(청구)
+- **현상:** 3위와 4위가 동일 아파트의 다른 이름 표기로 각각 출현
+- **원인:** 실거래가 원시 데이터에 동일 단지가 "이매촌청구"와 "이매촌(청구)" 두 가지 이름으로 등록됨. dedup 키는 `apt_name + area + date + floor + price` 조합이므로 이름이 다르면 별개 취급
+- **해결 방향:** `normalize_apt_name()` 적용 강화 또는 `apt_master_repo` complex_code 기반 dedup
+
+### ISSUE-02: 세대수 미확인 — 금강캐스빌, 이매촌(청구)
+- **현상:** 환금성 점수 20점 고정 (세대수 없음)
+- **원인:** `apt_master_repo`에 해당 단지 complex_code 매핑이 없음 → `apt_repo.search()` fallback도 미매칭
+- **해결 방향:** `build_apartment_master` Job 재실행으로 신규 단지 보완 (2순위 로드맵 항목)
+
+### ISSUE-03: 가격상승가능성 전체 10점
+- **현상:** 4개 단지 모두 가격상승가능성 10점 (호재 없음)
+- **원인 후보 1:** `_extract_horea_data()`의 `interest_areas`가 "송파구" 같은 구(區) 단위인데, 뉴스 문장에 구 이름이 직접 언급되지 않으면 매칭 실패
+- **원인 후보 2:** 오늘 수집된 뉴스(`2026-04-19_News.md`)에 관심 지역 호재 키워드 자체가 없을 수 있음
+- **확인 필요:** 뉴스 파일 내용 및 persona의 `interest_areas` 설정값 점검
