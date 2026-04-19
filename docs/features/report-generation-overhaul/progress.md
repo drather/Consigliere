@@ -46,9 +46,9 @@
 - [x] 점수 변별력 확보 확인 (77.5 / 57.5 / 51.1 / 31.1점)
 - [x] LLM 1회 호출 확인 (synthesizer in=2,396 out=1,987)
 - [x] 토큰 비용 확인: Job4 1회 = **+1원** (387→388원)
-- [ ] ISSUE-01: 중복 단지 제거 — 이매촌청구/이매촌(청구) 같은 매물이 다른 이름으로 2개 출현
-- [ ] ISSUE-02: 세대수 미확인 단지 보강 — 금강캐스빌, 이매촌(청구) apt_master 미매핑
-- [ ] ISSUE-03: 가격상승가능성 전체 10점 — 뉴스 호재 매칭 미동작 (interest_areas 설정 점검 필요)
+- [x] ISSUE-01: 중복 단지 제거 — _make_dedup_key + _normalize_name
+- [x] ISSUE-02: 세대수 미확인 단지 보강 — _lookup_apt_details normalize + ScoringEngine 중립값
+- [x] ISSUE-03: 가격상승가능성 전체 10점 — horea_validator LLM + _area_matches + 중립값 50
 
 ## Phase 4: Release
 - [ ] 단위 테스트 전체 통과
