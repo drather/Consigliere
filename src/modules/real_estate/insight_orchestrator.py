@@ -165,9 +165,7 @@ class InsightOrchestrator:
                     "horea_assessments": json.dumps(
                         horea_assessments or {}, ensure_ascii=False
                     ),
-                    "ranked_candidates": json.dumps(
-                        top_candidates, ensure_ascii=False, default=str
-                    ),
+                    "ranked_candidates": self._format_candidates_for_llm(top_candidates),
                 },
             )
             result = self.llm.generate_json(prompt, metadata=metadata)
@@ -178,6 +176,82 @@ class InsightOrchestrator:
             logger.error(f"[Orchestrator] 리포트 생성 실패: {e}")
 
         return self._empty_report()
+
+    def _format_candidates_for_llm(self, candidates: List[Dict]) -> str:
+        """scored 후보 목록을 점수 레이블 포함 텍스트로 변환.
+
+        LLM이 raw 필드(household_count=null 등)로 점수를 재계산하는 것을 방지한다.
+        모든 점수는 scores.X 값을 그대로 레이블링하여 LLM이 읽기만 하도록 강제한다.
+        """
+        medals = ["🥇 1위:", "🥈 2위:", "🥉 3위:"]
+        lines = [f"총 {len(candidates)}개 단지 (이 목록 외 단지는 절대 출력하지 마십시오)\n"]
+
+        for i, c in enumerate(candidates):
+            rank_label = medals[i] if i < 3 else f"{i + 1}위:"
+            scores = c.get("scores", {})
+            apt_name = c.get("apt_name", "")
+            total = c.get("total_score", 0)
+            district = c.get("district_name", "")
+
+            # 가격 포맷
+            price_man = int(c.get("price", 0))
+            price_eok = price_man // 10000
+            price_cheon = (price_man % 10000) // 1000
+            price_str = f"{price_eok}억" + (f" {price_cheon}천만원" if price_cheon else "원")
+            deal_info = (
+                f"{price_str} ({c.get('deal_date', '')}, "
+                f"{c.get('exclusive_area', '')}㎡, {c.get('floor', '')}층)"
+            )
+
+            # 단지 정보
+            parts: List[str] = []
+            constructor = c.get("constructor") or ""
+            if constructor:
+                parts.append(constructor)
+            approved = c.get("approved_date") or ""
+            if approved:
+                parts.append(f"{str(approved)[:4]}년준공")
+            hh = c.get("household_count") or 0
+            bld = c.get("building_count") or 0
+            if hh:
+                parts.append(f"{hh}세대")
+            if bld:
+                parts.append(f"{bld}개동")
+            complex_str = " / ".join(parts) if parts else "(단지정보 없음)"
+
+            # 출퇴근
+            commute_score = scores.get("commute", 50)
+            commute_min = c.get("commute_minutes")
+            stations = c.get("nearest_stations") or []
+            commute_detail = (
+                f" ({commute_min}분, {stations[0]})" if commute_min and stations else ""
+            )
+
+            # 환금성
+            lq_score = scores.get("liquidity", 50)
+            lq_detail = f" ({hh}세대)" if hh else " (세대수 미확인)"
+
+            # 학군
+            school_score = scores.get("school", 50)
+            school_notes = c.get("school_zone_notes") or ""
+            school_detail = f" ({school_notes})" if school_notes else ""
+
+            lines.append(
+                f"{rank_label} {apt_name} [지역: {district}] | 총점={total}"
+            )
+            lines.append(f"  가격: {deal_info}")
+            lines.append(f"  단지정보: {complex_str}")
+            lines.append(f"  출퇴근점수: {commute_score}점{commute_detail}")
+            lines.append(f"  환금성점수: {lq_score}점{lq_detail}")
+            lines.append(f"  생활편의점수: {scores.get('living_convenience', 50)}점")
+            lines.append(f"  학군점수: {school_score}점{school_detail}")
+            lines.append(
+                f"  가격상승가능성점수: {scores.get('price_potential', 50)}점"
+                f" (horea_assessments에서 해당 지역 [지역: {district}] verdict/reasoning 인용)"
+            )
+            lines.append("")
+
+        return "\n".join(lines)
 
     def _empty_report(self) -> Dict[str, Any]:
         return {

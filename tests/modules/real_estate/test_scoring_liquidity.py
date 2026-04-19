@@ -96,4 +96,4 @@ class TestLiquidityScore:
         """household_count 키 없을 때 기본값 0 처리 — KeyError 없어야 한다."""
         c = {"apt_name": "키없는아파트"}
         score = self.engine._score_liquidity(c)
-        assert score == 20  # _LOW (0 → LOW)
+        assert score == 50  # data_absent_neutral (세대수 없음 → 중립값)
