@@ -19,8 +19,9 @@ financial_defaults:
   loan_term_years: 30
 
 report:
-  recent_days: 7          # 후보 조회 기간 (일)
-  top_n: 10               # 최종 추천 상위 N개
+  recent_days: 7
+  top_n: 5               # was 10
+  budget_band_ratio: 0.1  # added: price ±10% filter ratio
 
 scoring:
   commute_thresholds: [20, 35]      # 분 기준: HIGH(≤20), MEDIUM(≤35), LOW(>35)
@@ -35,7 +36,8 @@ scoring:
     MEDIUM: 60
     LOW: 20
     COMPLETED: 50
-    UNKNOWN: 10
+    UNKNOWN: 50
+  data_absent_neutral: 50
 
 districts:
   # ── 서울특별시 (25개 구) ──────────────────────

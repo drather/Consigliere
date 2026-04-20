@@ -37,19 +37,20 @@ DEFAULT_CONFIG = {
     "household_thresholds": [300, 500],
     "school_keywords": ["학원가", "명문", "특목고", "자사고"],
     "reconstruction_score_map": {
-        "HIGH": 100, "MEDIUM": 60, "LOW": 20, "COMPLETED": 50, "UNKNOWN": 10
+        "HIGH": 100, "MEDIUM": 60, "LOW": 20, "COMPLETED": 50, "UNKNOWN": 50
     },
+    "data_absent_neutral": 50,
 }
 
 
 class TestScoringEngine:
-    def _score(self, candidates, weights=None, config=None, horea=None):
+    def _score(self, candidates, weights=None, config=None, horea_scores=None):
         from modules.real_estate.scoring import ScoringEngine
         engine = ScoringEngine(
             weights=weights or DEFAULT_WEIGHTS,
             config=config or DEFAULT_CONFIG,
         )
-        return engine.score_all(candidates, horea_data=horea or {})
+        return engine.score_all(candidates, horea_scores=horea_scores or {})
 
     def test_commute_high_score(self):
         c = make_candidate(commute_minutes=15)
@@ -102,10 +103,10 @@ class TestScoringEngine:
             apt_name="인덕원현대",
             district_name="안양시 동안구",
         )
-        horea = {"안양시 동안구": {"gtx": True, "items": ["GTX-C 인덕원역 착공"]}}
-        results = self._score([c], horea=horea)
-        # LOW(20) + gtx horea boost(+40) = 60
-        assert results[0]["scores"]["price_potential"] >= 60
+        horea_scores = {"안양시 동안구": {"score": 80, "verdict": "ACTIVE", "reasoning": "GTX-C 인덕원역"}}
+        results = self._score([c], horea_scores=horea_scores)
+        # LOW(20) + boost(32) = 52
+        assert results[0]["scores"]["price_potential"] >= 50
 
     def test_total_score_is_weighted_sum(self):
         c = make_candidate(

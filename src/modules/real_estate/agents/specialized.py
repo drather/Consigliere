@@ -2,7 +2,7 @@
 specialized.py — 부동산 모듈 전용 에이전트
 
 현재 파이프라인에서 사용되는 에이전트만 유지한다.
-LLM 역할: 호재 분석(InsightOrchestrator._analyze_horea) + 리포트 서술(InsightOrchestrator._synthesize_report)
+LLM 역할: 리포트 서술만 담당 (InsightOrchestrator._synthesize_report) — macro_summary/horea_text는 Python이 준비
 필터링·점수계산은 CandidateFilter·ScoringEngine(Python 코드)이 담당한다.
 """
 from typing import Dict, Any
@@ -25,7 +25,7 @@ class DataAnalystAgent(BaseAgent):
 
 
 class ContextAnalystAgent(BaseAgent):
-    """Legacy — 미사용. InsightOrchestrator._analyze_horea()로 대체."""
+    """Legacy — 미사용. horea 분석은 Python 키워드 매칭으로 대체됨."""
     def run(self, context: Dict[str, Any]) -> Dict[str, str]:
         raise NotImplementedError("ContextAnalystAgent는 더 이상 사용하지 않습니다.")
 

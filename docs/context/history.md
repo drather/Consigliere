@@ -1,5 +1,30 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-18
+**Last Updated:** 2026-04-20
+
+## 2026-04-19~20: Job4 부동산 리포트 생성 전면 점검
+
+- **Feature:** `feature/report-generation-overhaul` → master 머지 예정
+  - **배경:** Job4 첫 실행에서 중복 단지·세대수 누락·가격상승가능성 전체 10점·LLM 할루시네이션 등 4종 이슈 발견. 리포트 파이프라인 전반 재설계.
+  - **Phase 2 — 핵심 변경:**
+    - `generate_report()`: ChromaDB 벡터 검색 → `tx_repo.get_by_district()` SQLite 전환 (결정론적 날짜 필터)
+    - `calculate_budget()`: `mortgage_rate` 파라미터 추가 → 주담대금리 2.83% 실데이터 반영
+    - `_enrich_transactions()`: `apt_master_repo.get_by_name()` normalize로 household_count 복구
+    - LLM 2회 → 1회 통합: `horea_analyst` 제거, `macro_summary`/`horea_text` Python pre-format
+    - `ScoringEngine`: `data_absent_neutral=50` — 데이터 부재 ≠ 불량 처리
+    - `InsightOrchestrator`: `horea_validator` LLM 단계 추가 (Step2), `_format_candidates_for_llm()` (Step4 pre-format)
+    - `config.yaml`: `budget_band_ratio`, `data_absent_neutral`, `UNKNOWN→50` 추가
+  - **Phase 3.5 — 실행 이슈 수정:**
+    - ISSUE-01: `_make_dedup_key` + `_normalize_name` → 이매촌청구/이매촌(청구) 중복 제거
+    - ISSUE-02: `_lookup_apt_details` normalize → apt_master 미매핑 시 중립값 50
+    - ISSUE-03: `horea_validator` LLM + `_area_matches` 복합 지명 매칭 → 가격상승가능성 50
+  - **Phase 3.6 — LLM 할루시네이션 수정:**
+    - ISSUE-04: `_format_candidates_for_llm()` — raw JSON 제거, 점수를 텍스트 레이블로 pre-format
+    - ISSUE-05: 가격을 DB 단위(만원) 그대로 표기 → LLM 억/만원 단위 오변환 방지
+    - ISSUE-06: `nearest_stations` dict → `name/line` 추출 텍스트 변환
+    - ISSUE-07: 후보 수 명시 헤더 → phantom 후보 생성 방지
+  - **신규 프롬프트:** `horea_validator.md` (ACTIVE/DATED/NONE 판정, score 0~100)
+  - **성과:** 178/178 tests PASS, Job4 검증 완료 (3개 단지, 점수·가격·역 정보 정확), 토큰 비용 +1원/회
+  - **핵심 학습:** LLM은 raw JSON 필드 값으로 점수를 재계산하는 경향. 점수를 텍스트 레이블로 pre-format하면 재계산 불가 → `_format_candidates_for_llm()` 패턴으로 표준화.
 
 ## 2026-04-18: 거시경제 지표 수집 시스템 구축 + BOK 코드 정정
 

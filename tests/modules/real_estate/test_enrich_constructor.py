@@ -5,21 +5,34 @@ import os
 import sys
 import pytest
 from unittest.mock import MagicMock
+from datetime import timezone, datetime
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'src')))
 
-from modules.real_estate.models import ApartmentMaster
+from modules.real_estate.models import ApartmentMaster, AptMasterEntry
+from modules.real_estate.apartment_repository import ApartmentRepository
+from modules.real_estate.apt_master_repository import AptMasterRepository
 
 
 def _make_agent_with_master(master: ApartmentMaster):
-    """RealEstateAgent를 최소한으로 mock해서 apt_master_service.get_or_fetch 제어."""
+    """RealEstateAgent를 최소한으로 stub해서 apt_repo / apt_master_repo 제어."""
     from modules.real_estate.service import RealEstateAgent
 
+    apt_repo = ApartmentRepository(db_path=":memory:")
+    apt_master_repo = AptMasterRepository(db_path=":memory:")
+
+    if master is not None:
+        apt_repo.save(master)
+        apt_master_repo.upsert(AptMasterEntry(
+            apt_name=master.apt_name,
+            district_code=master.district_code,
+            complex_code=master.complex_code,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        ))
+
     agent = object.__new__(RealEstateAgent)
-    # apt_master_service mock
-    mock_svc = MagicMock()
-    mock_svc.get_or_fetch.return_value = master
-    agent.apt_master_service = mock_svc
+    agent.apt_repo = apt_repo
+    agent.apt_master_repo = apt_master_repo
     return agent
 
 
@@ -84,9 +97,11 @@ class TestEnrichConstructor:
         from modules.real_estate.service import RealEstateAgent
 
         agent = object.__new__(RealEstateAgent)
-        mock_svc = MagicMock()
-        mock_svc.get_or_fetch.side_effect = Exception("DB error")
-        agent.apt_master_service = mock_svc
+        # apt_master_repo.get_by_name_district raises an exception
+        mock_repo = MagicMock()
+        mock_repo.get_by_name_district.side_effect = Exception("DB error")
+        agent.apt_master_repo = mock_repo
+        agent.apt_repo = ApartmentRepository(db_path=":memory:")
 
         result = agent._enrich_transactions([_sample_tx()], area_intel={})
         assert len(result) == 1
@@ -95,7 +110,8 @@ class TestEnrichConstructor:
     def test_multiple_txs_all_enriched(self):
         """여러 tx에 대해 모두 constructor/approved_date가 부착된다."""
         agent = _make_agent_with_master(_sample_master())
-        txs = [_sample_tx(apt_name=f"아파트{i}") for i in range(3)]
+        # 모두 마스터 DB에 저장된 apt_name과 동일하게 사용
+        txs = [_sample_tx(apt_name="래미안퍼스티지") for _ in range(3)]
         result = agent._enrich_transactions(txs, area_intel={})
         for r in result:
             assert "constructor" in r

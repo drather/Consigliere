@@ -10,6 +10,7 @@ from core.prompt_loader import PromptLoader
 from core.llm import LLMClient
 from core.llm_pipeline import build_llm_pipeline
 from core.logger import get_logger
+from core.policy_fetcher import fetch_latest_financial_policies
 from .repository import ChromaRealEstateRepository
 from .config import RealEstateConfig
 from .tour_service import TourService
@@ -22,11 +23,39 @@ from .persona_manager import PersonaManager, PreferenceRulesManager
 from .apartment_master.client import ApartmentMasterClient
 from .apartment_master.repository import ApartmentMasterRepository
 from .apartment_master.service import ApartmentMasterService
+from .models import ApartmentMaster
 from .apartment_repository import ApartmentRepository
-from .transaction_repository import TransactionRepository
+# NOTE: _normalize_name is also defined in apartment_repository.py — extract to shared utils when refactoring
+from .transaction_repository import TransactionRepository, _normalize_name
 from .apt_master_repository import AptMasterRepository
 
 logger = get_logger(__name__)
+
+
+def _make_dedup_key(tx: dict) -> str:
+    """중복 제거 키 — apt_name은 정규화하여 표기 차이를 무시한다.
+
+    exclusive_area 또는 deal_date가 없는 불완전 레코드는 uuid로 처리해 dedup 대상에서 제외한다.
+    """
+    import uuid as _uuid
+    area = tx.get("exclusive_area")
+    deal = tx.get("deal_date")
+    if area is None or deal is None:
+        return str(_uuid.uuid4())
+    return (
+        f"{_normalize_name(tx.get('apt_name', ''))}"
+        f"_{area}_{deal}"
+        f"_{tx.get('floor', 0)}"
+        f"_{tx.get('price', 0)}"
+    )
+
+
+def _area_matches(area: str, text: str) -> bool:
+    """전체 지명 또는 공백 분리 토큰(2자 이상) 중 하나라도 포함되면 True."""
+    if area in text:
+        return True
+    return any(token in text for token in area.split() if len(token) >= 2)
+
 
 class RealEstateAgent:
     """
@@ -331,63 +360,74 @@ class RealEstateAgent:
         return {**stats, "elapsed_seconds": elapsed}
 
     def generate_report(self, district_code: Optional[str] = None, target_date: Optional[date] = None) -> Dict[str, Any]:
-        """Job 4: Generate insight report using stored data (macro from file, txs from ChromaDB).
-
-        district_code=None → persona.interest_areas 기반 구 동시 수집
-        district_code 지정 → 해당 구만 수집
-        """
+        """Job 4: SQLite tx_repo 기반 인사이트 리포트 생성."""
+        from dataclasses import asdict
         if target_date is None:
             target_date = date.today()
         logger.info(f"[Job4] Generating report for {target_date}, district_code={district_code}")
 
-        # Load news summary (Job2 결과)
+        # 1. 뉴스/거시경제 로드
         news_text = self._load_stored_news(target_date)
+        macro_data = self._load_stored_macro(target_date) or {}
+        news_articles = self._load_stored_news_articles(target_date)
 
-        # Load persona + policy context
-        persona_data = self._load_persona()
-        from core.policy_fetcher import fetch_latest_financial_policies
+        # 2. 주담대금리 추출 → 예산 계산
         policy_context = fetch_latest_financial_policies()
+        persona_data = self._load_persona()
 
-        # 예산 계산
-        budget_plan = self.calculator.calculate_budget(persona_data, policy_context)
+        mortgage_rate = None
+        loan_entry = macro_data.get("loan_rate", {})
+        if loan_entry and loan_entry.get("value") is not None:
+            mortgage_rate = float(loan_entry["value"]) / 100.0
+            logger.info(f"[Job4] 주담대금리 {loan_entry['value']}% 적용")
+
+        budget_plan = self.calculator.calculate_budget(persona_data, policy_context, mortgage_rate=mortgage_rate)
         budget_ceiling = budget_plan.final_max_price
 
-        # Resolve target districts
+        # 3. 관심 지역 코드 목록
         target_codes = self._resolve_interest_districts(persona_data, district_code)
         logger.info(f"[Job4] districts: {target_codes}")
 
-        # Load transactions from ChromaDB
+        # 4. SQLite tx_repo에서 실거래가 조회
         recent_days = self.config.get("report", {}).get("recent_days", 7)
+        cutoff = (target_date - timedelta(days=recent_days)).isoformat()
         all_txs: List[Dict[str, Any]] = []
         for code in target_codes:
             try:
-                where_clause = {"district_code": {"$eq": code}}
-                txs = self.repository.get_transactions(limit=50, where=where_clause)
-                all_txs.extend(txs)
+                rows = self.tx_repo.get_by_district(code, limit=200, date_from=cutoff)
+                all_txs.extend(asdict(tx) for tx in rows)
             except Exception as e:
-                logger.error(f"[Job4] ChromaDB query failed for {code}: {e}")
+                logger.error(f"[Job4] tx_repo 조회 실패 {code}: {e}")
 
-        # Dedup
-        seen_keys: set = set()
+        # 5. 중복 제거
+        seen_keys: set[str] = set()
         deduped_txs = []
         for tx in all_txs:
-            key = f"{tx.get('apt_name')}_{tx.get('exclusive_area')}_{tx.get('deal_date')}_{tx.get('floor')}"
+            key = _make_dedup_key(tx)
             if key not in seen_keys:
                 seen_keys.add(key)
                 deduped_txs.append(tx)
 
-        # 예산 이하 필터 (코드 레벨)
-        candidates = [tx for tx in deduped_txs if tx.get("price", 0) <= budget_ceiling]
-        logger.info(f"[Job4] 예산({budget_ceiling/1e8:.1f}억) 이하 후보: {len(candidates)}건")
+        # 6. 가격 ±band 필터 (예산과 관련성 높은 매물만)
+        band = self.config.get("report", {}).get("budget_band_ratio", 0.1)
+        lo, hi = budget_ceiling * (1 - band), budget_ceiling * (1 + band)
+        candidates = [tx for tx in deduped_txs if lo <= tx.get("price", 0) <= hi]
+        logger.info(f"[Job4] 예산 {budget_ceiling/1e8:.1f}억 ±{band*100:.0f}% → {len(candidates)}건 (전체 {len(deduped_txs)}건)")
 
-        # area_intel enrich (일괄, per-apt ChromaDB 호출 없음)
+        # 7. area_intel enrich
         area_intel = self._load_area_intel()
         workplace_station = persona_data.get("commute", {}).get("workplace_station", "")
         candidates = self._enrich_transactions(candidates, area_intel, workplace_station)
 
-        # 오케스트레이터에 위임
-        preference_rules = PreferenceRulesManager().get()
+        # 8. Python 데이터 준비
         interest_areas = persona_data.get("user", {}).get("interest_areas", [])
+        news_str = news_text
+        horea_data = self._extract_horea_data(news_str, interest_areas) if news_str.strip() else {}
+        macro_summary = self._format_macro_summary(macro_data)
+        horea_text = self._horea_data_to_text(horea_data)
+
+        # 9. 오케스트레이터에 위임
+        preference_rules = PreferenceRulesManager().get()
         report_json = self.insight_orchestrator.generate_strategy(
             target_date=target_date,
             candidates=candidates,
@@ -396,8 +436,10 @@ class RealEstateAgent:
             preference_rules=preference_rules,
             scoring_config=self.config.get("scoring", {}),
             report_config=self.config.get("report", {}),
-            news_text=news_text,
-            interest_areas=interest_areas,
+            horea_data=horea_data,
+            macro_summary=macro_summary,
+            horea_text=horea_text,
+            news_articles=news_articles,
         )
 
         self._save_report(report_json, target_date, len(candidates))
@@ -599,14 +641,15 @@ class RealEstateAgent:
             # ── 아파트 마스터 정보 enrich (세대수, 동수, 건설사, 사용승인일) ──
             # area_intel 유무와 무관하게 항상 실행
             try:
-                master = self.apt_master_service.get_or_fetch(apt_name, district_code)
-                if master:
-                    tx["household_count"] = master.household_count
-                    tx["building_count"] = master.building_count
-                    tx["constructor"] = master.constructor
-                    tx["approved_date"] = master.approved_date
+                detail = self._lookup_apt_details(apt_name, district_code)
+                if detail:
+                    tx["apt_name"] = detail.apt_name  # 표기 정규화 (이매촌(청구) → 이매촌청구)
+                    tx["household_count"] = detail.household_count
+                    tx["building_count"] = detail.building_count
+                    tx["constructor"] = detail.constructor
+                    tx["approved_date"] = detail.approved_date
             except Exception as e:
-                logger.warning(f"[Enrich] 마스터 조회 실패 {apt_name}: {e}")
+                logger.warning(f"[Enrich] apt_details 조회 실패 {apt_name}: {e}")
 
             if not area_intel:
                 enriched.append(tx)
@@ -683,8 +726,84 @@ class RealEstateAgent:
                 logger.warning(f"[Job4] Failed to parse macro JSON {filename}: {e}")
         return None
 
+    def _load_stored_news_articles(self, target_date: date) -> Optional[List[Dict[str, Any]]]:
+        """당일 Job2 기사 JSON 로드. 없으면 None 반환."""
+        news_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "news")
+        filename = os.path.join(news_dir, f"{target_date.isoformat()}_News_articles.json")
+        if os.path.exists(filename):
+            try:
+                with open(filename, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                logger.info(f"[Job4] Loaded news articles: {filename}")
+                return data.get("articles", [])
+            except Exception as e:
+                logger.error(f"[Job4] Failed to load news articles: {e}")
+        return None
+
     def _load_persona(self) -> Dict[str, Any]:
         return PersonaManager().load()
+
+    def _lookup_apt_details(self, apt_name: str, district_code: str) -> Optional[ApartmentMaster]:
+        """apt_master_repo + apt_repo 2-step lookup to return ApartmentMaster.
+
+        1) apt_master_repo → complex_code
+        2) complex_code → apt_repo.get() (exact)
+        3) Fallback: apt_repo.search() (partial match by apt_name + district_code)
+        """
+        apt_name = _normalize_name(apt_name)
+        entry = self.apt_master_repo.get_by_name_district(apt_name, district_code)
+        if entry and entry.complex_code:
+            detail = self.apt_repo.get(entry.complex_code)
+            if detail:
+                return detail
+        results = self.apt_repo.search(apt_name=apt_name, district_code=district_code, limit=1)
+        return results[0] if results else None
+
+    def _format_macro_summary(self, macro_data: Optional[Dict[str, Any]]) -> str:
+        if not macro_data:
+            return ""
+        lines = []
+        entry = macro_data.get("base_rate")
+        if entry and entry.get("value") is not None:
+            lines.append(f"- 기준금리: {entry['value']}% ({entry.get('date', '')})")
+        entry = macro_data.get("loan_rate")
+        if entry and entry.get("value") is not None:
+            lines.append(f"- 주담대금리(주택담보대출): {entry['value']}% ({entry.get('date', '')})")
+        entry = macro_data.get("m2_growth")
+        if entry and entry.get("value") is not None:
+            lines.append(f"- M2 통화량: {entry['value']:,}{entry.get('unit', '')} ({entry.get('date', '')})")
+        return "\n".join(lines)
+
+    def _extract_horea_data(self, news_text: str, interest_areas: List[str]) -> Dict[str, Any]:
+        GTX_KW = ["GTX", "광역급행철도"]
+        HOREA_KW = ["재건축", "재개발", "정비사업", "지구지정", "개발사업", "신도시", "택지지구",
+                    "학군", "학교신설", "착공", "개통", "노선"]
+        result: Dict[str, Any] = {}
+        sentences = [s.strip() for s in news_text.replace("\n", ".").split(".") if s.strip()]
+        for area in interest_areas:
+            items, has_gtx = [], False
+            for idx, sent in enumerate(sentences):
+                context = " ".join(sentences[max(0, idx - 1):idx + 2])
+                if not _area_matches(area, sent) and not _area_matches(area, context):
+                    continue
+                if any(kw in context for kw in GTX_KW):
+                    has_gtx = True
+                    items.append(sent)
+                elif any(kw in context for kw in HOREA_KW):
+                    items.append(sent)
+            if items:
+                result[area] = {"gtx": has_gtx, "items": items[:5]}
+        return result
+
+    def _horea_data_to_text(self, horea_data: Dict[str, Any]) -> str:
+        if not horea_data:
+            return "호재 정보 없음"
+        lines = []
+        for area, info in horea_data.items():
+            gtx_tag = " [GTX 수혜]" if info.get("gtx") else ""
+            for item in info.get("items", []):
+                lines.append(f"- {area}{gtx_tag}: {item}")
+        return "\n".join(lines) if lines else "호재 정보 없음"
 
     def get_persona(self) -> Dict[str, Any]:
         """현재 persona.yaml을 dict로 반환."""
