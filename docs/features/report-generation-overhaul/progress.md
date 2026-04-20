@@ -60,4 +60,4 @@
 ## Phase 4: Release
 - [x] 단위 테스트 전체 통과 (178 passed)
 - [x] result.md 작성 + E2E 면제 기록 (화면 변경 없음)
-- [ ] master 머지
+- [x] master 머지 (2026-04-20)
