@@ -24,7 +24,7 @@
 ### 📈 지역 시장 및 실거래 정밀 분석
 1. **실거래 트렌드:** 최근 거래가 방향(상승/하락/박스권), 거래량 변화, 매수세 판단
 2. **노후도 분석:** 30년차 근접 단지 식별, `reconstruction_status` 필드가 있는 단지 우선 언급, 신축/구축 가격 격차
-3. **단지별 특징:** 층수·면적에 따른 선호/비선호 타입. `commute_minutes_to_samsung`이 짧은 단지 강조.
-4. **역세권·출퇴근 분석:** `nearest_stations`(역명·노선·도보분)과 `commute_minutes_to_samsung`을 인용하여 직주근접 우수 단지를 구체적으로 명시하십시오.
+3. **단지별 특징:** 층수·면적에 따른 선호/비선호 타입. `commute_transit_minutes`(대중교통), `commute_car_minutes`(자차)가 짧은 단지 강조.
+4. **역세권·출퇴근 분석:** `nearest_stations`(역명·노선·도보분)과 `commute_transit_minutes`(대중교통), `commute_car_minutes`(자차)를 인용하여 직주근접 우수 단지를 구체적으로 명시하십시오.
 5. **학군 분석:** `school_zone_notes`와 `elementary_schools` 필드를 인용하여 학군 우위 단지를 명시하십시오.
-6. **단지 가치 결론:** 가성비 또는 미래 가치 높은 단지 3곳 선정 및 데이터 근거. enriched 필드(`commute_minutes_to_samsung`, `reconstruction_potential`, `school_zone_notes`)를 반드시 근거로 인용하십시오.
+6. **단지 가치 결론:** 가성비 또는 미래 가치 높은 단지 3곳 선정 및 데이터 근거. enriched 필드(`commute_transit_minutes`, `commute_car_minutes`, `reconstruction_potential`, `school_zone_notes`)를 반드시 근거로 인용하십시오.

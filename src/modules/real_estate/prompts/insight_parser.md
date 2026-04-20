@@ -21,7 +21,7 @@
 - 금액 단위: 값의 단위는 **원(KRW)**입니다. 예: `873786407` = **8억 7천만 원** (87억이 아님).
 - **스코어카드 1순위/2순위/3순위는 반드시 위 '추천 가능 단지 목록(화이트리스트)'에 있는 단지만 추천하십시오.** `analyst_insight`에 다른 단지명이 언급되더라도 이 목록을 최우선으로 따르십시오. 목록에 없는 단지 추천은 즉시 기각됩니다.
 - 목록에 단지가 2개뿐이라면 1순위/2순위만 작성하고, 1개뿐이라면 1순위만 작성하십시오.
-- `analyst_insight`의 enriched 거래 데이터에 포함된 `commute_minutes_to_samsung`, `nearest_stations`, `school_zone_notes`, `reconstruction_status` 필드를 근거로 반드시 인용하십시오.
+- `analyst_insight`의 enriched 거래 데이터에 포함된 `commute_transit_minutes`, `commute_car_minutes`, `nearest_stations`, `school_zone_notes`, `reconstruction_status` 필드를 근거로 반드시 인용하십시오.
 {{budget_constraint_note}}
 
 ## 사용자 선호 필터 규칙
@@ -36,7 +36,7 @@
 
 | 기준 | 기본 가중치 | 평가 기준 |
 |---|---|---|
-| 출퇴근 편의성 | 40% | `commute_minutes_to_samsung` ≤ 20분 → HIGH, ≤ 35분 → MEDIUM, > 35분 → LOW |
+| 출퇴근 편의성 | 40% | `commute_transit_minutes`(대중교통) ≤ 20분 → HIGH, ≤ 35분 → MEDIUM, > 35분 → LOW. `commute_car_minutes`(자차)도 병기. |
 | 환금성(역세권) | 20% | 500세대↑ 강남권 + 도보 5분내 역 → HIGH, 300세대↑ → MEDIUM, 기타 → LOW |
 | 학군 | 15% | 대치/반포 학원가 도보권 → HIGH, 명문초 배정권 → MEDIUM, 기타 → LOW |
 | 생활편의 | 15% | 대형마트·병원·편의시설 도보권 → HIGH, MEDIUM, LOW |
@@ -63,7 +63,7 @@
 🥇 1순위: [단지명] ([구/동], [세대수]세대, [준공연도] 준공)
 실거래가: X억 Y천만원 (YYYY-MM-DD, [평형]㎡)
 
-⚡ 교통 — [commute_minutes_to_samsung]분 (삼성역 기준)
+⚡ 교통 — 대중교통 [commute_transit_minutes]분 / 자차 [commute_car_minutes]분 / 도보 [commute_walk_minutes]분 (삼성역 기준)
 [nearest_stations 역명 + 노선 + 도보시간 상세 서술. 버스 환승 여부, 자차 이용 시 접근성 포함]
 
 🎒 학군
