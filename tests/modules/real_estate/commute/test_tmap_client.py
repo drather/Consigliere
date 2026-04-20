@@ -83,6 +83,18 @@ class TestTmapClientCar:
         assert "tmap/routes" in call_url
         assert "pedestrian" not in call_url
 
+    def test_car_missing_features_raises(self):
+        from modules.real_estate.commute.tmap_client import TmapClient
+        client = TmapClient(api_key="test-key")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"features": []}
+        mock_resp.raise_for_status.return_value = None
+
+        with patch("modules.real_estate.commute.tmap_client.requests.post", return_value=mock_resp):
+            with pytest.raises(ValueError):
+                client.route(37.4942, 127.0611, 37.5088, 127.0633, mode="car")
+
 
 class TestTmapClientWalking:
     def test_walking_duration_seconds_to_minutes(self):

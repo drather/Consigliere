@@ -64,7 +64,8 @@ class TmapClient:
         distance = best.get("totalWalkDistance", 0)
         return duration, distance
 
-    def _route_car(self, olat, olng, dlat, dlng) -> Tuple[int, int]:
+    def _route_feature_based(self, olat, olng, dlat, dlng, url: str) -> Tuple[int, int]:
+        """Common helper for car and walking routes using T-map features API."""
         payload = {
             "startX": str(olng),
             "startY": str(olat),
@@ -75,33 +76,16 @@ class TmapClient:
             "startName": "출발",
             "endName": "도착",
         }
-        resp = requests.post(f"{_CAR_URL}?version=1", json=payload, headers=self._headers(), timeout=self._timeout)
+        resp = requests.post(url, json=payload, headers=self._headers(), timeout=self._timeout)
         resp.raise_for_status()
         features = resp.json().get("features", [])
         if not features:
-            raise ValueError("T-map car: empty features in response")
+            raise ValueError(f"T-map {url}: empty features in response")
         props = features[0]["properties"]
-        duration = math.ceil(props["totalTime"] / 60)
-        distance = props.get("totalDistance", 0)
-        return duration, distance
+        return math.ceil(props["totalTime"] / 60), props.get("totalDistance", 0)
+
+    def _route_car(self, olat, olng, dlat, dlng) -> Tuple[int, int]:
+        return self._route_feature_based(olat, olng, dlat, dlng, f"{_CAR_URL}?version=1")
 
     def _route_walking(self, olat, olng, dlat, dlng) -> Tuple[int, int]:
-        payload = {
-            "startX": str(olng),
-            "startY": str(olat),
-            "endX": str(dlng),
-            "endY": str(dlat),
-            "reqCoordType": "WGS84GEO",
-            "resCoordType": "WGS84GEO",
-            "startName": "출발",
-            "endName": "도착",
-        }
-        resp = requests.post(f"{_WALKING_URL}?version=1", json=payload, headers=self._headers(), timeout=self._timeout)
-        resp.raise_for_status()
-        features = resp.json().get("features", [])
-        if not features:
-            raise ValueError("T-map walking: empty features in response")
-        props = features[0]["properties"]
-        duration = math.ceil(props["totalTime"] / 60)
-        distance = props.get("totalDistance", 0)
-        return duration, distance
+        return self._route_feature_based(olat, olng, dlat, dlng, f"{_WALKING_URL}?version=1")
