@@ -477,7 +477,7 @@ def get_commute_time(
     district_code: str,
     commute_service: CommuteService = Depends(get_commute_service),
 ):
-    """아파트 주소 → 삼성역 출퇴근 시간 조회 (대중교통·자차·도보 3가지).
+    """아파트 주소 → 삼성역 출퇴근 시간 + 경로 상세 조회 (대중교통·자차·도보).
 
     캐시 히트 시 즉시 반환, 캐시 미스 시 T-map API 호출 후 저장.
     """
@@ -495,6 +495,12 @@ def get_commute_time(
             "transit": results["transit"].duration_minutes if "transit" in results else None,
             "car": results["car"].duration_minutes if "car" in results else None,
             "walking": results["walking"].duration_minutes if "walking" in results else None,
+            "transit_legs": results["transit"].legs if "transit" in results else [],
+            "car_legs": results["car"].legs if "car" in results else [],
+            "walking_legs": results["walking"].legs if "walking" in results else [],
+            "transit_summary": results["transit"].route_summary if "transit" in results else "",
+            "car_summary": results["car"].route_summary if "car" in results else "",
+            "walking_summary": results["walking"].route_summary if "walking" in results else "",
             "cached": all(r.cached for r in results.values()) if results else False,
         }
     except Exception as e:

@@ -693,6 +693,9 @@ class RealEstateAgent:
             tx["commute_walk_minutes"] = commute_results["walking"].duration_minutes if "walking" in commute_results else None
             # 하위호환: scoring.py의 commute_minutes fallback 지원
             tx["commute_minutes"] = tx["commute_transit_minutes"]
+            tx["transit_summary"] = commute_results["transit"].route_summary if "transit" in commute_results else None
+            tx["car_summary"] = commute_results["car"].route_summary if "car" in commute_results else None
+            tx["walking_summary"] = commute_results["walking"].route_summary if "walking" in commute_results else None
 
             if not area_intel:
                 enriched.append(tx)
