@@ -153,6 +153,7 @@ The **Streamlit Dashboard** is the primary UI for interacting with the system, a
 - Telegram을 통한 양방향 통신 지원.
 - Claude desktop 도입을 통한 자동화
 - 카카오톡 대화방 대화 자동 export 기능
+- 티맵 API 경로 탐색기능 추가
 ---
 
 ## 6. Tech Stack
