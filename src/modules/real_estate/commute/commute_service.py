@@ -50,7 +50,7 @@ class CommuteService:
 
         origin_lat, origin_lng = coords
         try:
-            duration, distance = self._client.route(
+            duration, distance, legs, route_summary = self._client.route_with_legs(
                 origin_lat, origin_lng, self._dest_lat, self._dest_lng, mode=mode
             )
         except Exception as exc:
@@ -64,6 +64,8 @@ class CommuteService:
             duration_minutes=duration,
             distance_meters=distance,
             cached=False,
+            legs=legs,
+            route_summary=route_summary,
         )
         self._repo.upsert(result)
         return result

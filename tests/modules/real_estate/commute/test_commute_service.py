@@ -49,7 +49,7 @@ class TestCommuteServiceCacheHit:
 
         assert result.duration_minutes == 20
         assert result.cached is True
-        mock_client.route.assert_not_called()
+        mock_client.route_with_legs.assert_not_called()
 
 
 class TestCommuteServiceCacheMiss:
@@ -59,7 +59,7 @@ class TestCommuteServiceCacheMiss:
         mock_geocoder.geocode.return_value = (37.4942, 127.0611)
 
         mock_client = MagicMock()
-        mock_client.route.return_value = (59, 1200)
+        mock_client.route_with_legs.return_value = (59, 1200, [], "")
 
         repo = CommuteRepository(db_path=":memory:", ttl_days=90)
         svc = make_service(repo=repo, tmap_client=mock_client, geocoder=mock_geocoder)
@@ -75,7 +75,7 @@ class TestCommuteServiceCacheMiss:
         assert result.duration_minutes == 59
         assert result.cached is False
         mock_geocoder.geocode.assert_called_once()
-        mock_client.route.assert_called_once()
+        mock_client.route_with_legs.assert_called_once()
 
         # 저장 확인
         stored = repo.get("11710__파크데일", "삼성역", "transit")
@@ -97,11 +97,42 @@ class TestCommuteServiceCacheMiss:
         mock_geocoder.geocode.return_value = (37.49, 127.06)
 
         mock_client = MagicMock()
-        mock_client.route.side_effect = Exception("T-map 오류")
+        mock_client.route_with_legs.side_effect = Exception("T-map 오류")
 
         svc = make_service(geocoder=mock_geocoder, tmap_client=mock_client)
         result = svc.get("k", "주소", "단지", "11680", mode="transit")
         assert result is None
+
+    def test_cache_miss_stores_legs_in_result(self):
+        """캐시 미스 시 route_with_legs()가 호출되어 legs가 CommuteResult에 포함된다."""
+        mock_geocoder = MagicMock()
+        mock_geocoder.geocode.return_value = (37.49, 127.06)
+
+        mock_client = MagicMock()
+        mock_client.route_with_legs.return_value = (
+            59, 1200,
+            [{"mode": "BUS", "route": "302", "from_name": "가락시장", "to_name": "잠실역",
+              "duration_minutes": 12, "stop_count": 4}],
+            "도보 5분 → 302번 버스 → 잠실역",
+        )
+
+        repo = CommuteRepository(db_path=":memory:", ttl_days=90)
+        svc = make_service(repo=repo, tmap_client=mock_client, geocoder=mock_geocoder)
+
+        result = svc.get(
+            origin_key="11710__파크데일",
+            road_address="서울 송파구 가락동 124",
+            apt_name="파크데일",
+            district_code="11710",
+            mode="transit",
+        )
+
+        assert result is not None
+        assert result.duration_minutes == 59
+        assert len(result.legs) == 1
+        assert result.legs[0]["route"] == "302"
+        assert result.route_summary == "도보 5분 → 302번 버스 → 잠실역"
+        mock_client.route_with_legs.assert_called_once()
 
 
 class TestCommuteServiceGetAllModes:
@@ -111,7 +142,7 @@ class TestCommuteServiceGetAllModes:
         mock_geocoder.geocode.return_value = (37.49, 127.06)
 
         mock_client = MagicMock()
-        mock_client.route.side_effect = [(59, 1200), (30, 15000), (90, 5000)]
+        mock_client.route_with_legs.side_effect = [(59, 1200, [], ""), (30, 15000, [], ""), (90, 5000, [], "")]
 
         svc = make_service(geocoder=mock_geocoder, tmap_client=mock_client)
         results = svc.get_all_modes("k", "서울 송파구 가락동 124", "파크데일", "11710")
@@ -119,7 +150,7 @@ class TestCommuteServiceGetAllModes:
         assert results["transit"].duration_minutes == 59
         assert results["car"].duration_minutes == 30
         assert results["walking"].duration_minutes == 90
-        assert mock_client.route.call_count == 3
+        assert mock_client.route_with_legs.call_count == 3
 
     def test_get_all_modes_partial_failure_skips_failed_mode(self):
         """일부 모드 실패 시 나머지만 반환한다."""
@@ -127,7 +158,7 @@ class TestCommuteServiceGetAllModes:
         mock_geocoder.geocode.return_value = (37.49, 127.06)
 
         mock_client = MagicMock()
-        mock_client.route.side_effect = [(59, 1200), Exception("car 오류"), (90, 5000)]
+        mock_client.route_with_legs.side_effect = [(59, 1200, [], ""), Exception("car 오류"), (90, 5000, [], "")]
 
         svc = make_service(geocoder=mock_geocoder, tmap_client=mock_client)
         results = svc.get_all_modes("k", "주소", "단지", "11710")
