@@ -71,6 +71,63 @@ def _render_tx_dataframe(df: pd.DataFrame, code_to_name: Dict[str, str] = None):
     st.dataframe(df[available].rename(columns=col_map), use_container_width=True, hide_index=True)
 
 
+def _render_commute_card(commute_data: dict):
+    """출퇴근 경로 3단 카드 렌더링."""
+    transit_min = commute_data.get("transit")
+    car_min = commute_data.get("car")
+    walking_min = commute_data.get("walking")
+    transit_legs = commute_data.get("transit_legs", [])
+    car_legs = commute_data.get("car_legs", [])
+    walking_legs = commute_data.get("walking_legs", [])
+    transit_summary = commute_data.get("transit_summary", "")
+    car_summary = commute_data.get("car_summary", "")
+    walking_summary = commute_data.get("walking_summary", "")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("#### 🚌 대중교통")
+        if transit_min is not None:
+            st.metric("소요시간", f"{transit_min}분")
+            if transit_legs:
+                for leg in transit_legs:
+                    mode = leg.get("mode", "")
+                    if mode == "WALK":
+                        st.caption(f"🚶 도보 {leg.get('duration_minutes', 0)}분")
+                    elif mode == "BUS":
+                        st.caption(f"🚌 {leg.get('route', '')}번 버스 ({leg.get('stop_count', 0)}정거장)")
+                    elif mode in ("SUBWAY", "RAIL"):
+                        st.caption(f"🚇 {leg.get('route', '')} ({leg.get('stop_count', 0)}정거장)")
+            elif transit_summary:
+                st.caption(transit_summary)
+        else:
+            st.caption("조회 실패")
+
+    with col2:
+        st.markdown("#### 🚗 자가용")
+        if car_min is not None:
+            st.metric("소요시간", f"{car_min}분")
+            if car_legs:
+                for leg in car_legs:
+                    st.caption(f"🛣️ {leg.get('road_name', '')}")
+            elif car_summary:
+                st.caption(car_summary)
+        else:
+            st.caption("조회 실패")
+
+    with col3:
+        st.markdown("#### 🚶 도보")
+        if walking_min is not None:
+            st.metric("소요시간", f"{walking_min}분")
+            if walking_legs:
+                for leg in walking_legs:
+                    st.caption(f"🛤️ {leg.get('road_name', '')}")
+            elif walking_summary:
+                st.caption(walking_summary)
+        else:
+            st.caption("조회 실패")
+
+
 def _render_apt_detail_panel(entry, apt_repo=None, tx_limit: int = 50) -> None:
     """선택된 단지의 상세정보 + 실거래가 패널을 렌더링한다.
 
@@ -151,6 +208,27 @@ def _render_apt_detail_panel(entry, apt_repo=None, tx_limit: int = 50) -> None:
             f"단지코드: {complex_code or '-'}  |  지구코드: {entry.district_code}"
             + (f"  |  연면적: {total_area:,.0f}㎡" if total_area else "")
         )
+
+        # 출퇴근 경로 상세 카드
+        _road_address = getattr(details, "road_address", "") or ""
+        with st.expander("🗺️ 출퇴근 경로 상세", expanded=False):
+            try:
+                import requests as _req
+                commute_resp = _req.get(
+                    "http://localhost:8000/dashboard/real-estate/commute",
+                    params={
+                        "address": _road_address,
+                        "apt_name": entry.apt_name or "",
+                        "district_code": entry.district_code or "",
+                    },
+                    timeout=30,
+                )
+                if commute_resp.status_code == 200:
+                    _render_commute_card(commute_resp.json())
+                else:
+                    st.caption("출퇴근 정보 조회 실패")
+            except Exception:
+                st.caption("서버 연결 실패 — FastAPI 서버가 실행 중인지 확인하세요")
 
     # ── 실거래가 ──────────────────────────────────────────────────────────────
     st.markdown("### 📈 최근 실거래가")

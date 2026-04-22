@@ -28,6 +28,10 @@ from .apartment_repository import ApartmentRepository
 # NOTE: _normalize_name is also defined in apartment_repository.py — extract to shared utils when refactoring
 from .transaction_repository import TransactionRepository, _normalize_name
 from .apt_master_repository import AptMasterRepository
+from .commute.tmap_client import TmapClient
+from .commute.commute_repository import CommuteRepository
+from .commute.commute_service import CommuteService
+from .geocoder import GeocoderService
 
 logger = get_logger(__name__)
 
@@ -94,6 +98,18 @@ class RealEstateAgent:
         self.apt_repo = ApartmentRepository(db_path=re_db)
         self.tx_repo = TransactionRepository(db_path=re_db)
         self.apt_master_repo = AptMasterRepository(db_path=re_db)
+
+        # Commute Service (T-map 기반 출퇴근 시간 캐시)
+        commute_cfg = self.config.get("commute", {})
+        commute_db = self.config.get("commute_cache_db_path", "data/commute_cache.db")
+        kakao_key = os.getenv("KAKAO_API_KEY", "")
+        tmap_key = os.getenv("TMAP_API_KEY", "")
+        self.commute_service = CommuteService(
+            repo=CommuteRepository(db_path=commute_db, ttl_days=int(commute_cfg.get("cache_ttl_days", 90))),
+            tmap_client=TmapClient(api_key=tmap_key),
+            geocoder=GeocoderService(api_key=kakao_key),
+            config=commute_cfg,
+        )
 
     def log_tour(self, user_text: str) -> str:
         return self.tour_service.log_tour(user_text)
@@ -651,6 +667,36 @@ class RealEstateAgent:
             except Exception as e:
                 logger.warning(f"[Enrich] apt_details 조회 실패 {apt_name}: {e}")
 
+            # ── T-map 실시간 출퇴근 시간 ──
+            # detail은 메서드 상단 _lookup_apt_details 호출로 이미 확보됨
+            road_address = ""
+            try:
+                if detail:
+                    road_address = detail.road_address or ""
+            except Exception:
+                pass
+
+            origin_key = f"{district_code}__{apt_name}"
+            commute_results = {}
+            try:
+                commute_results = self.commute_service.get_all_modes(
+                    origin_key=origin_key,
+                    road_address=road_address,
+                    apt_name=apt_name,
+                    district_code=district_code,
+                )
+            except Exception as exc:
+                logger.warning("[Enrich] commute_service 오류 %s: %s", apt_name, exc)
+
+            tx["commute_transit_minutes"] = commute_results["transit"].duration_minutes if "transit" in commute_results else None
+            tx["commute_car_minutes"] = commute_results["car"].duration_minutes if "car" in commute_results else None
+            tx["commute_walk_minutes"] = commute_results["walking"].duration_minutes if "walking" in commute_results else None
+            # 하위호환: scoring.py의 commute_minutes fallback 지원
+            tx["commute_minutes"] = tx["commute_transit_minutes"]
+            tx["transit_summary"] = commute_results["transit"].route_summary if "transit" in commute_results else None
+            tx["car_summary"] = commute_results["car"].route_summary if "car" in commute_results else None
+            tx["walking_summary"] = commute_results["walking"].route_summary if "walking" in commute_results else None
+
             if not area_intel:
                 enriched.append(tx)
                 continue
@@ -685,14 +731,9 @@ class RealEstateAgent:
                 matched_dong = self._compute_district_average(dist_intel)
 
             if matched_dong:
-                tx["commute_minutes"] = matched_dong.get(
-                    "commute_minutes", dist_intel.get("default_commute_minutes", 99)
-                )
                 tx["nearest_stations"] = matched_dong.get("nearest_stations", [])
                 tx["school_zone_notes"] = matched_dong.get("school_zone_notes", "")
                 tx["elementary_schools"] = matched_dong.get("elementary_schools", [])
-            else:
-                tx["commute_minutes"] = dist_intel.get("default_commute_minutes", 99)
 
             enriched.append(tx)
 

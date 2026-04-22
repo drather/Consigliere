@@ -138,3 +138,22 @@ class TestScoringEngine:
         results = self._score([c])
         assert "total_score" in results[0]
         assert 0 <= results[0]["total_score"] <= 100
+
+    def test_score_commute_uses_transit_minutes_first(self):
+        """commute_transit_minutes가 있으면 commute_minutes보다 우선 사용한다."""
+        from modules.real_estate.scoring import ScoringEngine
+        engine = ScoringEngine(weights=DEFAULT_WEIGHTS, config=DEFAULT_CONFIG)
+        # commute_transit_minutes=59 → LOW(20), commute_minutes=15 → HIGH(100)
+        # transit 우선이면 LOW가 나와야 함
+        candidate = make_candidate(commute_transit_minutes=59, commute_minutes=15)
+        scored = engine.score_all([candidate])
+        assert scored[0]["scores"]["commute"] == 20  # LOW
+
+    def test_score_commute_fallback_to_commute_minutes(self):
+        """commute_transit_minutes가 None이면 commute_minutes로 fallback한다."""
+        from modules.real_estate.scoring import ScoringEngine
+        engine = ScoringEngine(weights=DEFAULT_WEIGHTS, config=DEFAULT_CONFIG)
+        candidate = make_candidate(commute_transit_minutes=None, commute_minutes=15)
+        scored = engine.score_all([candidate])
+        # commute_minutes=15 → HIGH(100)
+        assert scored[0]["scores"]["commute"] == 100

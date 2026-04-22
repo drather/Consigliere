@@ -7,6 +7,14 @@ bok_codes:
 
 geocode_cache_path: "data/geocode_cache.db"
 real_estate_db_path: "data/real_estate.db"
+commute_cache_db_path: "data/commute_cache.db"
+
+commute:
+  destination: "삼성역"
+  destination_lat: 37.5088
+  destination_lng: 127.0633
+  cache_ttl_days: 90
+
 macro_db_path: "data/macro.db"
 apartment_master_db_path: "data/apartment_master.db"
 apartment_master_rate_limit_sec: 0.3

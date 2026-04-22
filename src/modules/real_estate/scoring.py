@@ -57,7 +57,9 @@ class ScoringEngine:
     # ── 기준별 점수 계산 ──────────────────────────────────────────────
 
     def _score_commute(self, c: Dict) -> int:
-        minutes = c.get("commute_minutes")
+        minutes = c.get("commute_transit_minutes")
+        if minutes is None:
+            minutes = c.get("commute_minutes")
         if minutes is None:
             return self.neutral
         return _threshold_score(minutes, self.commute_thresholds)
