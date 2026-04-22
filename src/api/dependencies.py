@@ -68,3 +68,29 @@ _macro_service = MacroCollectionService(db_path=_macro_db_path)
 
 def get_macro_service() -> MacroCollectionService:
     return _macro_service
+
+
+import os
+from modules.real_estate.commute.commute_service import CommuteService
+from modules.real_estate.commute.commute_repository import CommuteRepository
+from modules.real_estate.commute.tmap_client import TmapClient
+from modules.real_estate.geocoder import GeocoderService
+
+_commute_cfg = _re_config.get("commute", {
+    "destination": "삼성역",
+    "destination_lat": 37.5088,
+    "destination_lng": 127.0633,
+    "cache_ttl_days": 90,
+})
+_commute_db_path = _re_config.get("commute_cache_db_path", "data/commute_cache.db")
+
+_commute_service = CommuteService(
+    repo=CommuteRepository(db_path=_commute_db_path, ttl_days=int(_commute_cfg.get("cache_ttl_days", 90))),
+    tmap_client=TmapClient(api_key=os.getenv("TMAP_API_KEY", "")),
+    geocoder=GeocoderService(api_key=os.getenv("KAKAO_API_KEY", "")),
+    config=_commute_cfg,
+)
+
+
+def get_commute_service() -> CommuteService:
+    return _commute_service

@@ -14,7 +14,9 @@ from api.dependencies import (
     get_tx_repo,
     get_apt_repo,
     get_apt_master_repo,
+    get_commute_service,
 )
+from modules.real_estate.commute.commute_service import CommuteService
 from modules.real_estate.service import RealEstateAgent
 from modules.real_estate.monitor.service import TransactionMonitorService
 from modules.real_estate.news.service import NewsService
@@ -465,4 +467,36 @@ def get_policy_facts(
         return results
     except Exception as e:
         logger.error(f"Policy Facts API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/dashboard/real-estate/commute")
+def get_commute_time(
+    address: str,
+    apt_name: str,
+    district_code: str,
+    commute_service: CommuteService = Depends(get_commute_service),
+):
+    """아파트 주소 → 삼성역 출퇴근 시간 조회 (대중교통·자차·도보 3가지).
+
+    캐시 히트 시 즉시 반환, 캐시 미스 시 T-map API 호출 후 저장.
+    """
+    try:
+        origin_key = f"{district_code}__{apt_name}"
+        results = commute_service.get_all_modes(
+            origin_key=origin_key,
+            road_address=address,
+            apt_name=apt_name,
+            district_code=district_code,
+        )
+        return {
+            "apt_name": apt_name,
+            "destination": "삼성역",
+            "transit": results["transit"].duration_minutes if "transit" in results else None,
+            "car": results["car"].duration_minutes if "car" in results else None,
+            "walking": results["walking"].duration_minutes if "walking" in results else None,
+            "cached": all(r.cached for r in results.values()) if results else False,
+        }
+    except Exception as e:
+        logger.error(f"Commute API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
