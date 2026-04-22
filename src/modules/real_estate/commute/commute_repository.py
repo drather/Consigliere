@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import logging
 from datetime import datetime, timedelta, timezone
@@ -15,6 +16,8 @@ CREATE TABLE IF NOT EXISTS commute_cache (
     mode             TEXT NOT NULL,
     duration_minutes INTEGER NOT NULL,
     distance_meters  INTEGER NOT NULL DEFAULT 0,
+    route_json       TEXT NOT NULL DEFAULT '[]',
+    route_summary    TEXT NOT NULL DEFAULT '',
     cached_at        TEXT NOT NULL,
     expires_at       TEXT NOT NULL,
     UNIQUE(origin_key, destination, mode)
@@ -26,14 +29,22 @@ class CommuteRepository:
     def __init__(self, db_path: str, ttl_days: int = 90):
         self._db_path = db_path
         self._ttl_days = ttl_days
-        # Keep a persistent connection for :memory: databases; for file-based
-        # DBs this is also fine since SQLite supports shared-cache reuse.
         self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._init_db()
 
     def _init_db(self):
         self._conn.executescript(_DDL)
+        self._conn.commit()
+        self._migrate()
+
+    def _migrate(self):
+        """기존 DB에 route_json / route_summary 컬럼이 없으면 추가."""
+        cols = {row[1] for row in self._conn.execute("PRAGMA table_info(commute_cache)")}
+        if "route_json" not in cols:
+            self._conn.execute("ALTER TABLE commute_cache ADD COLUMN route_json TEXT NOT NULL DEFAULT '[]'")
+        if "route_summary" not in cols:
+            self._conn.execute("ALTER TABLE commute_cache ADD COLUMN route_summary TEXT NOT NULL DEFAULT ''")
         self._conn.commit()
 
     def _now(self) -> datetime:
@@ -45,17 +56,17 @@ class CommuteRepository:
             "SELECT * FROM commute_cache WHERE origin_key=? AND destination=? AND mode=?",
             (origin_key, destination, mode),
         ).fetchone()
-
         if row is None:
             return None
-
         expires_at = datetime.fromisoformat(row["expires_at"])
         if expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=timezone.utc)
-
         if self._now() > expires_at:
             return None
-
+        try:
+            legs = json.loads(row["route_json"])
+        except (json.JSONDecodeError, TypeError):
+            legs = []
         return CommuteResult(
             origin_key=row["origin_key"],
             destination=row["destination"],
@@ -63,6 +74,8 @@ class CommuteRepository:
             duration_minutes=row["duration_minutes"],
             distance_meters=row["distance_meters"],
             cached=True,
+            legs=legs,
+            route_summary=row["route_summary"] or "",
         )
 
     def upsert(self, result: CommuteResult):
@@ -72,17 +85,22 @@ class CommuteRepository:
         self._conn.execute(
             """
             INSERT INTO commute_cache
-                (origin_key, destination, mode, duration_minutes, distance_meters, cached_at, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (origin_key, destination, mode, duration_minutes, distance_meters,
+                 route_json, route_summary, cached_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(origin_key, destination, mode) DO UPDATE SET
                 duration_minutes = excluded.duration_minutes,
                 distance_meters  = excluded.distance_meters,
+                route_json       = excluded.route_json,
+                route_summary    = excluded.route_summary,
                 cached_at        = excluded.cached_at,
                 expires_at       = excluded.expires_at
             """,
             (
                 result.origin_key, result.destination, result.mode,
                 result.duration_minutes, result.distance_meters,
+                json.dumps(result.legs, ensure_ascii=False),
+                result.route_summary,
                 now.isoformat(), expires_at.isoformat(),
             ),
         )
