@@ -1,10 +1,10 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-20
-**Current Active Feature:** `feature/report-generation-overhaul`
+**Last Updated:** 2026-04-22
+**Current Active Feature:** 없음 (대기 중)
 
 ## 현재 포커스
-- **Branch:** `feature/report-generation-overhaul`
-- **Status:** ✅ master 머지 완료 (2026-04-20)
+- **Branch:** `master`
+- **Status:** ✅ feature/commute-realtime 머지 완료 (2026-04-22)
 
 ## 선행 브랜치 (미머지)
 - **Branch:** `feature/real-estate-sqlite-redesign`
@@ -16,6 +16,16 @@
   - E2E Playwright 테스트 28개
 
 ## 최근 완료 작업
+- **completed:** 출퇴근 경로 상세 정보 추가 — legs + route_summary (2026-04-22)
+  - `CommuteResult`에 `legs: List[dict]`, `route_summary: str` 필드 추가
+  - `TmapClient.route_with_legs()` — transit legs 파싱, car/walking 도로명 파싱, _build_summary()
+  - `CommuteRepository` — route_json/route_summary 컬럼 + ALTER TABLE 자동 마이그레이션
+  - `CommuteService` — route_with_legs() 호출로 교체 (기존 route() 유지, 비파괴적 확장)
+  - FastAPI `GET /dashboard/real-estate/commute` — transit_legs/car_legs/walking_legs/summary 추가
+  - `_enrich_transactions()` — transit_summary/car_summary/walking_summary 거래 데이터에 추가
+  - 대시보드 — 3단 카드(대중교통/자가용/도보) expander 추가
+  - LLM 프롬프트 — insight_parser.md, context_analyst.md에 route_summary 필드 추가
+  - 490+ tests PASS, 기존 18개 테스트 변경 없음
 - **completed:** 리포트 생성 전면 점검 + LLM 할루시네이션 수정 (2026-04-19~20)
   - ChromaDB → tx_repo SQLite 전환, dedup normalize, apt_master enrich
   - 거시경제 주담대금리(2.83%) 예산 산출 반영
