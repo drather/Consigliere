@@ -68,3 +68,19 @@ class TestCommuteRepository:
 
         assert repo.get("11680__A단지", "삼성역", "transit").duration_minutes == 20
         assert repo.get("11710__B단지", "삼성역", "transit").duration_minutes == 59
+
+
+class TestCommuteResultModel:
+    def test_legs_defaults_to_empty_list(self):
+        from modules.real_estate.commute.models import CommuteResult
+        r = CommuteResult("k", "삼성역", "transit", 59, 1200)
+        assert r.legs == []
+        assert r.route_summary == ""
+
+    def test_legs_can_be_set(self):
+        from modules.real_estate.commute.models import CommuteResult
+        legs = [{"mode": "BUS", "route": "302", "from_name": "가락시장", "to_name": "잠실역",
+                 "duration_minutes": 12, "stop_count": 4}]
+        r = CommuteResult("k", "삼성역", "transit", 59, 1200, legs=legs, route_summary="302번 → 잠실역 → 2호선 → 삼성역")
+        assert r.legs[0]["route"] == "302"
+        assert r.route_summary == "302번 → 잠실역 → 2호선 → 삼성역"
