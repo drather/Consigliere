@@ -21,7 +21,7 @@
 - 금액 단위: 값의 단위는 **원(KRW)**입니다. 예: `873786407` = **8억 7천만 원** (87억이 아님).
 - **스코어카드 1순위/2순위/3순위는 반드시 위 '추천 가능 단지 목록(화이트리스트)'에 있는 단지만 추천하십시오.** `analyst_insight`에 다른 단지명이 언급되더라도 이 목록을 최우선으로 따르십시오. 목록에 없는 단지 추천은 즉시 기각됩니다.
 - 목록에 단지가 2개뿐이라면 1순위/2순위만 작성하고, 1개뿐이라면 1순위만 작성하십시오.
-- `analyst_insight`의 enriched 거래 데이터에 포함된 `commute_transit_minutes`, `commute_car_minutes`, `nearest_stations`, `school_zone_notes`, `reconstruction_status` 필드를 근거로 반드시 인용하십시오.
+- `analyst_insight`의 enriched 거래 데이터에 포함된 `commute_transit_minutes`, `commute_car_minutes`, `transit_summary`, `car_summary`, `nearest_stations`, `school_zone_notes`, `reconstruction_status` 필드를 근거로 반드시 인용하십시오.
 {{budget_constraint_note}}
 
 ## 사용자 선호 필터 규칙
@@ -64,6 +64,7 @@
 실거래가: X억 Y천만원 (YYYY-MM-DD, [평형]㎡)
 
 ⚡ 교통 — 대중교통 [commute_transit_minutes]분 / 자차 [commute_car_minutes]분 / 도보 [commute_walk_minutes]분 (삼성역 기준)
+경로: 대중교통 [transit_summary] / 자차 [car_summary]
 [nearest_stations 역명 + 노선 + 도보시간 상세 서술. 버스 환승 여부, 자차 이용 시 접근성 포함]
 
 🎒 학군
