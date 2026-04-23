@@ -1,7 +1,13 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../src"))
 
+import json
+from unittest.mock import MagicMock, patch
+
 from modules.real_estate.building_master.models import BuildingMaster
+from modules.real_estate.building_master.building_register_client import (
+    BuildingRegisterClient,
+)
 
 
 def test_building_master_construction():
@@ -33,3 +39,127 @@ def test_building_master_full_fields():
     assert bm.parcel_pnu == "1165010800"
     assert bm.completion_year == 2016
     assert bm.total_units == 1612
+
+
+_SAMPLE_RESPONSE = {
+    "response": {
+        "body": {
+            "totalCount": 2,
+            "items": {
+                "item": [
+                    {
+                        "mgmBldrgstPk": "1100000000000001000001",
+                        "bldNm": "래미안아파트",
+                        "sigunguCd": "11650",
+                        "bjdongCd": "10100",
+                        "newPlatPlc": "서울특별시 서초구 반포대로 23",
+                        "platPlc": "서울특별시 서초구 반포동 10-1",
+                        "useAprDay": "20050320",
+                        "hhldCnt": "1000",
+                        "dongCnt": "5",
+                        "vlRat": "250.0",
+                        "bcRat": "20.0",
+                        "mainPurpsCdNm": "아파트",
+                    },
+                    {
+                        "mgmBldrgstPk": "1100000000000001000002",
+                        "bldNm": "상가건물",
+                        "sigunguCd": "11650",
+                        "bjdongCd": "10100",
+                        "newPlatPlc": "서울특별시 서초구 어딘가 1",
+                        "platPlc": "서울특별시 서초구 반포동 20",
+                        "useAprDay": "20100101",
+                        "hhldCnt": "0",
+                        "dongCnt": "1",
+                        "vlRat": "400.0",
+                        "bcRat": "60.0",
+                        "mainPurpsCdNm": "근린생활시설",
+                    },
+                ]
+            },
+        }
+    }
+}
+
+
+def test_fetch_page_calls_correct_url():
+    client = BuildingRegisterClient(api_key="testkey")
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = _SAMPLE_RESPONSE
+    mock_resp.raise_for_status = MagicMock()
+
+    with patch("requests.get", return_value=mock_resp) as mock_get:
+        result = client.fetch_page("11650", page_no=1)
+
+    call_kwargs = mock_get.call_args
+    assert call_kwargs[1]["params"]["sigunguCd"] == "11650"
+    assert call_kwargs[1]["params"]["serviceKey"] == "testkey"
+    assert call_kwargs[1]["params"]["_type"] == "json"
+    assert result == _SAMPLE_RESPONSE
+
+
+def test_fetch_apartments_filters_non_apt():
+    client = BuildingRegisterClient(api_key="testkey")
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = _SAMPLE_RESPONSE
+    mock_resp.raise_for_status = MagicMock()
+
+    with patch("requests.get", return_value=mock_resp):
+        items = client.fetch_apartments_by_sigungu("11650")
+
+    assert len(items) == 1
+    assert items[0]["bldNm"] == "래미안아파트"
+
+
+def test_parse_item_extracts_fields():
+    raw = {
+        "mgmBldrgstPk": "1100000000000001000001",
+        "bldNm": "래미안아파트",
+        "sigunguCd": "11650",
+        "bjdongCd": "10100",
+        "newPlatPlc": "서울특별시 서초구 반포대로 23",
+        "platPlc": "서울특별시 서초구 반포동 10-1",
+        "useAprDay": "20050320",
+        "hhldCnt": "1000",
+        "dongCnt": "5",
+        "vlRat": "250.0",
+        "bcRat": "20.0",
+        "mainPurpsCdNm": "아파트",
+    }
+    parsed = BuildingRegisterClient.parse_item(raw)
+    assert parsed["mgm_pk"] == "1100000000000001000001"
+    assert parsed["building_name"] == "래미안아파트"
+    assert parsed["sigungu_code"] == "11650"
+    assert parsed["bjdong_code"] == "10100"
+    assert parsed["completion_year"] == 2005
+    assert parsed["total_units"] == 1000
+    assert parsed["total_buildings"] == 5
+    assert parsed["floor_area_ratio"] == 250.0
+    assert parsed["building_coverage_ratio"] == 20.0
+
+
+def test_parse_item_handles_missing_fields():
+    raw = {"mgmBldrgstPk": "9999", "bldNm": "테스트", "sigunguCd": "11110"}
+    parsed = BuildingRegisterClient.parse_item(raw)
+    assert parsed["completion_year"] is None
+    assert parsed["total_units"] is None
+    assert parsed["bjdong_code"] == ""
+
+
+def test_extract_items_handles_single_dict():
+    data = {
+        "response": {
+            "body": {
+                "totalCount": 1,
+                "items": {"item": {"mgmBldrgstPk": "001", "bldNm": "단독", "mainPurpsCdNm": "아파트"}},
+            }
+        }
+    }
+    items = BuildingRegisterClient._extract_items(data)
+    assert len(items) == 1
+    assert items[0]["mgmBldrgstPk"] == "001"
+
+
+def test_extract_items_handles_empty():
+    data = {"response": {"body": {"totalCount": 0, "items": {"item": None}}}}
+    assert BuildingRegisterClient._extract_items(data) == []
