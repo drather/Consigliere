@@ -65,14 +65,13 @@ apt_master.bjdong_code(8자리) + apt_master.jibun
 
 ```sql
 CREATE TABLE building_master (
-    pnu                     TEXT PRIMARY KEY,   -- 19자리 필지고유번호
+    mgm_pk                  TEXT PRIMARY KEY,   -- 관리건축물대장PK (22자리, 건축HUB 신규PK)
     building_name           TEXT NOT NULL,      -- 건축물대장 원본 건물명
     sigungu_code            TEXT NOT NULL,      -- 시군구 코드 5자리
-    bjdong_code             TEXT NOT NULL,      -- 법정동 코드 5자리
-    parcel_pnu              TEXT NOT NULL,      -- PNU 앞 15자리 (인덱스용)
+    parcel_pnu              TEXT NOT NULL,      -- 지번주소 파생 15자리 (join 인덱스)
     road_address            TEXT,
     jibun_address           TEXT,
-    completion_year         INTEGER,            -- 준공연도
+    completion_year         INTEGER,            -- 준공연도 (useAprDay 앞 4자리)
     total_units             INTEGER,            -- 총 세대수
     total_buildings         INTEGER,            -- 동수
     floor_area_ratio        REAL,               -- 용적률 (%)
@@ -121,12 +120,68 @@ src/api/routers/real_estate.py
 
 ## 6. API 연동
 
-**건축물대장 기본개요 조회 (공공데이터포털)**
-- 등록: `data.go.kr` → "건축물대장 기본개요 조회" 신청 (즉시 발급)
-- Endpoint: `http://apis.data.go.kr/1613000/BldRgstHubService/getBrBasisOulnInfo`
-- 주요 파라미터: `sigunguCd`(5자리), `bjdongCd`(5자리), `numOfRows`, `pageNo`
-- 주요 응답 필드: `platPlc`(지번주소), `newPlatPlc`(도로명), `bldNm`(건물명), `pnuCd`(PNU), `useAprDay`(사용승인일), `hhldCnt`(세대수), `dongCnt`(동수), `vlRat`(용적률), `bcRat`(건폐율)
-- 무료 쿼터: 일 1,000건 (신청 시 확장 가능)
+**건축HUB 건축물대장 기본개요 조회**
+- Base URL: `https://apis.data.go.kr/1613000/BldRgstHubService`
+- Operation: `GET /getBrBasisOulnInfo`
+- 인증키: `.env` → `HUB_API_KEY` (확인 완료)
+- 참고: `OpenAPI활용가이드-_건축HUB_건축물대장_1.0.hwp` (상세 필드명 구현 시 확인)
+
+**요청 파라미터:**
+
+| 파라미터 | 설명 | 비고 |
+|---|---|---|
+| `serviceKey` | 인증키 | `HUB_API_KEY` |
+| `sigunguCd` | 시군구코드 5자리 | 아래 목록 참고 |
+| `bjdongCd` | 법정동코드 5자리 | 생략 시 시군구 전체 |
+| `numOfRows` | 페이지당 건수 | 100 권장 |
+| `pageNo` | 페이지 번호 | 1부터 시작 |
+| `_type` | 응답 형식 | `json` |
+
+**주요 응답 필드 (구현 시 HWP 가이드로 검증):**
+
+| 필드 | 설명 |
+|---|---|
+| `mgmBldrgstPk` | 관리건축물대장PK (22자리, 건축HUB 신규PK) |
+| `platPlc` | 지번주소 (parcel_pnu 파생 원천) |
+| `newPlatPlc` | 도로명주소 |
+| `bldNm` | 건물명 |
+| `useAprDay` | 사용승인일 (YYYYMMDD → 연도만 추출) |
+| `hhldCnt` | 세대수 |
+| `dongCnt` | 동수 |
+| `vlRat` | 용적률 |
+| `bcRat` | 건폐율 |
+| `mainPurpsCdNm` | 주요용도명 (아파트 필터링용) |
+
+> **PK 주의:** 건축HUB 신규PK는 22자리 일련번호(`mgmBldrgstPk`)이며, 이를 `building_master`의 PK로 사용한다. `parcel_pnu`(15자리)는 지번주소에서 파생하여 `apt_master` 매핑용 인덱스로 별도 관리한다.
+
+**수도권 sigunguCd 목록 (첨부2 기준):**
+
+```python
+METRO_SIGUNGU_CODES = [
+    # 서울 (25개 구)
+    "11110", "11140", "11170", "11200", "11215", "11230", "11260",
+    "11290", "11305", "11320", "11350", "11380", "11410", "11440",
+    "11470", "11500", "11530", "11545", "11560", "11590", "11620",
+    "11650", "11680", "11710", "11740",
+    # 인천 (10개 구·군)
+    "28110", "28140", "28177", "28185", "28200", "28237", "28245",
+    "28260", "28710", "28720",
+    # 경기 (구 단위 분리 포함, 총 44개)
+    "41111", "41113", "41115", "41117",  # 수원시 4구
+    "41131", "41133", "41135",           # 성남시 3구
+    "41150",                             # 의정부시
+    "41171", "41173",                    # 안양시 2구
+    "41192", "41194", "41196",           # 부천시 3구
+    "41210", "41220", "41250",           # 광명, 평택, 동두천
+    "41271", "41273",                    # 안산시 2구
+    "41281", "41285", "41287",           # 고양시 3구
+    "41290", "41310", "41360", "41370", "41390", "41410", "41430",
+    "41450",
+    "41461", "41463", "41465",           # 용인시 3구
+    "41480", "41500", "41550", "41570", "41590", "41610", "41630",
+    "41650", "41670", "41800", "41820", "41830",
+]
+```
 
 ---
 
@@ -146,7 +201,7 @@ src/api/routers/real_estate.py
 
 | 항목 | 내용 |
 |---|---|
-| API 키 | 구현 전 `data.go.kr` 건축물대장 API 키 발급 필요 |
+| API 키 | `.env`의 `HUB_API_KEY` 확인 완료 |
 | 일일 쿼터 | 기본 1,000건 → 수도권 법정동 수천 개 → 수일에 걸쳐 수집 or 쿼터 확장 신청. `--collect` 스크립트는 429/오류 응답 시 해당 법정동 코드를 실패 목록에 기록하고 계속 진행 (재실행 시 미수집분만 처리). |
 | 매핑률 | 실거래가 지번 데이터 품질에 따라 매핑률 변동 — 목표 70% 이상 |
 | apt_master 미머지 | `feature/real-estate-sqlite-redesign` 브랜치 머지 후 구현 권장 |
