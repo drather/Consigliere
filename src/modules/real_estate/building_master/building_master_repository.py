@@ -35,6 +35,7 @@ VALUES
      :road_address, :jibun_address, :completion_year, :total_units,
      :total_buildings, :floor_area_ratio, :building_coverage_ratio, :collected_at)
 ON CONFLICT(mgm_pk) DO UPDATE SET
+    -- sigungu_code / bjdong_code / parcel_pnu 는 최초 등록 값을 보존
     building_name           = excluded.building_name,
     completion_year         = excluded.completion_year,
     total_units             = excluded.total_units,
@@ -66,8 +67,7 @@ class BuildingMasterRepository:
 
     def _init_db(self) -> None:
         conn = self._conn()
-        conn.executescript(_DDL)
-        conn.commit()
+        conn.executescript(_DDL)  # executescript issues implicit COMMIT
 
     def upsert(self, bm: BuildingMaster) -> None:
         params = {
