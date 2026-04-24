@@ -103,7 +103,7 @@ class AptMasterRepository:
         for sql in _MIGRATE_ADD_PNU_COLS:
             try:
                 conn.execute(sql)
-            except Exception:
+            except sqlite3.OperationalError:
                 pass  # column already exists
         conn.commit()
 
@@ -399,7 +399,7 @@ class AptMasterRepository:
                 (mgm_pk, score, apt_id),
             )
 
-    def get_all_for_mapping(self) -> list:
+    def get_all_for_mapping(self) -> List[AptMasterEntry]:
         """Returns all apt_master rows where pnu IS NULL (unmapped entries)."""
         with self._conn() as conn:
             rows = conn.execute(
