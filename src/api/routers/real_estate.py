@@ -518,12 +518,9 @@ def collect_building_master(
     """건축물대장 수집 + apt_master 매핑 실행. rebuild=true 시 기존 데이터 초기화."""
     try:
         if rebuild:
-            import sqlite3
             from modules.real_estate.config import RealEstateConfig
             db_path = RealEstateConfig().get("real_estate_db_path", "data/real_estate.db")
-            with sqlite3.connect(db_path) as conn:
-                conn.execute("DROP TABLE IF EXISTS building_master")
-            bm_service._bm_repo._init_db()
+            bm_service.reset_building_master(db_path)
 
         collect_result = bm_service.collect()
         map_result = bm_service.map_to_apt_master()

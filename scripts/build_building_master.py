@@ -12,7 +12,6 @@
     --rebuild  : DB 초기화 후 전체 재수집 + 매핑
 """
 import os
-import sqlite3
 import sys
 import logging
 import argparse
@@ -58,9 +57,7 @@ def main() -> None:
 
     if args.rebuild:
         logger.info("=== REBUILD: building_master 초기화 ===")
-        with sqlite3.connect(db_path) as conn:
-            conn.execute("DROP TABLE IF EXISTS building_master")
-        bm_repo._init_db()
+        svc.reset_building_master(db_path)
         _run_collect(svc)
         _run_map(svc)
         return

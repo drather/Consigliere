@@ -92,6 +92,13 @@ class BuildingMasterService:
             logger.info(f"[Collect] {code}: {len(raw_items)} items")
         return result
 
+    def reset_building_master(self, db_path: str) -> None:
+        """building_master 테이블 DROP 후 재생성 (rebuild 플로우 전용)."""
+        import sqlite3
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("DROP TABLE IF EXISTS building_master")
+        self._bm_repo._init_db()
+
     def map_to_apt_master(self) -> dict:
         """apt_master 항목을 building_master와 매핑. 유사도 >= 0.8이면 pnu 업데이트."""
         entries = self._apt_master_repo.get_all_for_mapping()
