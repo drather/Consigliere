@@ -1,7 +1,7 @@
 import os
 import logging
 import requests
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +27,10 @@ class BuildingRegisterClient:
     def fetch_apartments_by_sigungu(self, sigungu_cd: str) -> List[dict]:
         """시군구 전체 아파트 수집 (페이지네이션). 아파트 용도만 반환."""
         page_no = 1
+        num_of_rows = 100
         results: List[dict] = []
         while True:
-            data = self.fetch_page(sigungu_cd, page_no=page_no)
+            data = self.fetch_page(sigungu_cd, page_no=page_no, num_of_rows=num_of_rows)
             items = self._extract_items(data)
             if not items:
                 break
@@ -37,7 +38,7 @@ class BuildingRegisterClient:
             total = _safe_int(
                 data.get("response", {}).get("body", {}).get("totalCount", 0)
             )
-            if page_no * 100 >= total:
+            if page_no * num_of_rows >= total:
                 break
             page_no += 1
         return results
@@ -83,16 +84,20 @@ def _safe_int(val) -> int:
 
 
 def _to_int(val) -> Optional[int]:
+    if val is None:
+        return None
     try:
         v = str(val).strip()
-        return int(v) if v and v != "None" else None
+        return int(v) if v else None
     except (ValueError, TypeError):
         return None
 
 
 def _to_float(val) -> Optional[float]:
+    if val is None:
+        return None
     try:
         v = str(val).strip()
-        return float(v) if v and v != "None" else None
+        return float(v) if v else None
     except (ValueError, TypeError):
         return None
