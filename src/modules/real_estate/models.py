@@ -56,6 +56,8 @@ class AptMasterEntry:
     last_traded: Optional[str] = None       # 최근 거래일 YYYY-MM-DD
     created_at: str = ""
     id: Optional[int] = None                # auto-increment PK (신규 삽입 시 None)
+    pnu: Optional[str] = None               # FK → building_master.mgm_pk (NULLABLE)
+    mapping_score: Optional[float] = None   # 매핑 신뢰도 0.0~1.0
 
 
 @dataclass

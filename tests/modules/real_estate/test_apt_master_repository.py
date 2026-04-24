@@ -444,3 +444,58 @@ class TestRefreshStats:
         entry = master_repo.get_by_name_district("래미안퍼스티지", "11650")
         assert entry.tx_count == 3
         assert entry.last_traded == "2024-03-01"
+
+
+# ── pnu / mapping_score 마이그레이션 ──────────────────────────────────────────
+
+def test_pnu_columns_exist_after_init():
+    from modules.real_estate.apt_master_repository import AptMasterRepository
+    repo = AptMasterRepository(db_path=":memory:")
+    from modules.real_estate.models import AptMasterEntry
+    from datetime import datetime, timezone
+    entry = AptMasterEntry(
+        apt_name="테스트아파트", district_code="11650",
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+    repo.upsert(entry)
+    assert repo.count() == 1
+
+
+def test_update_building_mapping():
+    from modules.real_estate.apt_master_repository import AptMasterRepository
+    from modules.real_estate.models import AptMasterEntry
+    from datetime import datetime, timezone
+    repo = AptMasterRepository(db_path=":memory:")
+    entry = AptMasterEntry(
+        apt_name="래미안아파트", district_code="11650",
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+    repo.upsert(entry)
+    saved = repo.get_by_name_district("래미안아파트", "11650")
+    assert saved is not None
+
+    repo.update_building_mapping(saved.id, "1100000000000001000001", 0.95)
+    updated = repo.get_by_name_district("래미안아파트", "11650")
+    assert updated.pnu == "1100000000000001000001"
+    assert abs(updated.mapping_score - 0.95) < 0.001
+
+
+def test_get_all_for_mapping_returns_unmapped_only():
+    from modules.real_estate.apt_master_repository import AptMasterRepository
+    from modules.real_estate.models import AptMasterEntry
+    from datetime import datetime, timezone
+    repo = AptMasterRepository(db_path=":memory:")
+
+    now = datetime.now(timezone.utc).isoformat()
+    repo.upsert(AptMasterEntry(apt_name="A아파트", district_code="11650", created_at=now))
+    repo.upsert(AptMasterEntry(apt_name="B아파트", district_code="11650", created_at=now))
+
+    all_unmapped = repo.get_all_for_mapping()
+    assert len(all_unmapped) == 2
+
+    a = repo.get_by_name_district("A아파트", "11650")
+    repo.update_building_mapping(a.id, "MGM001", 0.9)
+
+    unmapped = repo.get_all_for_mapping()
+    assert len(unmapped) == 1
+    assert unmapped[0].apt_name == "B아파트"
