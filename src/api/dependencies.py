@@ -8,6 +8,9 @@ from modules.real_estate.transaction_repository import TransactionRepository
 from modules.real_estate.apartment_repository import ApartmentRepository
 from modules.real_estate.apt_master_repository import AptMasterRepository
 from modules.real_estate.config import RealEstateConfig
+from modules.real_estate.building_master.building_register_client import BuildingRegisterClient
+from modules.real_estate.building_master.building_master_repository import BuildingMasterRepository
+from modules.real_estate.building_master.building_master_service import BuildingMasterService
 from modules.automation.service import AutomationService
 from core.notify.slack import SlackSender
 
@@ -23,6 +26,12 @@ _re_db_path = _re_config.get("real_estate_db_path", "data/real_estate.db")
 _tx_repo = TransactionRepository(db_path=_re_db_path)
 _apt_repo = ApartmentRepository(db_path=_re_db_path)
 _apt_master_repo = AptMasterRepository(db_path=_re_db_path)
+_bm_repo = BuildingMasterRepository(db_path=_re_db_path)
+_bm_service = BuildingMasterService(
+    client=BuildingRegisterClient(),
+    bm_repo=_bm_repo,
+    apt_master_repo=_apt_master_repo,
+)
 _automation_service = AutomationService()
 _slack_sender = SlackSender()
 
@@ -52,6 +61,9 @@ def get_apt_repo() -> ApartmentRepository:
 
 def get_apt_master_repo() -> AptMasterRepository:
     return _apt_master_repo
+
+def get_building_master_service() -> BuildingMasterService:
+    return _bm_service
 
 def get_automation_service() -> AutomationService:
     return _automation_service
