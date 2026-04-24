@@ -12,6 +12,7 @@
     --rebuild  : DB 초기화 후 전체 재수집 + 매핑
 """
 import os
+import sqlite3
 import sys
 import logging
 import argparse
@@ -48,6 +49,7 @@ def main() -> None:
 
     config = RealEstateConfig()
     db_path = config.get("real_estate_db_path", "data/real_estate.db")
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
 
     client = BuildingRegisterClient()
     bm_repo = BuildingMasterRepository(db_path=db_path)
@@ -56,7 +58,6 @@ def main() -> None:
 
     if args.rebuild:
         logger.info("=== REBUILD: building_master 초기화 ===")
-        import sqlite3
         with sqlite3.connect(db_path) as conn:
             conn.execute("DROP TABLE IF EXISTS building_master")
         bm_repo._init_db()
