@@ -8,39 +8,18 @@ from modules.real_estate.building_master.models import BuildingMaster
 from modules.real_estate.building_master.building_register_client import BuildingRegisterClient
 from modules.real_estate.building_master.building_master_repository import BuildingMasterRepository
 from modules.real_estate.apt_master_repository import AptMasterRepository
+from modules.real_estate.config import RealEstateConfig
 
 logger = logging.getLogger(__name__)
 
-METRO_SIGUNGU_CODES = [
-    # 서울 25개 구
-    "11110", "11140", "11170", "11200", "11215", "11230", "11260",
-    "11290", "11305", "11320", "11350", "11380", "11410", "11440",
-    "11470", "11500", "11530", "11545", "11560", "11590", "11620",
-    "11650", "11680", "11710", "11740",
-    # 인천 10개 구·군
-    "28110", "28140", "28177", "28185", "28200", "28237", "28245",
-    "28260", "28710", "28720",
-    # 경기 44개 (구 단위 분리)
-    "41111", "41113", "41115", "41117",
-    "41131", "41133", "41135",
-    "41150",
-    "41171", "41173",
-    "41192", "41194", "41196",
-    "41210", "41220", "41250",
-    "41271", "41273",
-    "41281", "41285", "41287",
-    "41290", "41310", "41360", "41370", "41390", "41410", "41430",
-    "41450",
-    "41461", "41463", "41465",
-    "41480", "41500", "41550", "41570", "41590", "41610", "41630",
-    "41650", "41670", "41800", "41820", "41830",
-]
+_config = RealEstateConfig()
+METRO_SIGUNGU_CODES: List[str] = _config.get("building_master_sigungu_codes", [])
 
 
 def _normalize_name(name: str) -> str:
-    n = re.sub(r"[()（）\s·\-_]", "", name)
-    n = n.replace("아파트", "").replace("APT", "").replace("apt", "")
-    return n.lower()
+    n = re.sub(r"[()（）\s·\-_]", "", name).lower()
+    n = n.replace("아파트", "").replace("apt", "")
+    return n
 
 
 def _name_similarity(a: str, b: str) -> float:
@@ -82,7 +61,12 @@ class BuildingMasterService:
                 continue
             try:
                 raw_items = self._client.fetch_apartments_by_sigungu(code)
-                for raw in raw_items:
+            except Exception as e:
+                logger.error(f"[Collect] {code} fetch failed: {e}")
+                result["failed"].append(code)
+                continue
+            for raw in raw_items:
+                try:
                     parsed = self._client.parse_item(raw)
                     if not parsed.get("mgm_pk") or not parsed.get("building_name"):
                         continue
@@ -103,10 +87,9 @@ class BuildingMasterService:
                     )
                     self._bm_repo.upsert(bm)
                     result["collected"] += 1
-                logger.info(f"[Collect] {code}: {len(raw_items)} items")
-            except Exception as e:
-                logger.error(f"[Collect] {code} failed: {e}")
-                result["failed"].append(code)
+                except Exception as e:
+                    logger.warning(f"[Collect] {code} item skip: {e}")
+            logger.info(f"[Collect] {code}: {len(raw_items)} items")
         return result
 
     def map_to_apt_master(self) -> dict:
