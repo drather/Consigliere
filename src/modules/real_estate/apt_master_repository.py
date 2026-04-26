@@ -50,6 +50,11 @@ ON CONFLICT(apt_name, district_code) DO UPDATE SET
     last_traded  = excluded.last_traded
 """
 
+_MIGRATE_ADD_PNU_COLS = [
+    "ALTER TABLE apt_master ADD COLUMN pnu TEXT",
+    "ALTER TABLE apt_master ADD COLUMN mapping_score REAL",
+]
+
 
 def _row_to_entry(row: sqlite3.Row) -> AptMasterEntry:
     return AptMasterEntry(
@@ -63,6 +68,8 @@ def _row_to_entry(row: sqlite3.Row) -> AptMasterEntry:
         first_traded=row["first_traded"],
         last_traded=row["last_traded"],
         created_at=row["created_at"],
+        pnu=row["pnu"] if "pnu" in row.keys() else None,
+        mapping_score=row["mapping_score"] if "mapping_score" in row.keys() else None,
     )
 
 
@@ -93,6 +100,11 @@ class AptMasterRepository:
     def _init_db(self) -> None:
         conn = self._conn()
         conn.executescript(_DDL)
+        for sql in _MIGRATE_ADD_PNU_COLS:
+            try:
+                conn.execute(sql)
+            except sqlite3.OperationalError:
+                pass  # column already exists
         conn.commit()
 
     # ── CRUD ──────────────────────────────────────────────────────────────────
@@ -377,3 +389,20 @@ class AptMasterRepository:
         """
         with self._conn() as conn:
             conn.execute(sql)
+
+    def update_building_mapping(
+        self, apt_id: int, mgm_pk: str, score: float
+    ) -> None:
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE apt_master SET pnu = ?, mapping_score = ? WHERE id = ?",
+                (mgm_pk, score, apt_id),
+            )
+
+    def get_all_for_mapping(self) -> List[AptMasterEntry]:
+        """Returns all apt_master rows where pnu IS NULL (unmapped entries)."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM apt_master WHERE pnu IS NULL"
+            ).fetchall()
+        return [_row_to_entry(r) for r in rows]

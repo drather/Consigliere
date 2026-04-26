@@ -15,7 +15,9 @@ from api.dependencies import (
     get_apt_repo,
     get_apt_master_repo,
     get_commute_service,
+    get_building_master_service,
 )
+from modules.real_estate.building_master.building_master_service import BuildingMasterService
 from modules.real_estate.commute.commute_service import CommuteService
 from modules.real_estate.service import RealEstateAgent
 from modules.real_estate.monitor.service import TransactionMonitorService
@@ -505,4 +507,28 @@ def get_commute_time(
         }
     except Exception as e:
         logger.error(f"Commute API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/jobs/building-master/collect")
+def collect_building_master(
+    rebuild: bool = False,
+    bm_service: BuildingMasterService = Depends(get_building_master_service),
+):
+    """건축물대장 수집 + apt_master 매핑 실행. rebuild=true 시 기존 데이터 초기화."""
+    try:
+        if rebuild:
+            from modules.real_estate.config import RealEstateConfig
+            db_path = RealEstateConfig().get("real_estate_db_path", "data/real_estate.db")
+            bm_service.reset_building_master(db_path)
+
+        collect_result = bm_service.collect()
+        map_result = bm_service.map_to_apt_master()
+        return {
+            "status": "success",
+            "collect": collect_result,
+            "map": map_result,
+        }
+    except Exception as e:
+        logger.error(f"[BuildingMaster] collect error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
