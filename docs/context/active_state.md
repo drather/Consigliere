@@ -1,10 +1,10 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-22
+**Last Updated:** 2026-04-25
 **Current Active Feature:** 없음 (대기 중)
 
 ## 현재 포커스
 - **Branch:** `master`
-- **Status:** ✅ feature/commute-realtime 머지 완료 (2026-04-22)
+- **Status:** ✅ feature/building-master 머지 완료 (2026-04-25)
 
 ## 선행 브랜치 (미머지)
 - **Branch:** `feature/real-estate-sqlite-redesign`
@@ -16,6 +16,14 @@
   - E2E Playwright 테스트 28개
 
 ## 최근 완료 작업
+- **completed:** PNU 기반 Building Master DB 구축 (2026-04-25)
+  - 건축HUB 총괄표제부 API(`getBrRecapTitleInfo`) → `building_master` 테이블 구축
+  - `apt_master` 이름 유사도 매핑(SequenceMatcher ≥ 0.8) — pnu/mapping_score 컬럼 추가
+  - CLI: `scripts/build_building_master.py` (`--collect/--map/--rebuild`)
+  - FastAPI: `POST /jobs/building-master/collect` (rebuild 파라미터 포함)
+  - bjdong 코드 자동 탐색(`discover_bjdong_codes`): API가 sigunguCd만으론 빈 결과 반환
+  - 실데이터 검증: 서초/강남/송파/분당 4개 구 361건 수집, 최신 아파트 단지명 score 1.0 매핑 확인
+  - 26/26 단위 테스트 통과
 - **completed:** 출퇴근 경로 상세 정보 추가 — legs + route_summary (2026-04-22)
   - `CommuteResult`에 `legs: List[dict]`, `route_summary: str` 필드 추가
   - `TmapClient.route_with_legs()` — transit legs 파싱, car/walking 도로명 파싱, _build_summary()
@@ -82,21 +90,6 @@
 - **blocked:** 없음
 
 ## 다음 작업 로드맵
-
-### 기획 중 — PNU 기반 아파트 마스터 고도화
-- **아이디어:** 건축물에는 고유 식별번호(PNU: 필지고유번호, 건물고유번호)가 있어, 공공 API를 통해 현재 실거래가 파생 마스터보다 훨씬 정밀한 마스터 데이터를 구축할 수 있을 것으로 추정
-- **가설:** 현재 `apt_master`는 실거래가 API에서 파생 → apt_name 불일치, 중복, 필드 부족 문제 내재. PNU로 건물을 고정하면 영구적이고 권위 있는 식별자로 활용 가능
-- **탐색 후보 API:**
-  - 국토교통부 건물정보 API (`vworld.kr` 공간정보 오픈플랫폼) — PNU 기반 건물 조회
-  - 공공데이터포털 건축물대장 API (`open.molit.go.kr`) — 동·호수 단위 건축물대장 정보
-  - 국토교통부 부동산 종합정보 API (`ras.go.kr`) — 집합건물 정보
-  - K-apt 공동주택관리정보시스템 — 단지별 세대수, 동수, 준공연도, 관리비
-- **PNU 구조 참고:** 19자리 (`시도(2) + 시군구(3) + 읍면동(3) + 리(2) + 지목(1) + 지번(4) + 동번호(4)`)
-- **기대 효과:**
-  - apt_name 정규화 없이도 건물 고유 식별 가능
-  - 세대수·동수·준공연도·용적률 등 투자 분석 필드 확보
-  - 실거래가-건물정보 JOIN 정확도 대폭 향상
-- **다음 단계:** 브레인스토밍 시작 전 API 키 발급 가능 여부 및 무료 쿼터 확인 필요
 
 ### 1순위 — E2E 테스트 코드 업데이트
 - **목표:** Transaction-First 전환 이후 변경된 Tab1(아파트 탐색) UX에 맞게 E2E 테스트 정비
