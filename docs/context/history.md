@@ -1,5 +1,22 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-20
+**Last Updated:** 2026-04-27
+
+## 2026-04-23~25: PNU 기반 Building Master DB 구축
+
+- **Feature:** `feature/building-master` → master 머지 완료 (2026-04-25)
+- **배경:** `apt_master`는 실거래가 파생이라 단지명 불일치·투자 분석 필드 부족 문제 내재. 건축HUB 건축물대장 API로 공식 단지 메타데이터(준공연도·세대수·용적률)를 별도 구축하고 매핑.
+- **핵심 발견:**
+  - 스펙의 `getBrBasisOulnInfo`(기본개요)는 단지명/용도 필드 없음 → `getBrRecapTitleInfo`(총괄표제부)로 교체
+  - API가 `sigunguCd` 단독 쿼리 시 빈 응답 → `bjdongCd` 필수 → `discover_bjdong_codes()` 자동 탐색 구현
+  - 아파트 필터: `mainPurpsCdNm` 대신 `etcPurps`("공동주택(아파트)")로 교체
+- **신규 구성요소:**
+  - `src/modules/real_estate/building_master/` 패키지 (Client/Repository/Service/models)
+  - `scripts/build_building_master.py` CLI (`--collect/--map/--rebuild`)
+  - `POST /jobs/building-master/collect` FastAPI 엔드포인트
+  - `apt_master`에 `pnu`/`mapping_score` 컬럼 마이그레이션
+- **실데이터 검증:** 서초/강남/송파/분당 4개 구 361건 수집, 이름 일치 단지 score 1.0 완벽 매핑 확인 (래미안퍼스티지, 아크로리버파크 등). 전체 매핑률 26% — 비공식명 혼재가 원인.
+- **테스트:** 26/26 단위 테스트 PASS
+- **핵심 학습:** 공공 API는 문서상 optional 파라미터도 실질적으로 필수인 경우 있음. 반드시 실제 응답으로 검증 필요.
 
 ## 2026-04-19~20: Job4 부동산 리포트 생성 전면 점검
 
