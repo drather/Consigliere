@@ -103,6 +103,13 @@ class BuildingMasterRepository:
                 (sigungu_code,),
             ).fetchone()[0]
 
+    def get_by_mgm_pk(self, mgm_pk: str) -> Optional[BuildingMaster]:
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM building_master WHERE mgm_pk = ?", (mgm_pk,)
+            ).fetchone()
+        return _row_to_bm(row) if row else None
+
     def count(self) -> int:
         with self._conn() as conn:
             return conn.execute("SELECT COUNT(*) FROM building_master").fetchone()[0]
