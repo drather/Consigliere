@@ -16,6 +16,17 @@ _config = RealEstateConfig()
 METRO_SIGUNGU_CODES: List[str] = _config.get("building_master_sigungu_codes", [])
 
 
+def _normalize_addr(addr: str) -> str:
+    """도로명주소에서 '도로명 번지' 추출. 괄호 표기(동명) 제거 후 마지막 두 토큰."""
+    if not addr:
+        return ""
+    addr = re.sub(r"\([^)]*\)", "", addr).strip()
+    parts = addr.split()
+    if len(parts) >= 2:
+        return " ".join(parts[-2:])
+    return " ".join(parts)
+
+
 def _normalize_name(name: str) -> str:
     n = re.sub(r"[()（）\s·\-_]", "", name).lower()
     n = n.replace("아파트", "").replace("apt", "")
@@ -98,6 +109,48 @@ class BuildingMasterService:
         with sqlite3.connect(db_path) as conn:
             conn.execute("DROP TABLE IF EXISTS building_master")
         self._bm_repo._init_db()
+
+    def map_by_address(self) -> dict:
+        """2차 매핑: complex_code → apartments.road_address → building_master 주소 매칭.
+
+        주소 일치 후보에 대해 이름 유사도 임계값을 0.6으로 낮춰 적용한다.
+        """
+        entries = self._apt_master_repo.get_all_for_mapping()
+        result = {"mapped": 0, "no_address": 0, "no_match": 0, "total": len(entries)}
+
+        addr_map = self._apt_master_repo.get_apt_addresses_by_complex()
+
+        for entry in entries:
+            if not entry.complex_code:
+                result["no_address"] += 1
+                continue
+
+            apt_addr = addr_map.get(entry.complex_code)
+            if not apt_addr:
+                result["no_address"] += 1
+                continue
+
+            norm_apt = _normalize_addr(apt_addr)
+            candidates = self._bm_repo.get_by_sigungu(entry.district_code)
+            addr_candidates = [
+                c for c in candidates
+                if _normalize_addr(c.road_address or "") == norm_apt
+            ]
+
+            if not addr_candidates:
+                result["no_match"] += 1
+                continue
+
+            best_bm, best_score = _best_match(entry.apt_name, addr_candidates)
+            if best_bm and best_score >= 0.6:
+                self._apt_master_repo.update_building_mapping(
+                    entry.id, best_bm.mgm_pk, best_score
+                )
+                result["mapped"] += 1
+            else:
+                result["no_match"] += 1
+
+        return result
 
     def map_to_apt_master(self) -> dict:
         """apt_master 항목을 building_master와 매핑. 유사도 >= 0.8이면 pnu 업데이트."""

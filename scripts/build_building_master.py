@@ -4,12 +4,14 @@
 사용법:
     arch -arm64 .venv/bin/python3.12 scripts/build_building_master.py --collect
     arch -arm64 .venv/bin/python3.12 scripts/build_building_master.py --map
+    arch -arm64 .venv/bin/python3.12 scripts/build_building_master.py --map-address
     arch -arm64 .venv/bin/python3.12 scripts/build_building_master.py --rebuild
 
 옵션:
-    --collect  : 건축물대장 API 수집만 수행 (이어받기 지원)
-    --map      : building_master → apt_master 매핑만 수행
-    --rebuild  : DB 초기화 후 전체 재수집 + 매핑
+    --collect      : 건축물대장 API 수집만 수행 (이어받기 지원)
+    --map          : building_master → apt_master 이름 기반 1차 매핑
+    --map-address  : apartments.road_address 기반 2차 매핑 (미매핑 항목 대상)
+    --rebuild      : DB 초기화 후 전체 재수집 + 매핑
 """
 import os
 import sys
@@ -38,11 +40,12 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     parser = argparse.ArgumentParser(description="Building Master DB 구축")
     parser.add_argument("--collect", action="store_true", help="건축물대장 수집")
-    parser.add_argument("--map", action="store_true", help="apt_master 매핑")
+    parser.add_argument("--map", action="store_true", help="apt_master 이름 기반 1차 매핑")
+    parser.add_argument("--map-address", action="store_true", dest="map_address", help="주소 기반 2차 매핑")
     parser.add_argument("--rebuild", action="store_true", help="전체 재수집 + 매핑")
     args = parser.parse_args()
 
-    if not any([args.collect, args.map, args.rebuild]):
+    if not any([args.collect, args.map, args.map_address, args.rebuild]):
         parser.print_help()
         sys.exit(1)
 
@@ -68,6 +71,9 @@ def main() -> None:
     if args.map:
         _run_map(svc)
 
+    if args.map_address:
+        _run_map_address(svc)
+
 
 def _run_collect(svc: BuildingMasterService) -> None:
     logger.info("=== COLLECT 시작 ===")
@@ -88,6 +94,17 @@ def _run_map(svc: BuildingMasterService) -> None:
         f"완료 — mapped={result['mapped']} "
         f"below_threshold={result['below_threshold']} "
         f"no_candidates={result['no_candidates']} "
+        f"total={result['total']}"
+    )
+
+
+def _run_map_address(svc: BuildingMasterService) -> None:
+    logger.info("=== MAP-ADDRESS (2차 매핑) 시작 ===")
+    result = svc.map_by_address()
+    logger.info(
+        f"완료 — mapped={result['mapped']} "
+        f"no_address={result['no_address']} "
+        f"no_match={result['no_match']} "
         f"total={result['total']}"
     )
 

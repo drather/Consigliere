@@ -1,10 +1,10 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-25
+**Last Updated:** 2026-04-27
 **Current Active Feature:** 없음 (대기 중)
 
 ## 현재 포커스
 - **Branch:** `master`
-- **Status:** ✅ feature/building-master 머지 완료 (2026-04-25)
+- **Status:** ✅ feature/address-mapping 머지 완료 (2026-04-27)
 
 ## 선행 브랜치 (미머지)
 - **Branch:** `feature/real-estate-sqlite-redesign`
@@ -16,6 +16,13 @@
   - E2E Playwright 테스트 28개
 
 ## 최근 완료 작업
+- **completed:** 주소 기반 2차 매핑 구현 (2026-04-27)
+  - `map_by_address()`: complex_code → apartments.road_address → building_master 주소 매칭
+  - `_normalize_addr()`: 괄호 제거 + 마지막 2토큰("도로명 번지") 추출
+  - `get_apt_addresses_by_complex()`: apartments 테이블 bulk 로드
+  - 2차 매핑 207건 추가 → 누적 2,908건 / 6,037건 (48.2%)
+  - CLI `--map-address` 플래그 추가
+  - 8/8 단위 테스트 통과
 - **completed:** PNU 기반 Building Master DB 구축 (2026-04-25)
   - 건축HUB 총괄표제부 API(`getBrRecapTitleInfo`) → `building_master` 테이블 구축
   - `apt_master` 이름 유사도 매핑(SequenceMatcher ≥ 0.8) — pnu/mapping_score 컬럼 추가
