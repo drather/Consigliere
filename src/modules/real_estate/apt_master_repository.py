@@ -406,3 +406,15 @@ class AptMasterRepository:
                 "SELECT * FROM apt_master WHERE pnu IS NULL"
             ).fetchall()
         return [_row_to_entry(r) for r in rows]
+
+    def get_apt_addresses_by_complex(self) -> dict:
+        """apartments 테이블에서 complex_code → road_address 매핑 반환."""
+        try:
+            with self._conn() as conn:
+                rows = conn.execute(
+                    "SELECT complex_code, road_address FROM apartments "
+                    "WHERE complex_code IS NOT NULL AND road_address != ''"
+                ).fetchall()
+            return {r[0]: r[1] for r in rows}
+        except sqlite3.OperationalError:
+            return {}
