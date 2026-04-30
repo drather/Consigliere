@@ -689,11 +689,13 @@ def show_real_estate():
         else:
             selected_date = st.selectbox("날짜 선택", dates, key="pro_report_date_select")
 
-            if st.button("📄 리포트 보기", key="view_pro_report") or st.session_state.get("pro_report_auto_load"):
-                st.session_state.pro_report_auto_load = True
+            _cache_key = f"pro_report__{selected_date}"
+            if st.button("📄 리포트 보기", key="view_pro_report"):
                 with st.spinner("리포트 로딩 중..."):
-                    report = DashboardClient.get_professional_report(selected_date)
+                    st.session_state[_cache_key] = DashboardClient.get_professional_report(selected_date)
 
+            report = st.session_state.get(_cache_key)
+            if report is not None:
                 if not report:
                     st.error("리포트를 불러올 수 없습니다.")
                 else:
@@ -717,7 +719,7 @@ def show_real_estate():
                     school_map = {a["apt_name"]: a["text"] for a in report.get("school_analyses", [])}
 
                     for c in candidates_summary[:5]:
-                        name = c["apt_name"]
+                        name = c.get("apt_name", "알 수 없는 단지")
                         with st.expander(f"📋 {name} — {c.get('total_score', 0):.0f}점"):
                             scores = c.get("scores", {})
                             sc1, sc2, sc3, sc4, sc5 = st.columns(5)
