@@ -593,7 +593,7 @@ def generate_professional_report():
     from modules.real_estate.trend_analyzer import TrendAnalyzer
     from modules.real_estate.persona_manager import PersonaManager
     from modules.real_estate.apt_master_repository import AptMasterRepository
-    from modules.real_estate.macro.service import MacroService
+    from modules.macro.service import MacroCollectionService
     from core.llm_pipeline import build_llm_pipeline
     from core.prompt_loader import PromptLoader
     from core.storage import get_storage_provider
@@ -614,8 +614,9 @@ def generate_professional_report():
         candidates = apt_repo.list_by_district_codes(district_codes) if district_codes else apt_repo.list_all()
         candidate_dicts = [c.__dict__ if hasattr(c, "__dict__") else dict(c) for c in candidates[:50]]
 
-        macro_svc = MacroService()
-        macro_latest = macro_svc._svc.get_latest(domain="real_estate")
+        macro_db = cfg.get("macro_db_path", "data/macro.db")
+        macro_svc = MacroCollectionService(db_path=macro_db)
+        macro_latest = macro_svc.get_latest(domain="real_estate")
         macro_lines = [f"{m.get('name', '')}: {m.get('value', '')}{m.get('unit', '')}" for m in (macro_latest or [])]
         macro_summary = " | ".join(macro_lines[:4])
 
