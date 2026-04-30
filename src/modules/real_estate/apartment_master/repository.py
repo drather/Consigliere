@@ -15,55 +15,51 @@ except ImportError:
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS apartment_master (
-    cache_key               TEXT PRIMARY KEY,
-    complex_code            TEXT DEFAULT '',
-    household_count         INTEGER DEFAULT 0,
-    building_count          INTEGER DEFAULT 0,
-    parking_count           INTEGER DEFAULT 0,
-    constructor             TEXT DEFAULT '',
-    approved_date           TEXT DEFAULT '',
-    road_address            TEXT DEFAULT '',
-    legal_address           TEXT DEFAULT '',
-    top_floor               INTEGER DEFAULT 0,
-    base_floor              INTEGER DEFAULT 0,
-    total_area              REAL DEFAULT 0.0,
-    heat_type               TEXT DEFAULT '',
-    developer               TEXT DEFAULT '',
-    elevator_count          INTEGER DEFAULT 0,
-    units_60                INTEGER DEFAULT 0,
-    units_85                INTEGER DEFAULT 0,
-    units_135               INTEGER DEFAULT 0,
-    units_136_plus          INTEGER DEFAULT 0,
-    sido                    TEXT DEFAULT '',
-    sigungu                 TEXT DEFAULT '',
-    eupmyeondong            TEXT DEFAULT '',
-    ri                      TEXT DEFAULT '',
-    floor_area_ratio        REAL DEFAULT NULL,
-    building_coverage_ratio REAL DEFAULT NULL,
-    fetched_at              TEXT
+    cache_key           TEXT PRIMARY KEY,
+    complex_code        TEXT DEFAULT '',
+    household_count     INTEGER DEFAULT 0,
+    building_count      INTEGER DEFAULT 0,
+    parking_count       INTEGER DEFAULT 0,
+    constructor         TEXT DEFAULT '',
+    approved_date       TEXT DEFAULT '',
+    road_address        TEXT DEFAULT '',
+    legal_address       TEXT DEFAULT '',
+    top_floor           INTEGER DEFAULT 0,
+    base_floor          INTEGER DEFAULT 0,
+    total_area          REAL DEFAULT 0.0,
+    heat_type           TEXT DEFAULT '',
+    developer           TEXT DEFAULT '',
+    elevator_count      INTEGER DEFAULT 0,
+    units_60            INTEGER DEFAULT 0,
+    units_85            INTEGER DEFAULT 0,
+    units_135           INTEGER DEFAULT 0,
+    units_136_plus      INTEGER DEFAULT 0,
+    sido                TEXT DEFAULT '',
+    sigungu             TEXT DEFAULT '',
+    eupmyeondong        TEXT DEFAULT '',
+    ri                  TEXT DEFAULT '',
+    fetched_at          TEXT
 )
 """
 
 # 기존 DB에 없을 수 있는 신규 컬럼 목록 (컬럼명, 타입, 기본값)
 _NEW_COLUMNS = [
-    ("road_address",            "TEXT",    "''"),
-    ("legal_address",           "TEXT",    "''"),
-    ("top_floor",               "INTEGER", "0"),
-    ("base_floor",              "INTEGER", "0"),
-    ("total_area",              "REAL",    "0.0"),
-    ("heat_type",               "TEXT",    "''"),
-    ("developer",               "TEXT",    "''"),
-    ("elevator_count",          "INTEGER", "0"),
-    ("units_60",                "INTEGER", "0"),
-    ("units_85",                "INTEGER", "0"),
-    ("units_135",               "INTEGER", "0"),
-    ("units_136_plus",          "INTEGER", "0"),
-    ("sido",                    "TEXT",    "''"),
-    ("sigungu",                 "TEXT",    "''"),
-    ("eupmyeondong",            "TEXT",    "''"),
-    ("ri",                      "TEXT",    "''"),
-    ("floor_area_ratio",        "REAL",    "NULL"),
-    ("building_coverage_ratio", "REAL",    "NULL"),
+    ("road_address",  "TEXT",    "''"),
+    ("legal_address", "TEXT",    "''"),
+    ("top_floor",     "INTEGER", "0"),
+    ("base_floor",    "INTEGER", "0"),
+    ("total_area",    "REAL",    "0.0"),
+    ("heat_type",     "TEXT",    "''"),
+    ("developer",     "TEXT",    "''"),
+    ("elevator_count","INTEGER", "0"),
+    ("units_60",      "INTEGER", "0"),
+    ("units_85",      "INTEGER", "0"),
+    ("units_135",     "INTEGER", "0"),
+    ("units_136_plus","INTEGER", "0"),
+    ("sido",          "TEXT",    "''"),
+    ("sigungu",       "TEXT",    "''"),
+    ("eupmyeondong",  "TEXT",    "''"),
+    ("ri",            "TEXT",    "''"),
 ]
 
 
@@ -102,8 +98,7 @@ class ApartmentMasterRepository:
                 "road_address, legal_address, top_floor, base_floor, total_area, "
                 "heat_type, developer, elevator_count, "
                 "units_60, units_85, units_135, units_136_plus, "
-                "sido, sigungu, eupmyeondong, ri, "
-                "floor_area_ratio, building_coverage_ratio "
+                "sido, sigungu, eupmyeondong, ri "
                 "FROM apartment_master WHERE cache_key = ?",
                 (key,),
             ).fetchone()
@@ -134,8 +129,6 @@ class ApartmentMasterRepository:
             sigungu=row[19] or "",
             eupmyeondong=row[20] or "",
             ri=row[21] or "",
-            floor_area_ratio=row[22],
-            building_coverage_ratio=row[23],
         )
 
     def save(self, master: ApartmentMaster) -> None:
@@ -149,9 +142,8 @@ class ApartmentMasterRepository:
                 "road_address, legal_address, top_floor, base_floor, total_area, "
                 "heat_type, developer, elevator_count, "
                 "units_60, units_85, units_135, units_136_plus, "
-                "sido, sigungu, eupmyeondong, ri, "
-                "floor_area_ratio, building_coverage_ratio, fetched_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "sido, sigungu, eupmyeondong, ri, fetched_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     key,
                     master.complex_code,
@@ -176,8 +168,6 @@ class ApartmentMasterRepository:
                     master.sigungu,
                     master.eupmyeondong,
                     master.ri,
-                    master.floor_area_ratio,
-                    master.building_coverage_ratio,
                     fetched_at,
                 ),
             )
