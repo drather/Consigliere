@@ -656,107 +656,114 @@ def show_real_estate():
     # ──────────────────────────────────────────────────────────
     # TAB 3: Report Archive
     # ──────────────────────────────────────────────────────────
+    # ──────────────────────────────────────────────────────────
+    # TAB 3: Report Archive (전문 컨설턴트 리포트)
+    # ──────────────────────────────────────────────────────────
     with tab3:
-        st.subheader("인사이트 리포트")
+        st.subheader("📋 부동산 전략 리포트 아카이브")
 
-        # 리포트 생성 영역
+        # 리포트 생성 버튼
         with st.expander("⚙️ 리포트 생성", expanded=False):
-            rc1, rc2 = st.columns(2)
-            with rc1:
-                if not st.session_state.get("districts"):
-                    st.session_state.districts = DashboardClient.get_districts()
-                _report_options = {"페르소나 관심 지역 전체 (강남·서초·분당·송파)": None}
-                _report_options.update({d["name"]: d["code"] for d in st.session_state.get("districts", [])})
-                _report_names = list(_report_options.keys())
-                _report_sel = st.selectbox("수집 지역", _report_names, index=0, key="report_district_select")
-                report_district = _report_options.get(_report_sel)
-
-            st.caption("거시경제 지표를 먼저 수집한 뒤 리포트를 생성하면 저장된 데이터를 활용합니다.")
-            mc1, mc2, mc3 = st.columns(3)
-
-            with mc1:
-                if st.button("📈 거시경제 수집", use_container_width=True):
-                    with st.spinner("한국은행 API 조회 중..."):
-                        r = DashboardClient.trigger_collect_macro(domain="real_estate")
-                    if "error" in r:
-                        st.error(r["error"])
-                    else:
-                        collected = r.get("collected", [])
-                        st.success(f"✅ {len(collected)}개 지표 수집 완료")
-                        st.session_state.pop("macro_latest", None)
-
-            with mc2:
-                if st.button("📊 리포트 생성", use_container_width=True):
-                    with st.spinner("인사이트 리포트 생성 중... (1~3분 소요)"):
-                        r = DashboardClient.trigger_generate_report(report_district)
-                    if "error" in r:
-                        st.error(r["error"])
-                    else:
-                        st.success(f"✅ 점수 {r.get('score', 0)}점 | 실거래 {r.get('tx_count', 0)}건")
-                        st.rerun()
-
-            with mc3:
-                send_slack = st.checkbox("Slack 전송", value=True, key="pipeline_slack")
-                if st.button("🚀 전체 파이프라인", use_container_width=True, type="primary"):
-                    with st.spinner("파이프라인 실행 중... (최대 5분 소요)"):
-                        r = DashboardClient.trigger_run_pipeline(report_district, send_slack=send_slack)
-                    if "error" in r:
-                        st.error(r["error"])
-                    else:
-                        pipeline = r.get("pipeline", {})
-                        j4 = pipeline.get("job4", {})
-                        st.success(f"✅ 완료 | 점수 {j4.get('score', 0)}점 | Slack: {pipeline.get('slack', '미전송')}")
-                        with st.expander("상세 결과"):
-                            st.json(pipeline)
-                        st.rerun()
+            st.caption("오늘 날짜 기준 전문 컨설턴트 리포트를 생성합니다. (2~5분 소요)")
+            if st.button("📊 전문 리포트 생성", type="primary", use_container_width=True, key="gen_pro_report"):
+                with st.spinner("POI 수집 + 실거래가 추세 + LLM 분석 중..."):
+                    r = DashboardClient.trigger_generate_professional_report()
+                if "error" in r:
+                    st.error(f"❌ 오류: {r['error']}")
+                else:
+                    st.success(f"✅ {r.get('date', '')} 리포트 생성 완료 ({r.get('candidates_count', 0)}개 단지 분석)")
+                    st.session_state.pop("pro_report_dates", None)
+                    st.rerun()
 
         st.markdown("---")
 
-        # 리포트 목록
-        reports = DashboardClient.list_insight_reports()
-        if not reports:
-            st.warning("저장된 인사이트 리포트가 없습니다.")
-            st.info("위 '⚙️ 리포트 생성'을 실행하면 자동으로 저장됩니다.")
+        # 날짜 목록 로드
+        if "pro_report_dates" not in st.session_state:
+            st.session_state.pro_report_dates = DashboardClient.list_professional_reports()
+
+        dates = st.session_state.get("pro_report_dates", [])
+
+        if not dates:
+            st.warning("저장된 전문 리포트가 없습니다.")
+            st.info("위 '⚙️ 리포트 생성'을 실행하거나 매일 07:00 자동 생성을 기다리세요.")
         else:
-            df_reports = pd.DataFrame(reports)
-            df_reports["score_label"] = df_reports["score"].apply(
-                lambda s: f"{'🟢' if s >= 80 else '🟡' if s >= 60 else '🔴'} {s}점"
-            )
-            st.dataframe(
-                df_reports[["date", "score_label", "tx_count", "created_at"]].rename(columns={
-                    "date": "날짜", "score_label": "검증 점수", "tx_count": "실거래 건수", "created_at": "생성 시각"
-                }),
-                use_container_width=True,
-                hide_index=True,
-            )
+            selected_date = st.selectbox("날짜 선택", dates, key="pro_report_date_select")
 
-            st.markdown("---")
+            if st.button("📄 리포트 보기", key="view_pro_report") or st.session_state.get("pro_report_auto_load"):
+                st.session_state.pro_report_auto_load = True
+                with st.spinner("리포트 로딩 중..."):
+                    report = DashboardClient.get_professional_report(selected_date)
 
-            filenames = [r["filename"] for r in reports]
-            labels = [f"{r['date']} (Score {r['score']})" for r in reports]
-            selected_idx = st.selectbox("리포트 선택", range(len(labels)), format_func=lambda i: labels[i])
-
-            if st.button("📄 리포트 보기"):
-                with st.spinner("로딩 중..."):
-                    report = DashboardClient.get_insight_report(filenames[selected_idx])
                 if not report:
                     st.error("리포트를 불러올 수 없습니다.")
                 else:
-                    st.markdown(f"### 📋 {report.get('date')} 인사이트 리포트")
-                    st.caption(f"검증 점수: {report.get('score')}점 | 실거래 건수: {report.get('tx_count')}건 | 생성: {report.get('created_at', '')[:19]}")
                     st.markdown("---")
-                    for block in report.get("blocks", []):
-                        btype = block.get("type")
-                        if btype == "header":
-                            st.markdown(f"## {block.get('text', {}).get('text', '')}")
-                        elif btype == "section":
-                            raw_text = block.get("text", {}).get("text", "")
-                            st.markdown(_mrkdwn_to_md(raw_text))
-                        elif btype == "context":
-                            for elem in block.get("elements", []):
-                                st.caption(_mrkdwn_to_md(elem.get("text", "")))
-                        elif btype == "divider":
-                            st.markdown("---")
+
+                    # Executive Summary
+                    budget_str = f"{report.get('budget_available', 0) / 1_0000_0000:.1f}억"
+                    st.markdown(f"### 💰 구매 가능 예산: {budget_str}")
+                    st.caption(report.get("macro_summary", ""))
+
+                    candidates_summary = report.get("candidates_summary", [])
+                    if candidates_summary:
+                        st.markdown("**🏆 추천 Top 3**")
+                        for c in candidates_summary[:3]:
+                            st.markdown(f"- **{c['apt_name']}** — {c.get('total_score', 0):.0f}점")
+
+                    st.markdown("---")
+
+                    # 단지별 상세 (expander)
+                    location_map = {a["apt_name"]: a["text"] for a in report.get("location_analyses", [])}
+                    school_map = {a["apt_name"]: a["text"] for a in report.get("school_analyses", [])}
+
+                    for c in candidates_summary[:5]:
+                        name = c["apt_name"]
+                        with st.expander(f"📋 {name} — {c.get('total_score', 0):.0f}점"):
+                            scores = c.get("scores", {})
+                            sc1, sc2, sc3, sc4, sc5 = st.columns(5)
+                            with sc1:
+                                st.metric("출퇴근", f"{scores.get('commute', '-')}점")
+                            with sc2:
+                                st.metric("환금성", f"{scores.get('liquidity', '-')}점")
+                            with sc3:
+                                st.metric("생활편의", f"{scores.get('living_convenience', '-')}점")
+                            with sc4:
+                                st.metric("학군", f"{scores.get('school', '-')}점")
+                            with sc5:
+                                st.metric("투자잠재력", f"{scores.get('price_potential', '-')}점")
+
+                            if location_map.get(name):
+                                st.markdown("**📍 입지**")
+                                st.write(location_map[name])
+                            if school_map.get(name):
+                                st.markdown("**🏫 학군**")
+                                st.write(school_map[name])
+
+                    st.markdown("---")
+
+                    # 투자 전략
+                    strategy = report.get("strategy", {})
+                    if strategy:
+                        st.markdown("### 🎯 투자 전략 및 액션 플랜")
+                        if strategy.get("strategy"):
+                            st.info(f"**전략:** {strategy['strategy']}")
+                        col_s, col_m = st.columns(2)
+                        with col_s:
+                            st.markdown("**단기(3개월)**")
+                            st.write(strategy.get("action_short", "-"))
+                        with col_m:
+                            st.markdown("**중기(1년)**")
+                            st.write(strategy.get("action_mid", "-"))
+                        if strategy.get("risks"):
+                            st.markdown("**⚠️ 리스크 요인**")
+                            for r in strategy["risks"]:
+                                st.markdown(f"- {r}")
+
+                    st.markdown("---")
+
+                    # 전체 마크다운 리포트
+                    with st.expander("📄 전체 리포트 (Markdown)", expanded=False):
+                        st.markdown(report.get("markdown", ""))
 
     # ──────────────────────────────────────────────────────────
     # TAB 4: 페르소나 편집
