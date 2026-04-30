@@ -37,6 +37,9 @@ class ApartmentMaster:
     sigungu: str = ""            # as2 (시군구, 예: 서초구)
     eupmyeondong: str = ""       # as3 (읍면동, 예: 반포동)
     ri: str = ""                 # as4 (리, 도심지역은 보통 빈값)
+    # 건물 규제 지표 (투자가치 산정용)
+    floor_area_ratio: Optional[float] = None      # vlRat (용적률 %)
+    building_coverage_ratio: Optional[float] = None  # bcRat (건폐율 %)
     fetched_at: str = ""
 
 @dataclass

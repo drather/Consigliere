@@ -203,6 +203,13 @@ class ApartmentMasterService:
         def _str(val) -> str:
             return str(val or "").strip()
 
+        def _float_or_none(val):
+            try:
+                v = str(val or "").replace(",", "").strip()
+                return float(v) if v else None
+            except (ValueError, TypeError):
+                return None
+
         return ApartmentMaster(
             apt_name=apt_name,
             district_code=district_code,
@@ -234,6 +241,9 @@ class ApartmentMasterService:
             sigungu=_str((list_item or {}).get("as2")),
             eupmyeondong=_str((list_item or {}).get("as3")),
             ri=_str((list_item or {}).get("as4")),
+            # 건물 규제 지표
+            floor_area_ratio=_float_or_none(info.get("vlRat")),
+            building_coverage_ratio=_float_or_none(info.get("bcRat")),
             fetched_at=datetime.now(timezone.utc).isoformat(),
         )
 

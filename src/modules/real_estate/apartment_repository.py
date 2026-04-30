@@ -14,37 +14,44 @@ except ImportError:
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS apartments (
-    complex_code     TEXT PRIMARY KEY,
-    apt_name         TEXT NOT NULL,
-    district_code    TEXT NOT NULL DEFAULT '',
-    sido             TEXT NOT NULL DEFAULT '',
-    sigungu          TEXT NOT NULL DEFAULT '',
-    eupmyeondong     TEXT NOT NULL DEFAULT '',
-    ri               TEXT NOT NULL DEFAULT '',
-    road_address     TEXT NOT NULL DEFAULT '',
-    legal_address    TEXT NOT NULL DEFAULT '',
-    household_count  INTEGER NOT NULL DEFAULT 0,
-    building_count   INTEGER NOT NULL DEFAULT 0,
-    parking_count    INTEGER NOT NULL DEFAULT 0,
-    constructor      TEXT NOT NULL DEFAULT '',
-    developer        TEXT NOT NULL DEFAULT '',
-    approved_date    TEXT NOT NULL DEFAULT '',
-    top_floor        INTEGER NOT NULL DEFAULT 0,
-    base_floor       INTEGER NOT NULL DEFAULT 0,
-    total_area       REAL NOT NULL DEFAULT 0.0,
-    heat_type        TEXT NOT NULL DEFAULT '',
-    elevator_count   INTEGER NOT NULL DEFAULT 0,
-    units_60         INTEGER NOT NULL DEFAULT 0,
-    units_85         INTEGER NOT NULL DEFAULT 0,
-    units_135        INTEGER NOT NULL DEFAULT 0,
-    units_136_plus   INTEGER NOT NULL DEFAULT 0,
-    fetched_at       TEXT NOT NULL DEFAULT ''
+    complex_code            TEXT PRIMARY KEY,
+    apt_name                TEXT NOT NULL,
+    district_code           TEXT NOT NULL DEFAULT '',
+    sido                    TEXT NOT NULL DEFAULT '',
+    sigungu                 TEXT NOT NULL DEFAULT '',
+    eupmyeondong            TEXT NOT NULL DEFAULT '',
+    ri                      TEXT NOT NULL DEFAULT '',
+    road_address            TEXT NOT NULL DEFAULT '',
+    legal_address           TEXT NOT NULL DEFAULT '',
+    household_count         INTEGER NOT NULL DEFAULT 0,
+    building_count          INTEGER NOT NULL DEFAULT 0,
+    parking_count           INTEGER NOT NULL DEFAULT 0,
+    constructor             TEXT NOT NULL DEFAULT '',
+    developer               TEXT NOT NULL DEFAULT '',
+    approved_date           TEXT NOT NULL DEFAULT '',
+    top_floor               INTEGER NOT NULL DEFAULT 0,
+    base_floor              INTEGER NOT NULL DEFAULT 0,
+    total_area              REAL NOT NULL DEFAULT 0.0,
+    heat_type               TEXT NOT NULL DEFAULT '',
+    elevator_count          INTEGER NOT NULL DEFAULT 0,
+    units_60                INTEGER NOT NULL DEFAULT 0,
+    units_85                INTEGER NOT NULL DEFAULT 0,
+    units_135               INTEGER NOT NULL DEFAULT 0,
+    units_136_plus          INTEGER NOT NULL DEFAULT 0,
+    floor_area_ratio        REAL DEFAULT NULL,
+    building_coverage_ratio REAL DEFAULT NULL,
+    fetched_at              TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_apt_district  ON apartments(district_code);
 CREATE INDEX IF NOT EXISTS idx_apt_sido      ON apartments(sido);
 CREATE INDEX IF NOT EXISTS idx_apt_sigungu   ON apartments(sigungu);
 CREATE INDEX IF NOT EXISTS idx_apt_name      ON apartments(apt_name);
 """
+
+_MIGRATE_RATIO_COLS = [
+    "ALTER TABLE apartments ADD COLUMN floor_area_ratio REAL DEFAULT NULL",
+    "ALTER TABLE apartments ADD COLUMN building_coverage_ratio REAL DEFAULT NULL",
+]
 
 def _normalize_name(name: str) -> str:
     """아파트 이름 정규화: 공백 및 괄호 기호 제거, 내용 보존.
@@ -70,6 +77,7 @@ INSERT OR REPLACE INTO apartments (
     top_floor, base_floor, total_area,
     heat_type, elevator_count,
     units_60, units_85, units_135, units_136_plus,
+    floor_area_ratio, building_coverage_ratio,
     fetched_at
 ) VALUES (
     :complex_code, :apt_name, :district_code,
@@ -80,12 +88,14 @@ INSERT OR REPLACE INTO apartments (
     :top_floor, :base_floor, :total_area,
     :heat_type, :elevator_count,
     :units_60, :units_85, :units_135, :units_136_plus,
+    :floor_area_ratio, :building_coverage_ratio,
     :fetched_at
 )
 """
 
 
 def _row_to_master(row: dict) -> ApartmentMaster:
+    keys = row.keys()
     return ApartmentMaster(
         complex_code=row["complex_code"],
         apt_name=row["apt_name"],
@@ -111,6 +121,8 @@ def _row_to_master(row: dict) -> ApartmentMaster:
         units_85=row["units_85"],
         units_135=row["units_135"],
         units_136_plus=row["units_136_plus"],
+        floor_area_ratio=row["floor_area_ratio"] if "floor_area_ratio" in keys else None,
+        building_coverage_ratio=row["building_coverage_ratio"] if "building_coverage_ratio" in keys else None,
         fetched_at=row["fetched_at"],
     )
 
@@ -138,6 +150,11 @@ class ApartmentRepository:
     def _init_db(self):
         conn = self._conn()
         conn.executescript(_DDL)
+        for sql in _MIGRATE_RATIO_COLS:
+            try:
+                conn.execute(sql)
+            except sqlite3.OperationalError:
+                pass  # column already exists
         conn.commit()
 
     # ── CRUD ──────────────────────────────────────────────────────────────────
@@ -165,11 +182,13 @@ class ApartmentRepository:
                 "total_area":     master.total_area,
                 "heat_type":      master.heat_type,
                 "elevator_count": master.elevator_count,
-                "units_60":       master.units_60,
-                "units_85":       master.units_85,
-                "units_135":      master.units_135,
-                "units_136_plus": master.units_136_plus,
-                "fetched_at":     master.fetched_at,
+                "units_60":                master.units_60,
+                "units_85":                master.units_85,
+                "units_135":               master.units_135,
+                "units_136_plus":          master.units_136_plus,
+                "floor_area_ratio":        master.floor_area_ratio,
+                "building_coverage_ratio": master.building_coverage_ratio,
+                "fetched_at":              master.fetched_at,
             })
 
     def get(self, complex_code: str) -> Optional[ApartmentMaster]:
