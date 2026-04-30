@@ -19,6 +19,10 @@ def make_candidate(**kwargs):
         "reconstruction_potential": "MEDIUM",
         "gtx_benefit": False,
         "price": 800_000_000,
+        "poi_stations": None,
+        "poi_academies_count": None,
+        "floor_area_ratio": None,
+        "build_year": None,
     }
     base.update(kwargs)
     return base
@@ -157,3 +161,66 @@ class TestScoringEngine:
         scored = engine.score_all([candidate])
         # commute_minutes=15 → HIGH(100)
         assert scored[0]["scores"]["commute"] == 100
+
+
+class TestScoringEnginePOI:
+    """POI 데이터 반영 스코어링 테스트."""
+
+    POI_WEIGHTS = {
+        "commute": 25, "liquidity": 25, "price_potential": 25,
+        "living_convenience": 17, "school": 8,
+    }
+    POI_CONFIG = {
+        "commute_thresholds": [20, 35],
+        "household_thresholds": [300, 500],
+        "school_keywords": ["학원가", "명문"],
+        "reconstruction_score_map": {"HIGH": 100, "MEDIUM": 60, "LOW": 20, "COMPLETED": 50, "UNKNOWN": 50},
+        "data_absent_neutral": 50,
+        "poi_close_station_walk_minutes": 5,
+        "poi_academy_high_threshold": 30,
+        "poi_academy_medium_threshold": 15,
+        "reconstruction_age_years": 30,
+        "reconstruction_far_max": 200,
+    }
+
+    def test_living_convenience_high_with_two_close_stations(self):
+        from modules.real_estate.scoring import ScoringEngine
+        c = make_candidate(
+            nearest_stations=None,
+            poi_stations=[{"name": "강남역", "walk_minutes": 4}, {"name": "역삼역", "walk_minutes": 3}],
+        )
+        engine = ScoringEngine(self.POI_WEIGHTS, self.POI_CONFIG)
+        result = engine.score_all([c])[0]
+        assert result["scores"]["living_convenience"] == 100
+
+    def test_school_score_high_with_many_academies(self):
+        from modules.real_estate.scoring import ScoringEngine
+        c = make_candidate(
+            school_zone_notes=None,
+            poi_academies_count=35,
+        )
+        engine = ScoringEngine(self.POI_WEIGHTS, self.POI_CONFIG)
+        result = engine.score_all([c])[0]
+        assert result["scores"]["school"] == 100
+
+    def test_reconstruction_high_with_old_low_far(self):
+        from modules.real_estate.scoring import ScoringEngine
+        c = make_candidate(
+            reconstruction_potential="UNKNOWN",
+            floor_area_ratio=185.0,
+            build_year=1992,
+        )
+        engine = ScoringEngine(self.POI_WEIGHTS, self.POI_CONFIG)
+        result = engine.score_all([c])[0]
+        assert result["scores"]["price_potential"] == 100
+
+    def test_reconstruction_low_with_new_high_far(self):
+        from modules.real_estate.scoring import ScoringEngine
+        c = make_candidate(
+            reconstruction_potential="UNKNOWN",
+            floor_area_ratio=280.0,
+            build_year=2015,
+        )
+        engine = ScoringEngine(self.POI_WEIGHTS, self.POI_CONFIG)
+        result = engine.score_all([c])[0]
+        assert result["scores"]["price_potential"] == 20
