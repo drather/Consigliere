@@ -1,10 +1,10 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-27
+**Last Updated:** 2026-04-30
 **Current Active Feature:** 없음 (대기 중)
 
 ## 현재 포커스
 - **Branch:** `master`
-- **Status:** ✅ feature/address-mapping 머지 완료 (2026-04-27)
+- **Status:** ✅ feature/apt-ratios 롤백 + 컨텍스트 업데이트 완료 (2026-04-30)
 
 ## 선행 브랜치 (미머지)
 - **Branch:** `feature/real-estate-sqlite-redesign`

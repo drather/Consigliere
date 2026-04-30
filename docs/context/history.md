@@ -1,5 +1,16 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-27
+**Last Updated:** 2026-04-30
+
+## 2026-04-27~30: 주소 기반 2차 매핑 + 용적률/건폐율 탐색 (롤백)
+
+- **Feature:** `feature/address-mapping` → master 머지 완료 (2026-04-27)
+- **2차 매핑 결과:** `map_by_address()` 구현 — apartments.road_address 기준 207건 추가 매핑 → 누적 2,908건/6,037건 (48.2%)
+- **핵심 학습 (용적률/건폐율 탐색 실패):**
+  - 목표: apt_master 전체에 용적률·건폐율 매핑
+  - 가정: `getAphusBassInfoV4`(공동주택 기본정보 API)에 `vlRat`/`bcRat` 필드 있음 → **오판**
+  - 실제: `vlRat`/`bcRat`는 건축물대장 API(`getBrRecapTitleInfo`)에서만 제공 — 이미 building_master에 저장됨
+  - apt_master → building_master 매핑 48.2%가 한계 (명칭 불일치 구조적 원인)
+  - feature/apt-ratios 브랜치: 구현 후 revert, master 반영 시 no-op
 
 ## 2026-04-23~25: PNU 기반 Building Master DB 구축
 
