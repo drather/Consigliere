@@ -8,6 +8,7 @@ bok_codes:
 geocode_cache_path: "data/geocode_cache.db"
 real_estate_db_path: "data/real_estate.db"
 commute_cache_db_path: "data/commute_cache.db"
+poi_cache_ttl_days: 30
 
 commute:
   destination: "삼성역"
@@ -30,6 +31,7 @@ report:
   recent_days: 7
   top_n: 5               # was 10
   budget_band_ratio: 0.1  # added: price ±10% filter ratio
+  report_storage_path: "data/real_estate_reports"
 
 scoring:
   commute_thresholds: [20, 35]      # 분 기준: HIGH(≤20), MEDIUM(≤35), LOW(>35)
@@ -46,6 +48,11 @@ scoring:
     COMPLETED: 50
     UNKNOWN: 50
   data_absent_neutral: 50
+  poi_close_station_walk_minutes: 5
+  poi_academy_high_threshold: 30
+  poi_academy_medium_threshold: 15
+  reconstruction_age_years: 30
+  reconstruction_far_max: 200
 
 districts:
   # ── 서울특별시 (25개 구) ──────────────────────
