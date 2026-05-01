@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 from core.llm import BaseLLMClient
 from core.prompt_loader import PromptLoader
 from core.logger import get_logger
+from .config import RealEstateConfig
 from .poi_collector import PoiCollector, PoiData
 from .trend_analyzer import TrendAnalyzer, TrendData
 from .scoring import ScoringEngine
@@ -25,11 +26,12 @@ from .report_repository import ReportRepository, ProfessionalReport
 
 logger = get_logger(__name__)
 
-_DSR_RATE = 0.40
-_LOAN_TERM_MONTHS = 360
-
-
-def _calc_budget(persona_data: Dict, macro_summary: str) -> int:
+def _calc_budget(
+    persona_data: Dict,
+    macro_summary: str,
+    dsr_rate: float = 0.40,
+    loan_term_months: int = 360,
+) -> int:
     import re
     user = persona_data.get("user", {})
     assets = user.get("assets", {}).get("total", 0)
@@ -39,12 +41,12 @@ def _calc_budget(persona_data: Dict, macro_summary: str) -> int:
     annual_rate = float(rate_match.group(1)) / 100 if rate_match else 0.045
     monthly_rate = annual_rate / 12
     monthly_income = annual_income / 12
-    max_monthly_payment = monthly_income * _DSR_RATE
+    max_monthly_payment = monthly_income * dsr_rate
 
     if monthly_rate > 0:
-        loan_limit = max_monthly_payment * (1 - (1 + monthly_rate) ** -_LOAN_TERM_MONTHS) / monthly_rate
+        loan_limit = max_monthly_payment * (1 - (1 + monthly_rate) ** -loan_term_months) / monthly_rate
     else:
-        loan_limit = max_monthly_payment * _LOAN_TERM_MONTHS
+        loan_limit = max_monthly_payment * loan_term_months
 
     return int(assets + loan_limit)
 
@@ -280,7 +282,10 @@ class ReportOrchestrator:
         scoring_config: Dict[str, Any],
         macro_summary: str = "",
     ) -> ProfessionalReport:
-        budget_available = _calc_budget(persona_data, macro_summary)
+        financial_cfg = RealEstateConfig().get("financial_defaults", {})
+        dsr_rate = financial_cfg.get("dsr_rate", 0.40)
+        loan_term_months = int(financial_cfg.get("loan_term_years", 30)) * 12
+        budget_available = _calc_budget(persona_data, macro_summary, dsr_rate=dsr_rate, loan_term_months=loan_term_months)
         logger.info(f"[ReportOrchestrator] 구매 가능 예산: {budget_available / 100_000_000:.1f}억")
 
         enriched = _enrich_with_poi(candidates, self._poi_collector)

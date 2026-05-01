@@ -26,6 +26,7 @@ financial_defaults:
   tax_rate_multiplier: 0.03
   interest_rate: 0.045
   loan_term_years: 30
+  dsr_rate: 0.40
 
 report:
   recent_days: 7
@@ -53,6 +54,10 @@ scoring:
   poi_academy_medium_threshold: 15
   reconstruction_age_years: 30
   reconstruction_far_max: 200
+  area_tolerance_sqm: 5.0
+
+poi:
+  walk_speed_mpm: 67
 
 districts:
   # ── 서울특별시 (25개 구) ──────────────────────

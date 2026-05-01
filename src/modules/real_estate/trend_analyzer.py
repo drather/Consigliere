@@ -10,8 +10,6 @@ from core.logger import get_logger
 
 logger = get_logger(__name__)
 
-_AREA_TOLERANCE = 5.0  # 전용면적 ±5㎡ 허용
-
 
 @dataclass
 class TrendData:
@@ -36,6 +34,11 @@ class TrendData:
 class TrendAnalyzer:
     def __init__(self, db_path: str):
         self._db_path = db_path
+        try:
+            from .config import RealEstateConfig
+            self._area_tolerance: float = RealEstateConfig().get("scoring", {}).get("area_tolerance_sqm", 5.0)
+        except Exception:
+            self._area_tolerance = 5.0
 
     def get_trend(
         self,
@@ -45,8 +48,8 @@ class TrendAnalyzer:
     ) -> Optional[TrendData]:
         since = (date.today() - timedelta(days=30 * months)).strftime("%Y-%m-%d")
         mid = (date.today() - timedelta(days=30 * (months // 2))).strftime("%Y-%m-%d")
-        area_min = area_sqm - _AREA_TOLERANCE
-        area_max = area_sqm + _AREA_TOLERANCE
+        area_min = area_sqm - self._area_tolerance
+        area_max = area_sqm + self._area_tolerance
 
         with sqlite3.connect(self._db_path) as conn:
             rows = conn.execute(

@@ -18,7 +18,6 @@ from core.logger import get_logger
 logger = get_logger(__name__)
 
 _KAKAO_KEYWORD_URL = "https://dapi.kakao.com/v2/local/search/keyword.json"
-_WALK_SPEED_MPM = 67  # 보행 속도 m/min
 _CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yaml")
 
 _DDL = """
@@ -42,6 +41,15 @@ def _load_ttl_days() -> int:
         return int(cfg.get("poi_cache_ttl_days", 30))
     except Exception:
         return 30
+
+
+def _load_walk_speed_mpm() -> int:
+    try:
+        with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        return int(cfg.get("poi", {}).get("walk_speed_mpm", 67))
+    except Exception:
+        return 67
 
 
 @dataclass
@@ -74,6 +82,7 @@ class PoiCollector:
         self._api_key = api_key
         self._db_path = db_path
         self._ttl_days = ttl_days if ttl_days is not None else _load_ttl_days()
+        self._walk_speed_mpm = _load_walk_speed_mpm()
         self._init_db()
 
     def _init_db(self) -> None:
@@ -118,7 +127,7 @@ class PoiCollector:
         result = []
         for d in docs:
             dist_m = int(d.get("distance", 0))
-            walk_min = round(dist_m / _WALK_SPEED_MPM)
+            walk_min = round(dist_m / self._walk_speed_mpm)
             result.append({"name": d.get("place_name", ""), "walk_minutes": walk_min})
         return result
 

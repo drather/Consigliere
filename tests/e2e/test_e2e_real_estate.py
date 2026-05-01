@@ -343,15 +343,15 @@ def test_insight_policy_search_button(page, base_url):
 
 @pytest.mark.e2e
 def test_report_archive_renders(page, base_url):
-    """SCN-17: Report Archive 탭 클릭 시 '인사이트 리포트' 서브헤더가 표시된다."""
+    """SCN-17: Report Archive 탭 클릭 시 '부동산 전략 리포트 아카이브' 서브헤더가 표시된다."""
     go_to_real_estate(page, base_url)
     click_real_estate_tab(page, "Report Archive", wait_ms=1_500)
 
     assert_no_streamlit_exception(page, "report_archive_tab")
 
     main_text = get_main_text(page)
-    assert "인사이트 리포트" in main_text, \
-        f"'인사이트 리포트' 텍스트 없음. 텍스트(앞 300자):\n{main_text[:300]}"
+    assert "부동산 전략 리포트" in main_text, \
+        f"'부동산 전략 리포트' 텍스트 없음. 텍스트(앞 300자):\n{main_text[:300]}"
 
 
 @pytest.mark.e2e
@@ -362,7 +362,7 @@ def test_report_archive_list_or_warning(page, base_url):
 
     main_text = get_main_text(page)
     has_content = (
-        "저장된 인사이트 리포트가 없습니다" in main_text
+        "저장된 전문 리포트가 없습니다" in main_text
         or "날짜" in main_text
         or "검증 점수" in main_text
         or "리포트 생성" in main_text
