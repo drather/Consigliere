@@ -125,14 +125,58 @@ enriched = _enrich_with_trend(enriched, self._trend_analyzer)
 
 ### Layer 3 — 출퇴근 Enrichment (CommuteService 연동)
 
-**파일:** `src/modules/real_estate/report_orchestrator.py`
+**파일:** `src/modules/real_estate/commute/commute_service.py`, `src/modules/real_estate/report_orchestrator.py`
 
-새 함수 `_enrich_with_commute()` 추가:
+**설계 원칙:** `persona.yaml`의 `commute.workplace_station`이 단일 진실 공급원. `config.yaml`의 `commute.destination`은 fallback 기본값. 사용자가 persona를 수정하면 다음 리포트 생성 시 자동 반영.
+
+#### commute_service.py 수정
+
+`CommuteService.get()`에 optional destination override 파라미터 추가:
 
 ```python
+def get(
+    self,
+    origin_key: str,
+    road_address: str,
+    apt_name: str,
+    district_code: str,
+    mode: str,
+    dest_override: Optional[str] = None,
+    dest_lat_override: Optional[float] = None,
+    dest_lng_override: Optional[float] = None,
+) -> Optional[CommuteResult]:
+    dest = dest_override or self._dest
+    dest_lat = dest_lat_override or self._dest_lat
+    dest_lng = dest_lng_override or self._dest_lng
+
+    cached = self._repo.get(origin_key, dest, mode)
+    if cached is not None:
+        return cached
+    # ... 이하 기존 로직, self._dest 대신 dest/dest_lat/dest_lng 사용
+```
+
+#### report_orchestrator.py 수정
+
+orchestrator가 persona에서 workplace_station을 읽고, GeocoderService로 역 좌표를 조회한 뒤 `_enrich_with_commute()`에 전달:
+
+```python
+def _resolve_workplace_coords(persona_data: Dict, geocoder) -> tuple:
+    """persona의 workplace_station을 lat/lng로 변환. 실패 시 (None, None, None)."""
+    station = persona_data.get("commute", {}).get("workplace_station", "")
+    if not station:
+        return None, None, None
+    coords = geocoder.geocode(apt_name=station, district_code="", address=station)
+    if coords:
+        return station, coords[0], coords[1]
+    return None, None, None
+
+
 def _enrich_with_commute(
     candidates: List[Dict],
-    commute_svc,          # CommuteService 인스턴스 (destination은 초기화 시 설정)
+    commute_svc,
+    dest: Optional[str],
+    dest_lat: Optional[float],
+    dest_lng: Optional[float],
 ) -> List[Dict]:
     enriched = []
     for c in candidates:
@@ -149,6 +193,9 @@ def _enrich_with_commute(
                     apt_name=apt_name,
                     district_code=district_code,
                     mode="transit",
+                    dest_override=dest,
+                    dest_lat_override=dest_lat,
+                    dest_lng_override=dest_lng,
                 )
                 if cr:
                     result["commute_transit_minutes"] = cr.duration_minutes
@@ -158,7 +205,15 @@ def _enrich_with_commute(
     return enriched
 ```
 
-`generate()` 메서드 시그니처에 `commute_svc` 주입. 엔드포인트(`real_estate.py`)에서 `CommuteService` 생성 후 전달.
+`generate()` 호출부:
+```python
+dest, dest_lat, dest_lng = _resolve_workplace_coords(persona_data, self._geocoder)
+enriched = _enrich_with_commute(enriched, self._commute_svc, dest, dest_lat, dest_lng)
+```
+
+`ReportOrchestrator.__init__`에 `geocoder` 파라미터 추가.
+
+**목적지 변경 방법:** `persona.yaml`의 `commute.workplace_station` 값만 수정하면 다음 리포트 생성 시 자동 반영. commute_cache는 `(origin_key, destination)` 복합키로 저장되므로 목적지가 바뀌면 자연스럽게 새 캐시 생성.
 
 ---
 
@@ -235,11 +290,13 @@ for s in elem + middle:
 | 파일 | 변경 내용 |
 |------|-----------|
 | `src/modules/real_estate/apt_master_repository.py` | `search()` 파라미터 추가, apartments JOIN, AptMasterEntry 필드 추가 |
-| `src/modules/real_estate/report_orchestrator.py` | `_enrich_with_building()` 추가, `_enrich_with_commute()` 추가, `_enrich_with_trend()` 면적 다중시도, `_build_markdown()` 개선, `ReportOrchestrator.__init__` 파라미터 추가 |
+| `src/modules/real_estate/commute/commute_service.py` | `get()`에 `dest_override`, `dest_lat_override`, `dest_lng_override` 파라미터 추가 |
+| `src/modules/real_estate/report_orchestrator.py` | `_enrich_with_building()` 추가, `_resolve_workplace_coords()` 추가, `_enrich_with_commute()` 추가, `_enrich_with_trend()` 면적 다중시도, `_build_markdown()` 개선, `ReportOrchestrator.__init__`에 `geocoder` 파라미터 추가 |
 | `src/modules/real_estate/poi_collector.py` | 학교 쿼리 분리 (초등/중학 별도 호출 + 중복 제거) |
 | `src/api/routers/real_estate.py` | persona 필터 파라미터 전달, `CommuteService` 생성·주입, `candidate[:100]` |
 | `tests/unit/real_estate/test_apt_master_repository.py` | `search()` 신규 파라미터 테스트 |
-| `tests/unit/real_estate/test_report_orchestrator.py` | `_enrich_with_building()`, `_enrich_with_commute()`, 다중 면적 trend 테스트 |
+| `tests/unit/real_estate/test_commute_service.py` | `get()` destination override 테스트 |
+| `tests/unit/real_estate/test_report_orchestrator.py` | `_enrich_with_building()`, `_resolve_workplace_coords()`, `_enrich_with_commute()`, 다중 면적 trend 테스트 |
 
 ---
 
