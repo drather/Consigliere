@@ -372,3 +372,42 @@ class DashboardClient:
         except requests.exceptions.RequestException as e:
             print(f"Error running workflow {workflow_id}: {e}")
             return {"error": str(e)}
+
+    @staticmethod
+    def list_professional_reports() -> list:
+        """전문 리포트 날짜 목록 반환."""
+        try:
+            resp = requests.get(f"{API_BASE_URL}/dashboard/real-estate/professional-reports", timeout=10)
+            if resp.status_code == 200:
+                return resp.json().get("dates", [])
+            return []
+        except Exception:
+            return []
+
+    @staticmethod
+    def get_professional_report(date_str: str) -> dict:
+        """특정 날짜 전문 리포트 반환."""
+        try:
+            resp = requests.get(
+                f"{API_BASE_URL}/dashboard/real-estate/professional-reports/{date_str}",
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return {}
+        except Exception:
+            return {}
+
+    @staticmethod
+    def trigger_generate_professional_report() -> dict:
+        """전문 리포트 즉시 생성 트리거."""
+        try:
+            resp = requests.post(
+                f"{API_BASE_URL}/jobs/professional-report/generate",
+                timeout=300,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return {"error": f"HTTP {resp.status_code}"}
+        except Exception as e:
+            return {"error": str(e)}

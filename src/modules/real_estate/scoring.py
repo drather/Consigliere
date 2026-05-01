@@ -53,6 +53,11 @@ class ScoringEngine:
         self.recon_map = config.get("reconstruction_score_map", {
             "HIGH": 100, "MEDIUM": 60, "LOW": 20, "COMPLETED": 50, "UNKNOWN": 50
         })
+        self.poi_close_station_min = config.get("poi_close_station_walk_minutes", 5)
+        self.poi_academy_high = config.get("poi_academy_high_threshold", 30)
+        self.poi_academy_mid = config.get("poi_academy_medium_threshold", 15)
+        self.recon_age_years = config.get("reconstruction_age_years", 30)
+        self.recon_far_max = config.get("reconstruction_far_max", 200)
 
     # ── 기준별 점수 계산 ──────────────────────────────────────────────
 
@@ -71,6 +76,15 @@ class ScoringEngine:
         return _household_score(households, self.household_thresholds)
 
     def _score_school(self, c: Dict) -> int:
+        """POI 학원 수 우선, 없으면 school_zone_notes fallback."""
+        poi_academies = c.get("poi_academies_count")
+        if poi_academies is not None:
+            if poi_academies >= self.poi_academy_high:
+                return _HIGH
+            if poi_academies >= self.poi_academy_mid:
+                return _MEDIUM
+            return _LOW
+
         notes = c.get("school_zone_notes")
         if notes is None:
             return self.neutral
@@ -82,7 +96,16 @@ class ScoringEngine:
         return _LOW
 
     def _score_living_convenience(self, c: Dict) -> int:
-        """역 수 + 도보 5분 이내 역 존재 여부로 판단."""
+        """POI 역 데이터 우선, 없으면 nearest_stations fallback."""
+        poi_stations = c.get("poi_stations")
+        if poi_stations is not None:
+            close = [s for s in poi_stations if s.get("walk_minutes", 99) <= self.poi_close_station_min]
+            if len(close) >= 2:
+                return _HIGH
+            if close:
+                return _MEDIUM
+            return _LOW
+
         stations = c.get("nearest_stations")
         if stations is None:
             return self.neutral
@@ -96,9 +119,26 @@ class ScoringEngine:
         return _LOW
 
     def _score_price_potential(self, c: Dict, horea_scores: Optional[Dict] = None) -> int:
-        """재건축 잠재력 기본 점수 + horea_validator LLM 점수 부스트."""
-        potential = c.get("reconstruction_potential", "UNKNOWN")
-        base = self.recon_map.get(potential, self.neutral)
+        """용적률+건축연도 기반 정량화 우선, 없으면 reconstruction_potential fallback."""
+        import datetime as _dt
+
+        far = c.get("floor_area_ratio")
+        build_year = c.get("build_year")
+
+        if far is not None and build_year is not None:
+            current_year = _dt.date.today().year
+            age = current_year - int(build_year)
+            is_old = age >= self.recon_age_years
+            is_low_far = float(far) <= self.recon_far_max
+            if is_old and is_low_far:
+                base = _HIGH
+            elif is_old or is_low_far:
+                base = _MEDIUM
+            else:
+                base = _LOW
+        else:
+            potential = c.get("reconstruction_potential", "UNKNOWN")
+            base = self.recon_map.get(potential, self.neutral)
 
         if c.get("gtx_benefit"):
             base = min(100, base + 30)

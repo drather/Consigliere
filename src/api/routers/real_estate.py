@@ -532,3 +532,114 @@ def collect_building_master(
     except Exception as e:
         logger.error(f"[BuildingMaster] collect error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── 전문 컨설턴트 리포트 ──────────────────────────────────────────────
+
+def _get_report_repo():
+    """ReportRepository 인스턴스 반환 (config에서 경로 로드)."""
+    from modules.real_estate.config import RealEstateConfig
+    from modules.real_estate.report_repository import ReportRepository
+    cfg = RealEstateConfig()
+    storage_path = cfg.get("report", {}).get("report_storage_path", "data/real_estate_reports")
+    return ReportRepository(storage_path=storage_path)
+
+
+@router.get("/dashboard/real-estate/professional-reports")
+def list_professional_reports():
+    """저장된 전문 리포트 날짜 목록 반환."""
+    try:
+        repo = _get_report_repo()
+        return {"dates": repo.list_dates()}
+    except Exception as e:
+        logger.error(f"[API] list_professional_reports 오류: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/dashboard/real-estate/professional-reports/{date_str}")
+def get_professional_report(date_str: str):
+    """특정 날짜 전문 리포트 반환."""
+    try:
+        repo = _get_report_repo()
+        report = repo.load(date_str)
+        if report is None:
+            raise HTTPException(status_code=404, detail=f"리포트 없음: {date_str}")
+        return {
+            "date": report.date,
+            "budget_available": report.budget_available,
+            "macro_summary": report.macro_summary,
+            "candidates_summary": report.candidates_summary,
+            "location_analyses": report.location_analyses,
+            "school_analyses": report.school_analyses,
+            "strategy": report.strategy,
+            "markdown": report.markdown,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[API] get_professional_report 오류: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/jobs/professional-report/generate")
+def generate_professional_report():
+    """오늘 날짜 전문 리포트 즉시 생성 (대시보드 수동 실행용)."""
+    import os
+    from datetime import date
+    from modules.real_estate.config import RealEstateConfig
+    from modules.real_estate.report_orchestrator import ReportOrchestrator
+    from modules.real_estate.report_repository import ReportRepository
+    from modules.real_estate.poi_collector import PoiCollector
+    from modules.real_estate.trend_analyzer import TrendAnalyzer
+    from modules.real_estate.persona_manager import PersonaManager
+    from modules.real_estate.apt_master_repository import AptMasterRepository
+    from modules.macro.service import MacroCollectionService
+    from core.llm_pipeline import build_llm_pipeline
+    from core.prompt_loader import PromptLoader
+    from core.storage import get_storage_provider
+
+    try:
+        cfg = RealEstateConfig()
+        re_db = cfg.get("real_estate_db_path", "data/real_estate.db")
+        report_path = cfg.get("report", {}).get("report_storage_path", "data/real_estate_reports")
+        kakao_key = os.getenv("KAKAO_API_KEY", "")
+
+        persona = PersonaManager().load()
+        scoring_cfg = cfg.get("scoring", {})
+
+        apt_repo = AptMasterRepository(db_path=re_db)
+        interest_areas = persona.get("user", {}).get("interest_areas", [])
+        district_codes = cfg.get_district_codes_by_names(interest_areas) if hasattr(cfg, "get_district_codes_by_names") else []
+
+        candidates = apt_repo.list_by_district_codes(district_codes) if district_codes else apt_repo.list_all()
+        candidate_dicts = [c.__dict__ if hasattr(c, "__dict__") else dict(c) for c in candidates[:50]]
+
+        macro_db = cfg.get("macro_db_path", "data/macro.db")
+        macro_svc = MacroCollectionService(db_path=macro_db)
+        macro_latest = macro_svc.get_latest(domain="real_estate")
+        macro_lines = [f"{m.get('name', '')}: {m.get('value', '')}{m.get('unit', '')}" for m in (macro_latest or [])]
+        macro_summary = " | ".join(macro_lines[:4])
+
+        llm = build_llm_pipeline()
+        root_storage = get_storage_provider("local", root_path=".")
+        prompt_loader = PromptLoader(root_storage, base_dir="src/modules/real_estate/prompts")
+
+        orchestrator = ReportOrchestrator(
+            llm=llm,
+            prompt_loader=prompt_loader,
+            poi_collector=PoiCollector(api_key=kakao_key, db_path=re_db),
+            trend_analyzer=TrendAnalyzer(db_path=re_db),
+            report_repository=ReportRepository(storage_path=report_path),
+        )
+
+        report = orchestrator.generate(
+            target_date=date.today(),
+            candidates=candidate_dicts,
+            persona_data=persona,
+            scoring_config=scoring_cfg,
+            macro_summary=macro_summary,
+        )
+        return {"status": "success", "date": report.date, "candidates_count": len(report.candidates_summary)}
+    except Exception as e:
+        logger.error(f"[API] generate_professional_report 오류: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
