@@ -122,10 +122,11 @@ def _resolve_workplace_coords(persona_data: Dict, geocoder) -> tuple:
         return None, None, None
     try:
         coords = geocoder.geocode(apt_name=station, district_code="", address=station)
-        if coords:
-            return station, coords[0], coords[1]
     except Exception as e:
         logger.warning(f"[Orchestrator] workplace_station 좌표 변환 실패 ({station}): {e}")
+        return None, None, None
+    if coords:
+        return station, coords[0], coords[1]
     return None, None, None
 
 
@@ -393,6 +394,8 @@ class ReportOrchestrator:
         enriched = _enrich_with_building(enriched, self._re_db_path)
         if self._commute_svc and self._geocoder:
             dest, dest_lat, dest_lng = _resolve_workplace_coords(persona_data, self._geocoder)
+            if dest is None and persona_data.get("commute", {}).get("workplace_station"):
+                logger.warning("[ReportOrchestrator] workplace_station 좌표 조회 실패 — config 기본 목적지로 대체됨")
             enriched = _enrich_with_commute(enriched, self._commute_svc, dest, dest_lat, dest_lng)
         enriched = _enrich_with_trend(enriched, self._trend_analyzer)
 
