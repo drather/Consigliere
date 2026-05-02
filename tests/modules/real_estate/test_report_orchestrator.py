@@ -118,6 +118,7 @@ def orchestrator(mock_llm, mock_prompt_loader, mock_poi_collector, mock_trend_an
         poi_collector=mock_poi_collector,
         trend_analyzer=mock_trend_analyzer,
         report_repository=report_repo,
+        re_db_path=str(tmp_path / "re.db"),  # ← 추가
     )
 
 
@@ -157,3 +158,62 @@ class TestReportOrchestrator:
             macro_summary="",
         )
         assert isinstance(report, ProfessionalReport)
+
+
+import sqlite3 as _sqlite3
+from modules.real_estate.report_orchestrator import _enrich_with_building
+
+
+def _setup_building_db(db_path: str):
+    """테스트용 building_master 테이블 생성."""
+    with _sqlite3.connect(db_path) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS building_master (
+                mgm_pk TEXT PRIMARY KEY,
+                building_name TEXT,
+                sigungu_code TEXT,
+                floor_area_ratio REAL,
+                building_coverage_ratio REAL,
+                completion_year INTEGER,
+                collected_at TEXT
+            )
+        """)
+        conn.execute(
+            "INSERT INTO building_master VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("BM001", "래미안테스트", "11650", 247.3, 21.8, 2002, "2026-01-01"),
+        )
+
+
+class TestEnrichWithBuilding:
+    def test_pnu_match_fills_far_bcr_build_year(self, tmp_path):
+        """pnu가 있고 building_master에 매칭되면 FAR·BCR·build_year가 채워진다."""
+        db_path = str(tmp_path / "re.db")
+        _setup_building_db(db_path)
+        candidates = [{"apt_name": "래미안", "pnu": "BM001"}]
+
+        result = _enrich_with_building(candidates, db_path)
+
+        assert result[0]["floor_area_ratio"] == pytest.approx(247.3)
+        assert result[0]["building_coverage_ratio"] == pytest.approx(21.8)
+        assert result[0]["build_year"] == 2002
+
+    def test_no_pnu_uses_approved_date_fallback(self, tmp_path):
+        """pnu 없고 approved_date가 있으면 앞 4자리로 build_year 파생."""
+        db_path = str(tmp_path / "re.db")
+        _setup_building_db(db_path)
+        candidates = [{"apt_name": "기타단지", "pnu": None, "approved_date": "20050315"}]
+
+        result = _enrich_with_building(candidates, db_path)
+
+        assert result[0]["build_year"] == 2005
+        assert result[0].get("floor_area_ratio") is None
+
+    def test_no_match_returns_candidate_unchanged(self, tmp_path):
+        """pnu가 있지만 building_master에 없으면 원본 그대로 반환."""
+        db_path = str(tmp_path / "re.db")
+        _setup_building_db(db_path)
+        candidates = [{"apt_name": "미매핑단지", "pnu": "UNKNOWN_PNU"}]
+
+        result = _enrich_with_building(candidates, db_path)
+
+        assert result[0].get("floor_area_ratio") is None

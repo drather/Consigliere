@@ -70,6 +70,48 @@ def _enrich_with_poi(candidates: List[Dict], poi_collector: PoiCollector) -> Lis
     return enriched
 
 
+def _enrich_with_building(candidates: List[Dict], db_path: str) -> List[Dict]:
+    """pnu → building_master JOIN으로 용적률·건폐율·준공연도를 채운다.
+    pnu 없으면 approved_date 앞 4자리에서 build_year를 파생한다."""
+    import sqlite3 as _sqlite3
+    bm_map: Dict[str, Dict] = {}
+    if db_path:
+        pnu_list = [c.get("pnu") for c in candidates if c.get("pnu")]
+        if pnu_list:
+            try:
+                placeholders = ",".join("?" * len(pnu_list))
+                with _sqlite3.connect(db_path) as conn:
+                    rows = conn.execute(
+                        f"SELECT mgm_pk, floor_area_ratio, building_coverage_ratio, completion_year "
+                        f"FROM building_master WHERE mgm_pk IN ({placeholders})",
+                        pnu_list,
+                    ).fetchall()
+                bm_map = {
+                    r[0]: {
+                        "floor_area_ratio": r[1],
+                        "building_coverage_ratio": r[2],
+                        "build_year": r[3],
+                    }
+                    for r in rows
+                }
+            except Exception as e:
+                logger.warning(f"[Orchestrator] building_master 조회 실패: {e}")
+
+    enriched = []
+    for c in candidates:
+        result = dict(c)
+        pnu = c.get("pnu")
+        if pnu and pnu in bm_map:
+            result.update(bm_map[pnu])
+        if not result.get("build_year") and result.get("approved_date"):
+            try:
+                result["build_year"] = int(str(result["approved_date"])[:4])
+            except (ValueError, TypeError):
+                pass
+        enriched.append(result)
+    return enriched
+
+
 def _enrich_with_trend(candidates: List[Dict], trend_analyzer: TrendAnalyzer) -> List[Dict]:
     enriched = []
     for c in candidates:
@@ -267,12 +309,18 @@ class ReportOrchestrator:
         poi_collector: PoiCollector,
         trend_analyzer: TrendAnalyzer,
         report_repository: ReportRepository,
+        re_db_path: str = "",        # building_master 조회용
+        commute_svc=None,            # Task 3에서 사용, 미리 추가
+        geocoder=None,               # Task 3에서 사용, 미리 추가
     ):
         self._llm = llm
         self._prompt_loader = prompt_loader
         self._poi_collector = poi_collector
         self._trend_analyzer = trend_analyzer
         self._repo = report_repository
+        self._re_db_path = re_db_path
+        self._commute_svc = commute_svc
+        self._geocoder = geocoder
 
     def generate(
         self,
@@ -289,6 +337,7 @@ class ReportOrchestrator:
         logger.info(f"[ReportOrchestrator] 구매 가능 예산: {budget_available / 100_000_000:.1f}억")
 
         enriched = _enrich_with_poi(candidates, self._poi_collector)
+        enriched = _enrich_with_building(enriched, self._re_db_path)   # ← 신규
         enriched = _enrich_with_trend(enriched, self._trend_analyzer)
 
         weights = persona_data.get("priority_weights", {})
