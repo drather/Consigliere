@@ -180,12 +180,11 @@ def _enrich_with_trend(
     for c in candidates:
         result = dict(c)
         apt_master_id = c.get("id") or c.get("apt_master_id")
-        area_sqm = c.get("exclusive_area") or c.get("area_sqm")
 
         if apt_master_id:
             try:
                 trend = None
-                areas_to_try = preferred_areas if preferred_areas else ([area_sqm] if area_sqm else [84.0])
+                areas_to_try = preferred_areas
                 for area in areas_to_try:
                     trend = trend_analyzer.get_trend(apt_master_id=apt_master_id, area_sqm=area)
                     if trend:
