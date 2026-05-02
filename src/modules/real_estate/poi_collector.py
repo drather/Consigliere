@@ -101,8 +101,16 @@ class PoiCollector:
 
     def _fetch_and_cache(self, complex_code: str, lat: float, lng: float) -> PoiData:
         stations = self._search("지하철역", lat, lng, self.STATION_RADIUS, size=5)
-        schools = self._search("초등학교 중학교", lat, lng, self.SCHOOL_RADIUS, size=15)
-        academies = self._search("학원", lat, lng, self.ACADEMY_RADIUS, size=45)
+        elem = self._search("초등학교", lat, lng, self.SCHOOL_RADIUS, size=15)
+        middle = self._search("중학교", lat, lng, self.SCHOOL_RADIUS, size=15)
+        seen: set = set()
+        schools: list = []
+        for doc in elem + middle:
+            key = doc.get("id") or doc.get("place_name", "")
+            if key not in seen:
+                seen.add(key)
+                schools.append(doc)
+        academies = self._search("학원", lat, lng, self.ACADEMY_RADIUS, size=15)
         marts = self._search("대형마트 백화점", lat, lng, self.MART_RADIUS, size=15)
 
         poi = PoiData(

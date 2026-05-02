@@ -40,13 +40,16 @@ def collector(db_path):
 class TestPoiCollectorCollect:
     def test_collect_returns_poi_data(self, collector):
         mock_stations = [_make_station("강남역", 350), _make_station("역삼역", 620)]
-        mock_schools = [_make_school("역삼초등학교", 450), _make_school("언주중학교", 820)]
-        mock_academies = [_make_place(f"학원{i}", 500) for i in range(25)]
+        mock_elem = [_make_school("역삼초등학교", 450)]
+        mock_middle = [_make_school("언주중학교", 820)]
+        mock_academies = [_make_place(f"학원{i}", 500) for i in range(15)]
         mock_marts = [_make_place("이마트", 300), _make_place("홈플러스", 900)]
 
+        # 5 API calls: 지하철역, 초등학교, 중학교, 학원, 마트
         responses = [
             _make_kakao_response(mock_stations),
-            _make_kakao_response(mock_schools),
+            _make_kakao_response(mock_elem),
+            _make_kakao_response(mock_middle),
             _make_kakao_response(mock_academies),
             _make_kakao_response(mock_marts),
         ]
@@ -64,7 +67,7 @@ class TestPoiCollectorCollect:
         assert result.subway_stations[0]["name"] == "강남역"
         assert result.subway_stations[0]["walk_minutes"] == 5  # 350m / 67m/min ≈ 5분
         assert result.schools_count == 2
-        assert result.academies_count == 25
+        assert result.academies_count == 15
         assert result.marts_count == 2
 
     def test_collect_caches_result(self, collector, db_path):
