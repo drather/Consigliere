@@ -589,3 +589,15 @@ class TestSearchMinHousehold:
 
         results = repo.search(sigungu="강남구", min_household_count=0)
         assert len(results) == 1
+
+    def test_search_fallback_with_min_household_returns_all_when_no_apartments_table(self, tmp_path):
+        """apartments 테이블 없고 min_household_count > 0이면 필터 미적용, 전건 반환 (경고 발생)."""
+        db_path = str(tmp_path / "fallback2.db")
+        repo = AptMasterRepository(db_path=db_path)
+        repo.upsert(_make_entry("대형단지", "11680", sigungu="강남구", complex_code="CC1"))
+        repo.upsert(_make_entry("소형단지", "11680", sigungu="강남구", complex_code="CC2"))
+        # apartments 테이블 없음 — 필터를 적용할 수 없음
+
+        results = repo.search(sigungu="강남구", min_household_count=500)
+        # 필터 미적용으로 전건 반환됨 (fallback 동작)
+        assert len(results) == 2

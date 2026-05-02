@@ -10,8 +10,12 @@ from typing import List, Optional
 
 try:
     from modules.real_estate.models import AptMasterEntry
+    from core.logger import get_logger
 except ImportError:
     from src.modules.real_estate.models import AptMasterEntry
+    from core.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 _DDL = """
@@ -164,7 +168,8 @@ class AptMasterRepository:
         """apt_name(부분일치) / sido / sigungu 필터 검색.
 
         min_household_count > 0이면 apartments 테이블 LEFT JOIN으로 세대수 필터링.
-        apartments 테이블이 없는 환경에서는 JOIN 없이 fallback.
+        apartments 매핑이 없는 단지(complex_code=None 또는 apartments 미매핑)는 필터 적용 시 제외된다.
+        apartments 테이블이 없는 환경에서는 JOIN 없이 fallback (필터 미적용, 경고 로그 발생).
         """
         clauses: list = []
         params: list = []
@@ -179,8 +184,8 @@ class AptMasterRepository:
             clauses.append("am.sigungu = ?")
             params.append(sigungu)
         if min_household_count > 0:
-            clauses.append("(a.household_count >= ? OR a.household_count IS NULL AND ? = 0)")
-            params.extend([min_household_count, min_household_count])
+            clauses.append("a.household_count >= ?")
+            params.append(min_household_count)
 
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         order = "ORDER BY COALESCE(a.household_count, 0) DESC" if min_household_count > 0 else "ORDER BY am.apt_name"
@@ -196,8 +201,15 @@ class AptMasterRepository:
             with self._conn() as conn:
                 rows = conn.execute(sql, params).fetchall()
             return [_row_to_entry(r) for r in rows]
-        except sqlite3.OperationalError:
+        except sqlite3.OperationalError as e:
+            if "no such table" not in str(e):
+                raise
             # apartments 테이블이 없는 환경 fallback — JOIN 없이 재시도
+            if min_household_count > 0:
+                logger.warning(
+                    "[AptMasterRepository] apartments 테이블 없음 — min_household_count=%d 필터 미적용",
+                    min_household_count,
+                )
             plain_clauses: list = []
             plain_params: list = []
             if apt_name:
