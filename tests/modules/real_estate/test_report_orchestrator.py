@@ -293,3 +293,53 @@ class TestEnrichWithCommute:
         result = _enrich_with_commute(candidates, mock_svc, "삼성역", 37.5088, 127.0633)
 
         assert result[0].get("commute_transit_minutes") is None  # 예외 삼켜짐
+
+
+from modules.real_estate.report_orchestrator import _enrich_with_trend
+
+
+class TestEnrichWithTrendMultiArea:
+    def test_tries_first_area_and_returns_on_hit(self):
+        """preferred_areas=[84, 99]일 때 84㎡ 데이터 있으면 84 기준 trend 반환."""
+        mock_analyzer = MagicMock()
+        mock_analyzer.get_trend.side_effect = lambda apt_master_id, area_sqm: (
+            TrendData(apt_master_id=1, area_sqm=area_sqm, avg_price=2_800_000_000,
+                      price_change_pct=1.5, monthly_volume=3.0,
+                      price_min=2_700_000_000, price_max=2_900_000_000, sample_count=5)
+            if area_sqm == 84.0 else None
+        )
+        candidates = [{"apt_name": "래미안", "id": 1}]
+
+        result = _enrich_with_trend(candidates, mock_analyzer, preferred_areas=[84.0, 99.0])
+
+        assert result[0]["_trend"].area_sqm == 84.0
+        assert result[0]["_trend_area_sqm"] == 84.0
+        # 84로 히트했으니 99는 시도 안 함
+        assert mock_analyzer.get_trend.call_count == 1
+
+    def test_falls_back_to_second_area_when_first_empty(self):
+        """84㎡ 데이터 없고 99㎡ 데이터 있으면 99 기준 trend 반환."""
+        mock_analyzer = MagicMock()
+        mock_analyzer.get_trend.side_effect = lambda apt_master_id, area_sqm: (
+            TrendData(apt_master_id=1, area_sqm=area_sqm, avg_price=3_200_000_000,
+                      price_change_pct=0.5, monthly_volume=1.2,
+                      price_min=3_100_000_000, price_max=3_300_000_000, sample_count=3)
+            if area_sqm == 99.0 else None
+        )
+        candidates = [{"apt_name": "팰리스", "id": 1}]
+
+        result = _enrich_with_trend(candidates, mock_analyzer, preferred_areas=[84.0, 99.0])
+
+        assert result[0]["_trend"].area_sqm == 99.0
+        assert result[0]["_trend_area_sqm"] == 99.0
+        assert mock_analyzer.get_trend.call_count == 2  # 84 실패 후 99 시도
+
+    def test_no_data_in_any_area_returns_no_trend(self):
+        """모든 면적대에서 None이면 _trend 키 없음."""
+        mock_analyzer = MagicMock()
+        mock_analyzer.get_trend.return_value = None
+        candidates = [{"apt_name": "미수집단지", "id": 1}]
+
+        result = _enrich_with_trend(candidates, mock_analyzer, preferred_areas=[84.0, 99.0])
+
+        assert result[0].get("_trend") is None

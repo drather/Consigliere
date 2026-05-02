@@ -166,16 +166,33 @@ def _enrich_with_commute(
     return enriched
 
 
-def _enrich_with_trend(candidates: List[Dict], trend_analyzer: TrendAnalyzer) -> List[Dict]:
+def _enrich_with_trend(
+    candidates: List[Dict],
+    trend_analyzer: TrendAnalyzer,
+    preferred_areas: Optional[List[float]] = None,
+) -> List[Dict]:
+    """preferred_areas 순서대로 면적대를 시도해 실거래 추세를 채운다.
+    preferred_areas 미제공 시 기존 동작(84㎡ 단일) 유지."""
+    if preferred_areas is None:
+        preferred_areas = [84.0]
+
     enriched = []
     for c in candidates:
         result = dict(c)
-        apt_master_id = c.get("apt_master_id")
-        area_sqm = c.get("exclusive_area", 84.0)
+        apt_master_id = c.get("id") or c.get("apt_master_id")
+        area_sqm = c.get("exclusive_area") or c.get("area_sqm")
+
         if apt_master_id:
             try:
-                trend = trend_analyzer.get_trend(apt_master_id=apt_master_id, area_sqm=area_sqm)
-                result["_trend"] = trend
+                trend = None
+                areas_to_try = preferred_areas if preferred_areas else ([area_sqm] if area_sqm else [84.0])
+                for area in areas_to_try:
+                    trend = trend_analyzer.get_trend(apt_master_id=apt_master_id, area_sqm=area)
+                    if trend:
+                        result["_trend_area_sqm"] = area
+                        break
+                if trend:
+                    result["_trend"] = trend
             except Exception as e:
                 logger.warning(f"[Orchestrator] 추세 실패 {c.get('apt_name')}: {e}")
         enriched.append(result)
@@ -397,7 +414,8 @@ class ReportOrchestrator:
             if dest is None and persona_data.get("commute", {}).get("workplace_station"):
                 logger.warning("[ReportOrchestrator] workplace_station 좌표 조회 실패 — config 기본 목적지로 대체됨")
             enriched = _enrich_with_commute(enriched, self._commute_svc, dest, dest_lat, dest_lng)
-        enriched = _enrich_with_trend(enriched, self._trend_analyzer)
+        preferred_areas = persona_data.get("apartment_preferences", {}).get("preferred_area_sqm", [84.0])
+        enriched = _enrich_with_trend(enriched, self._trend_analyzer, preferred_areas=preferred_areas)
 
         weights = persona_data.get("priority_weights", {})
         scored = ScoringEngine(weights, scoring_config).score_all(enriched)
