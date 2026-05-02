@@ -106,7 +106,12 @@ class PoiCollector:
         seen: set = set()
         schools: list = []
         for doc in elem + middle:
-            key = doc.get("id") or doc.get("place_name", "")
+            pid = (doc.get("id") or "").strip()
+            name = (doc.get("place_name") or "").strip()
+            key = pid or name
+            if not key:
+                logger.warning("[PoiCollector] school doc에 id/place_name 없음, 스킵: %s", doc)
+                continue
             if key not in seen:
                 seen.add(key)
                 schools.append(doc)
