@@ -57,6 +57,7 @@ _MIGRATE_ADD_PNU_COLS = [
 
 
 def _row_to_entry(row: sqlite3.Row) -> AptMasterEntry:
+    keys = row.keys()
     return AptMasterEntry(
         id=row["id"],
         apt_name=row["apt_name"],
@@ -68,8 +69,11 @@ def _row_to_entry(row: sqlite3.Row) -> AptMasterEntry:
         first_traded=row["first_traded"],
         last_traded=row["last_traded"],
         created_at=row["created_at"],
-        pnu=row["pnu"] if "pnu" in row.keys() else None,
-        mapping_score=row["mapping_score"] if "mapping_score" in row.keys() else None,
+        pnu=row["pnu"] if "pnu" in keys else None,
+        mapping_score=row["mapping_score"] if "mapping_score" in keys else None,
+        household_count=row["household_count"] if "household_count" in keys else None,
+        road_address=row["road_address"] if "road_address" in keys else None,
+        approved_date=row["approved_date"] if "approved_date" in keys else None,
     )
 
 
@@ -154,29 +158,63 @@ class AptMasterRepository:
         apt_name: str = "",
         sido: str = "",
         sigungu: str = "",
+        min_household_count: int = 0,
         limit: int = 500,
     ) -> List[AptMasterEntry]:
-        """apt_name(부분일치) / sido / sigungu 필터 검색."""
+        """apt_name(부분일치) / sido / sigungu 필터 검색.
+
+        min_household_count > 0이면 apartments 테이블 LEFT JOIN으로 세대수 필터링.
+        apartments 테이블이 없는 환경에서는 JOIN 없이 fallback.
+        """
         clauses: list = []
         params: list = []
 
         if apt_name:
-            clauses.append("apt_name LIKE ?")
+            clauses.append("am.apt_name LIKE ?")
             params.append(f"%{apt_name}%")
         if sido:
-            clauses.append("sido = ?")
+            clauses.append("am.sido = ?")
             params.append(sido)
         if sigungu:
-            clauses.append("sigungu = ?")
+            clauses.append("am.sigungu = ?")
             params.append(sigungu)
+        if min_household_count > 0:
+            clauses.append("(a.household_count >= ? OR a.household_count IS NULL AND ? = 0)")
+            params.extend([min_household_count, min_household_count])
 
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
-        sql = f"SELECT * FROM apt_master {where} ORDER BY apt_name LIMIT ?"
+        order = "ORDER BY COALESCE(a.household_count, 0) DESC" if min_household_count > 0 else "ORDER BY am.apt_name"
+        sql = (
+            f"SELECT am.*, a.household_count, a.road_address, a.approved_date "
+            f"FROM apt_master am "
+            f"LEFT JOIN apartments a ON am.complex_code = a.complex_code "
+            f"{where} {order} LIMIT ?"
+        )
         params.append(limit)
 
-        with self._conn() as conn:
-            rows = conn.execute(sql, params).fetchall()
-        return [_row_to_entry(r) for r in rows]
+        try:
+            with self._conn() as conn:
+                rows = conn.execute(sql, params).fetchall()
+            return [_row_to_entry(r) for r in rows]
+        except sqlite3.OperationalError:
+            # apartments 테이블이 없는 환경 fallback — JOIN 없이 재시도
+            plain_clauses: list = []
+            plain_params: list = []
+            if apt_name:
+                plain_clauses.append("apt_name LIKE ?")
+                plain_params.append(f"%{apt_name}%")
+            if sido:
+                plain_clauses.append("sido = ?")
+                plain_params.append(sido)
+            if sigungu:
+                plain_clauses.append("sigungu = ?")
+                plain_params.append(sigungu)
+            plain_where = ("WHERE " + " AND ".join(plain_clauses)) if plain_clauses else ""
+            plain_sql = f"SELECT * FROM apt_master {plain_where} ORDER BY apt_name LIMIT ?"
+            plain_params.append(limit)
+            with self._conn() as conn:
+                rows = conn.execute(plain_sql, plain_params).fetchall()
+            return [_row_to_entry(r) for r in rows]
 
     # ── 필터 옵션 ─────────────────────────────────────────────────────────────
 

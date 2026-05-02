@@ -58,6 +58,10 @@ class AptMasterEntry:
     id: Optional[int] = None                # auto-increment PK (신규 삽입 시 None)
     pnu: Optional[str] = None               # FK → building_master.mgm_pk (NULLABLE)
     mapping_score: Optional[float] = None   # 매핑 신뢰도 0.0~1.0
+    # apartments JOIN으로 채워지는 선택 필드
+    household_count: Optional[int] = None
+    road_address: Optional[str] = None
+    approved_date: Optional[str] = None
 
 
 @dataclass

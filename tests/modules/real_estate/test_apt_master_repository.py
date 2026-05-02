@@ -499,3 +499,93 @@ def test_get_all_for_mapping_returns_unmapped_only():
     unmapped = repo.get_all_for_mapping()
     assert len(unmapped) == 1
     assert unmapped[0].apt_name == "B아파트"
+
+
+import sqlite3 as _sqlite3
+
+
+def _insert_apartment(db_path: str, complex_code: str, household_count: int, road_address: str = "", approved_date: str = ""):
+    """테스트용 apartments 레코드 직접 삽입."""
+    with _sqlite3.connect(db_path) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS apartments (
+                complex_code TEXT PRIMARY KEY,
+                household_count INTEGER DEFAULT 0,
+                road_address TEXT DEFAULT '',
+                approved_date TEXT DEFAULT '',
+                apt_name TEXT DEFAULT '',
+                district_code TEXT DEFAULT '',
+                sido TEXT DEFAULT '',
+                sigungu TEXT DEFAULT '',
+                eupmyeondong TEXT DEFAULT '',
+                ri TEXT DEFAULT '',
+                legal_address TEXT DEFAULT '',
+                building_count INTEGER DEFAULT 0,
+                parking_count INTEGER DEFAULT 0,
+                constructor TEXT DEFAULT '',
+                developer TEXT DEFAULT '',
+                top_floor INTEGER DEFAULT 0,
+                base_floor INTEGER DEFAULT 0,
+                total_area REAL DEFAULT 0.0,
+                heat_type TEXT DEFAULT '',
+                elevator_count INTEGER DEFAULT 0,
+                units_60 INTEGER DEFAULT 0,
+                units_85 INTEGER DEFAULT 0,
+                units_135 INTEGER DEFAULT 0,
+                units_136_plus INTEGER DEFAULT 0,
+                fetched_at TEXT DEFAULT ''
+            )
+        """)
+        conn.execute(
+            "INSERT OR REPLACE INTO apartments (complex_code, household_count, road_address, approved_date) VALUES (?, ?, ?, ?)",
+            (complex_code, household_count, road_address, approved_date),
+        )
+
+
+class TestSearchMinHousehold:
+    def test_min_household_filters_below_threshold(self, tmp_path):
+        """min_household_count=500 설정 시 세대수 500 미만 단지는 제외된다."""
+        db_path = str(tmp_path / "test.db")
+        repo = AptMasterRepository(db_path=db_path)
+        # 단지 A: complex_code 있음, 세대수 293 (제외 대상)
+        repo.upsert(_make_entry("소형단지", "11680", sigungu="강남구", complex_code="CC001"))
+        _insert_apartment(db_path, "CC001", household_count=293, road_address="서울 강남구 테헤란로 1")
+        # 단지 B: complex_code 있음, 세대수 1500 (포함 대상)
+        repo.upsert(_make_entry("대형단지", "11680", sigungu="강남구", complex_code="CC002"))
+        _insert_apartment(db_path, "CC002", household_count=1500, road_address="서울 강남구 역삼동 100")
+
+        results = repo.search(sigungu="강남구", min_household_count=500)
+
+        names = [r.apt_name for r in results]
+        assert "대형단지" in names
+        assert "소형단지" not in names
+
+    def test_min_household_zero_returns_all(self, tmp_path):
+        """min_household_count=0 (기본값)이면 세대수 무관 전부 반환."""
+        db_path = str(tmp_path / "test.db")
+        repo = AptMasterRepository(db_path=db_path)
+        repo.upsert(_make_entry("소형단지", "11680", sigungu="강남구", complex_code="CC001"))
+        _insert_apartment(db_path, "CC001", household_count=100)
+
+        results = repo.search(sigungu="강남구", min_household_count=0)
+        assert len(results) == 1
+
+    def test_search_returns_road_address_from_apartments(self, tmp_path):
+        """search() 결과에 apartments.road_address가 채워진다."""
+        db_path = str(tmp_path / "test.db")
+        repo = AptMasterRepository(db_path=db_path)
+        repo.upsert(_make_entry("래미안", "11650", sigungu="서초구", complex_code="CC010"))
+        _insert_apartment(db_path, "CC010", household_count=800, road_address="서울 서초구 반포대로 1")
+
+        results = repo.search(sigungu="서초구")
+        assert results[0].road_address == "서울 서초구 반포대로 1"
+
+    def test_search_without_apartments_table_does_not_raise(self, tmp_path):
+        """apartments 테이블이 없어도 search()는 정상 반환한다."""
+        db_path = str(tmp_path / "fallback.db")
+        repo = AptMasterRepository(db_path=db_path)
+        repo.upsert(_make_entry("테스트단지", "11680", sigungu="강남구"))
+        # apartments 테이블 미생성 상태
+
+        results = repo.search(sigungu="강남구", min_household_count=0)
+        assert len(results) == 1
