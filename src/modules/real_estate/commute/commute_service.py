@@ -37,9 +37,20 @@ class CommuteService:
         apt_name: str,
         district_code: str,
         mode: str,
+        dest_override: Optional[str] = None,
+        dest_lat_override: Optional[float] = None,
+        dest_lng_override: Optional[float] = None,
     ) -> Optional[CommuteResult]:
-        """단일 모드 출퇴근 시간 반환. 실패 시 None."""
-        cached = self._repo.get(origin_key, self._dest, mode)
+        """단일 모드 출퇴근 시간 반환. 실패 시 None.
+
+        dest_override 제공 시 초기화 destination 대신 사용.
+        캐시 키는 (origin_key, destination, mode) 복합키.
+        """
+        dest = dest_override or self._dest
+        dest_lat = dest_lat_override if dest_lat_override is not None else self._dest_lat
+        dest_lng = dest_lng_override if dest_lng_override is not None else self._dest_lng
+
+        cached = self._repo.get(origin_key, dest, mode)
         if cached is not None:
             return cached
 
@@ -51,7 +62,7 @@ class CommuteService:
         origin_lat, origin_lng = coords
         try:
             duration, distance, legs, route_summary = self._client.route_with_legs(
-                origin_lat, origin_lng, self._dest_lat, self._dest_lng, mode=mode
+                origin_lat, origin_lng, dest_lat, dest_lng, mode=mode
             )
         except Exception as exc:
             logger.warning("[CommuteService] T-map %s 실패 (%s): %s", mode, apt_name, exc)
@@ -59,7 +70,7 @@ class CommuteService:
 
         result = CommuteResult(
             origin_key=origin_key,
-            destination=self._dest,
+            destination=dest,
             mode=mode,
             duration_minutes=duration,
             distance_meters=distance,

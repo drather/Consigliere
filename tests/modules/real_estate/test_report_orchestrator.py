@@ -224,3 +224,72 @@ class TestEnrichWithBuilding:
         result = _enrich_with_building(candidates, "")
         assert result[0].get("floor_area_ratio") is None
         assert result[0]["apt_name"] == "테스트"
+
+
+from modules.real_estate.report_orchestrator import _resolve_workplace_coords, _enrich_with_commute
+from modules.real_estate.commute.models import CommuteResult
+
+
+class TestResolveWorkplaceCoords:
+    def test_returns_station_and_coords_when_geocode_succeeds(self):
+        mock_geocoder = MagicMock()
+        mock_geocoder.geocode.return_value = (37.5088, 127.0633)
+        persona = {"commute": {"workplace_station": "삼성역"}}
+
+        name, lat, lng = _resolve_workplace_coords(persona, mock_geocoder)
+
+        assert name == "삼성역"
+        assert lat == pytest.approx(37.5088)
+        assert lng == pytest.approx(127.0633)
+
+    def test_returns_none_triple_when_geocode_fails(self):
+        mock_geocoder = MagicMock()
+        mock_geocoder.geocode.return_value = None
+        persona = {"commute": {"workplace_station": "없는역"}}
+
+        name, lat, lng = _resolve_workplace_coords(persona, mock_geocoder)
+
+        assert name is None and lat is None and lng is None
+
+    def test_returns_none_triple_when_no_workplace_station(self):
+        mock_geocoder = MagicMock()
+        persona = {"commute": {}}
+
+        name, lat, lng = _resolve_workplace_coords(persona, mock_geocoder)
+
+        assert name is None and lat is None and lng is None
+
+
+class TestEnrichWithCommute:
+    def test_fills_commute_transit_minutes(self):
+        mock_svc = MagicMock()
+        mock_svc.get.return_value = CommuteResult(
+            origin_key="11680__래미안",
+            destination="삼성역",
+            mode="transit",
+            duration_minutes=22,
+            distance_meters=1500,
+        )
+        candidates = [{"apt_name": "래미안", "district_code": "11680", "road_address": "서울 강남구 역삼동 1"}]
+
+        result = _enrich_with_commute(candidates, mock_svc, "삼성역", 37.5088, 127.0633)
+
+        assert result[0]["commute_transit_minutes"] == 22
+
+    def test_skips_when_no_road_address(self):
+        mock_svc = MagicMock()
+        candidates = [{"apt_name": "주소없는단지", "district_code": "11680", "road_address": ""}]
+
+        result = _enrich_with_commute(candidates, mock_svc, "삼성역", 37.5088, 127.0633)
+
+        assert result[0].get("commute_transit_minutes") is None
+        mock_svc.get.assert_not_called()
+
+    def test_handles_commute_service_exception_gracefully(self):
+        mock_svc = MagicMock()
+        mock_svc.get.side_effect = RuntimeError("T-map API 실패")
+        candidates = [{"apt_name": "에러단지", "district_code": "11680", "road_address": "서울 강남구 1"}]
+
+        result = _enrich_with_commute(candidates, mock_svc, "삼성역", 37.5088, 127.0633)
+
+        assert result[0].get("commute_transit_minutes") is None  # 예외 삼켜짐

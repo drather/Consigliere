@@ -114,6 +114,57 @@ def _enrich_with_building(candidates: List[Dict], db_path: str) -> List[Dict]:
     return enriched
 
 
+def _resolve_workplace_coords(persona_data: Dict, geocoder) -> tuple:
+    """persona의 commute.workplace_station을 lat/lng로 변환.
+    실패하면 (None, None, None) 반환."""
+    station = persona_data.get("commute", {}).get("workplace_station", "")
+    if not station:
+        return None, None, None
+    try:
+        coords = geocoder.geocode(apt_name=station, district_code="", address=station)
+        if coords:
+            return station, coords[0], coords[1]
+    except Exception as e:
+        logger.warning(f"[Orchestrator] workplace_station 좌표 변환 실패 ({station}): {e}")
+    return None, None, None
+
+
+def _enrich_with_commute(
+    candidates: List[Dict],
+    commute_svc,
+    dest: Optional[str],
+    dest_lat: Optional[float],
+    dest_lng: Optional[float],
+) -> List[Dict]:
+    """각 candidate에 commute_transit_minutes 를 채운다.
+    road_address 없으면 스킵. CommuteService 예외는 로그 후 무시."""
+    enriched = []
+    for c in candidates:
+        result = dict(c)
+        road_address = c.get("road_address") or ""
+        if road_address and commute_svc is not None:
+            apt_name = c.get("apt_name", "")
+            district_code = c.get("district_code", "")
+            origin_key = f"{district_code}__{apt_name}"
+            try:
+                cr = commute_svc.get(
+                    origin_key=origin_key,
+                    road_address=road_address,
+                    apt_name=apt_name,
+                    district_code=district_code,
+                    mode="transit",
+                    dest_override=dest,
+                    dest_lat_override=dest_lat,
+                    dest_lng_override=dest_lng,
+                )
+                if cr:
+                    result["commute_transit_minutes"] = cr.duration_minutes
+            except Exception as e:
+                logger.warning(f"[Orchestrator] Commute 실패 {apt_name}: {e}")
+        enriched.append(result)
+    return enriched
+
+
 def _enrich_with_trend(candidates: List[Dict], trend_analyzer: TrendAnalyzer) -> List[Dict]:
     enriched = []
     for c in candidates:
@@ -339,7 +390,10 @@ class ReportOrchestrator:
         logger.info(f"[ReportOrchestrator] 구매 가능 예산: {budget_available / 100_000_000:.1f}억")
 
         enriched = _enrich_with_poi(candidates, self._poi_collector)
-        enriched = _enrich_with_building(enriched, self._re_db_path)   # ← 신규
+        enriched = _enrich_with_building(enriched, self._re_db_path)
+        if self._commute_svc and self._geocoder:
+            dest, dest_lat, dest_lng = _resolve_workplace_coords(persona_data, self._geocoder)
+            enriched = _enrich_with_commute(enriched, self._commute_svc, dest, dest_lat, dest_lng)
         enriched = _enrich_with_trend(enriched, self._trend_analyzer)
 
         weights = persona_data.get("priority_weights", {})

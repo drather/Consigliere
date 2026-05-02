@@ -166,3 +166,63 @@ class TestCommuteServiceGetAllModes:
         assert "transit" in results
         assert "car" not in results
         assert "walking" in results
+
+
+class TestCommuteServiceDestOverride:
+    def test_dest_override_uses_different_destination_for_cache(self):
+        """dest_override가 다르면 기본 destination 캐시와 별개로 조회한다."""
+        repo = CommuteRepository(db_path=":memory:", ttl_days=90)
+        # 기본 destination(삼성역) 캐시 저장
+        from modules.real_estate.commute.models import CommuteResult
+        repo.upsert(CommuteResult(
+            origin_key="11680__테스트",
+            destination="삼성역",
+            mode="transit",
+            duration_minutes=20,
+            distance_meters=1000,
+        ))
+        mock_geocoder = MagicMock()
+        mock_geocoder.geocode.return_value = (37.4942, 127.0611)
+        mock_client = MagicMock()
+        mock_client.route_with_legs.return_value = (35, 5000, [], "판교역 경유")
+        svc = make_service(repo=repo, tmap_client=mock_client, geocoder=mock_geocoder)
+
+        # dest_override를 판교역으로 지정 → 캐시 미스 → API 호출
+        result = svc.get(
+            origin_key="11680__테스트",
+            road_address="서울 강남구 역삼동 123",
+            apt_name="테스트",
+            district_code="11680",
+            mode="transit",
+            dest_override="판교역",
+            dest_lat_override=37.3952,
+            dest_lng_override=127.1109,
+        )
+
+        assert result.duration_minutes == 35
+        assert result.destination == "판교역"
+        mock_client.route_with_legs.assert_called_once()
+
+    def test_dest_override_none_uses_default(self):
+        """dest_override=None이면 초기화 시 설정한 기본 destination을 사용한다."""
+        repo = CommuteRepository(db_path=":memory:", ttl_days=90)
+        from modules.real_estate.commute.models import CommuteResult
+        repo.upsert(CommuteResult(
+            origin_key="11680__래미안",
+            destination="삼성역",
+            mode="transit",
+            duration_minutes=18,
+            distance_meters=900,
+        ))
+        svc = make_service(repo=repo)
+
+        result = svc.get(
+            origin_key="11680__래미안",
+            road_address="서울 강남구 역삼동 1",
+            apt_name="래미안",
+            district_code="11680",
+            mode="transit",
+            dest_override=None,
+        )
+
+        assert result.duration_minutes == 18
