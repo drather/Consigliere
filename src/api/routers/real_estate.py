@@ -593,6 +593,10 @@ def generate_professional_report():
     from modules.real_estate.trend_analyzer import TrendAnalyzer
     from modules.real_estate.persona_manager import PersonaManager
     from modules.real_estate.apt_master_repository import AptMasterRepository
+    from modules.real_estate.geocoder import GeocoderService
+    from modules.real_estate.commute.commute_service import CommuteService
+    from modules.real_estate.commute.commute_repository import CommuteRepository
+    from modules.real_estate.commute.tmap_client import TmapClient
     from modules.macro.service import MacroCollectionService
     from core.llm_pipeline import build_llm_pipeline
     from core.prompt_loader import PromptLoader
@@ -609,10 +613,15 @@ def generate_professional_report():
 
         apt_repo = AptMasterRepository(db_path=re_db)
         interest_areas = persona.get("user", {}).get("interest_areas", [])
-        district_codes = cfg.get_district_codes_by_names(interest_areas) if hasattr(cfg, "get_district_codes_by_names") else []
+        min_hh = persona.get("apartment_preferences", {}).get("min_household_count", 0)
 
-        candidates = apt_repo.list_by_district_codes(district_codes) if district_codes else apt_repo.list_all()
-        candidate_dicts = [c.__dict__ if hasattr(c, "__dict__") else dict(c) for c in candidates[:50]]
+        if interest_areas:
+            candidates = []
+            for area in interest_areas:
+                candidates.extend(apt_repo.search(sigungu=area, min_household_count=min_hh, limit=200))
+        else:
+            candidates = apt_repo.search(min_household_count=min_hh, limit=500)
+        candidate_dicts = [c.__dict__ if hasattr(c, "__dict__") else dict(c) for c in candidates[:100]]
 
         macro_db = cfg.get("macro_db_path", "data/macro.db")
         macro_svc = MacroCollectionService(db_path=macro_db)
@@ -624,12 +633,33 @@ def generate_professional_report():
         root_storage = get_storage_provider("local", root_path=".")
         prompt_loader = PromptLoader(root_storage, base_dir="src/modules/real_estate/prompts")
 
+        geocode_cache = cfg.get("geocode_cache_path", "data/geocode_cache.db")
+        geocoder = GeocoderService(api_key=kakao_key, cache_path=geocode_cache)
+
+        commute_cfg = cfg.get("commute", {
+            "destination": "삼성역",
+            "destination_lat": 37.5088,
+            "destination_lng": 127.0633,
+            "cache_ttl_days": 90,
+        })
+        commute_db = cfg.get("commute_cache_db_path", "data/commute_cache.db")
+        tmap_key = os.getenv("TMAP_API_KEY", "")
+        commute_svc = CommuteService(
+            repo=CommuteRepository(db_path=commute_db, ttl_days=int(commute_cfg.get("cache_ttl_days", 90))),
+            tmap_client=TmapClient(api_key=tmap_key),
+            geocoder=geocoder,
+            config=commute_cfg,
+        )
+
         orchestrator = ReportOrchestrator(
             llm=llm,
             prompt_loader=prompt_loader,
             poi_collector=PoiCollector(api_key=kakao_key, db_path=re_db),
             trend_analyzer=TrendAnalyzer(db_path=re_db),
             report_repository=ReportRepository(storage_path=report_path),
+            re_db_path=re_db,
+            commute_svc=commute_svc,
+            geocoder=geocoder,
         )
 
         report = orchestrator.generate(

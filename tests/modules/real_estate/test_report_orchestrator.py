@@ -79,7 +79,7 @@ def mock_llm():
 @pytest.fixture
 def mock_prompt_loader():
     loader = MagicMock()
-    loader.load_with_cache_split.return_value = ("시스템 프롬프트", "유저 프롬프트 {{candidates_poi_json}} {{candidates_school_json}} {{macro_summary}} {{budget_summary}} {{user_goals}} {{ranked_candidates_summary}}")
+    loader.load_with_cache_split.return_value = ({}, "시스템 프롬프트", "유저 프롬프트 {{candidates_poi_json}} {{candidates_school_json}} {{macro_summary}} {{budget_summary}} {{user_goals}} {{ranked_candidates_summary}}")
     return loader
 
 

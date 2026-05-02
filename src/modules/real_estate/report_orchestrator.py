@@ -207,7 +207,7 @@ def _call_location_agent(llm: BaseLLMClient, prompt_loader: PromptLoader, candid
         }
         for c in candidates
     ]
-    system, user_tmpl = prompt_loader.load_with_cache_split("location_analyst")
+    _, system, user_tmpl = prompt_loader.load_with_cache_split("location_analyst")
     user = user_tmpl.replace("{{candidates_poi_json}}", json.dumps(poi_input, ensure_ascii=False))
     try:
         result = llm.generate_json(system=system, user=user)
@@ -226,7 +226,7 @@ def _call_school_agent(llm: BaseLLMClient, prompt_loader: PromptLoader, candidat
         }
         for c in candidates
     ]
-    system, user_tmpl = prompt_loader.load_with_cache_split("school_analyst")
+    _, system, user_tmpl = prompt_loader.load_with_cache_split("school_analyst")
     user = user_tmpl.replace("{{candidates_school_json}}", json.dumps(school_input, ensure_ascii=False))
     try:
         result = llm.generate_json(system=system, user=user)
@@ -252,7 +252,7 @@ def _call_strategy_agent(
     budget_str = f"{budget_available / 100_000_000:.1f}억원"
     user_goals = persona_data.get("user", {}).get("plans", {}).get("primary_goal", "실거주 및 투자 가치")
 
-    system, user_tmpl = prompt_loader.load_with_cache_split("strategy_analyst")
+    _, system, user_tmpl = prompt_loader.load_with_cache_split("strategy_analyst")
     user = (
         user_tmpl
         .replace("{{macro_summary}}", macro_summary)
@@ -349,11 +349,14 @@ def _build_markdown(
         lines.append(f"- 대중교통 {commute or '?'}분")
         lines.append("")
 
-        budget_ok = budget_available >= c.get("price", 0)
         lines.append("**예산 적합성**")
-        price_eok = c.get("price", 0) / 100_000_000
-        lines.append(f"- 최근 실거래가: {price_eok:.1f}억 vs 구매 가능 {budget_str}")
-        lines.append(f"- {'예산 범위 내' if budget_ok else '예산 초과 — 추가 조달 필요'}")
+        if trend and trend.avg_price > 0:
+            budget_ok = budget_available >= trend.avg_price
+            area_label = f"{c.get('_trend_area_sqm', 84):.0f}㎡"
+            lines.append(f"- 최근 실거래가: {trend.avg_price_eok()} ({area_label} 기준) vs 구매 가능 {budget_str}")
+            lines.append(f"- {'예산 범위 내' if budget_ok else '예산 초과 — 추가 조달 필요'}")
+        else:
+            lines.append(f"- 최근 실거래가: 미수집 vs 구매 가능 {budget_str}")
         lines.append("")
 
     lines.append("## 4. 투자 전략 및 액션 플랜\n")
