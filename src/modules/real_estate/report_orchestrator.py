@@ -327,7 +327,8 @@ def _build_markdown(
 
         lines.append("**실거래가 추세**")
         if trend:
-            lines.append(f"- 6개월 평균가: {trend.avg_price_eok()} (84㎡ 기준)")
+            area_label = f"{c.get('_trend_area_sqm', 84):.0f}㎡"
+            lines.append(f"- 6개월 평균가: {trend.avg_price_eok()} ({area_label} 기준)")
             lines.append(f"- 3개월 전 대비: {trend.price_change_str()} / 월 평균 거래량 {trend.monthly_volume:.1f}건")
         else:
             lines.append("- 실거래가 데이터 미수집")
