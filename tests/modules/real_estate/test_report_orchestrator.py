@@ -217,3 +217,10 @@ class TestEnrichWithBuilding:
         result = _enrich_with_building(candidates, db_path)
 
         assert result[0].get("floor_area_ratio") is None
+
+    def test_empty_db_path_returns_candidates_unchanged(self):
+        """db_path가 빈 문자열이면 DB 조회 없이 원본 반환."""
+        candidates = [{"apt_name": "테스트", "pnu": "BM001"}]
+        result = _enrich_with_building(candidates, "")
+        assert result[0].get("floor_area_ratio") is None
+        assert result[0]["apt_name"] == "테스트"

@@ -12,6 +12,7 @@ ReportOrchestrator — 전문 컨설턴트 리포트 생성 파이프라인.
   8. Markdown 리포트 조립 → ReportRepository 저장
 """
 import json
+import sqlite3
 from datetime import date
 from typing import Any, Dict, List, Optional
 
@@ -73,18 +74,17 @@ def _enrich_with_poi(candidates: List[Dict], poi_collector: PoiCollector) -> Lis
 def _enrich_with_building(candidates: List[Dict], db_path: str) -> List[Dict]:
     """pnu → building_master JOIN으로 용적률·건폐율·준공연도를 채운다.
     pnu 없으면 approved_date 앞 4자리에서 build_year를 파생한다."""
-    import sqlite3 as _sqlite3
     bm_map: Dict[str, Dict] = {}
     if db_path:
-        pnu_list = [c.get("pnu") for c in candidates if c.get("pnu")]
-        if pnu_list:
+        mgm_pk_list = [c.get("pnu") for c in candidates if c.get("pnu")]
+        if mgm_pk_list:
             try:
-                placeholders = ",".join("?" * len(pnu_list))
-                with _sqlite3.connect(db_path) as conn:
+                placeholders = ",".join("?" * len(mgm_pk_list))
+                with sqlite3.connect(db_path) as conn:
                     rows = conn.execute(
                         f"SELECT mgm_pk, floor_area_ratio, building_coverage_ratio, completion_year "
                         f"FROM building_master WHERE mgm_pk IN ({placeholders})",
-                        pnu_list,
+                        mgm_pk_list,
                     ).fetchall()
                 bm_map = {
                     r[0]: {
@@ -94,8 +94,10 @@ def _enrich_with_building(candidates: List[Dict], db_path: str) -> List[Dict]:
                     }
                     for r in rows
                 }
-            except Exception as e:
-                logger.warning(f"[Orchestrator] building_master 조회 실패: {e}")
+            except sqlite3.OperationalError as e:
+                logger.warning(f"[Orchestrator] building_master 조회 실패 (테이블 없음): {e}")
+            except sqlite3.Error as e:
+                logger.error(f"[Orchestrator] building_master DB 오류: {e}")
 
     enriched = []
     for c in candidates:
