@@ -3,13 +3,16 @@ ReportOrchestrator — 전문 컨설턴트 리포트 생성 파이프라인.
 
 흐름:
   1. Python: DSR 기반 예산 계산
-  2. Python: PoiCollector — 각 단지 POI 수집 (캐시 우선)
-  3. Python: TrendAnalyzer — 실거래가 추세 집계
-  4. Python: ScoringEngine(POI 반영) — 점수 계산
-  5. LLM: LocationAgent — 입지 분석 (Top 5 배치)
-  6. LLM: SchoolAgent — 학군 분석 (Top 5 배치)
-  7. LLM: StrategyAgent — 투자 전략 + 액션 플랜
-  8. Markdown 리포트 조립 → ReportRepository 저장
+  2. Python: GeocoderService — road_address → lat/lng (캐시 우선)
+  3. Python: PoiCollector — 각 단지 POI 수집 (lat/lng 필수)
+  4. Python: BuildingMaster JOIN — 용적률·건폐율·준공연도
+  5. Python: CommuteService — TMAP 출퇴근 실측
+  6. Python: TrendAnalyzer — 실거래가 추세 집계
+  7. Python: ScoringEngine(POI 반영) — 점수 계산
+  8. LLM: LocationAgent — 입지 분석 (Top 5 배치)
+  9. LLM: SchoolAgent — 학군 분석 (Top 5 배치)
+  10. LLM: StrategyAgent — 투자 전략 + 액션 플랜
+  11. Markdown 리포트 조립 → ReportRepository 저장
 """
 import json
 import sqlite3
@@ -52,8 +55,47 @@ def _calc_budget(
     return int(assets + loan_limit)
 
 
+def _enrich_with_geocode(candidates: List[Dict], geocoder) -> List[Dict]:
+    """road_address → GeocoderService → lat/lng 채움.
+    이미 lat/lng가 있으면 스킵. geocoder가 None이면 no-op."""
+    if geocoder is None:
+        return candidates
+
+    hit = skip = miss = 0
+    enriched = []
+    for c in candidates:
+        result = dict(c)
+        if c.get("lat") and c.get("lng"):
+            skip += 1
+            enriched.append(result)
+            continue
+        road_address = c.get("road_address") or ""
+        apt_name = c.get("apt_name", "")
+        district_code = c.get("district_code", "")
+        if road_address:
+            try:
+                coords = geocoder.geocode(apt_name, district_code, address=road_address)
+                if coords:
+                    result["lat"], result["lng"] = coords
+                    hit += 1
+                else:
+                    logger.warning("[Geocode] 좌표 없음: %s / %s", apt_name, road_address)
+                    miss += 1
+            except Exception as e:
+                logger.warning("[Geocode] 실패 %s: %s", apt_name, e)
+                miss += 1
+        else:
+            logger.debug("[Geocode] road_address 없음, 스킵: %s", apt_name)
+            miss += 1
+        enriched.append(result)
+
+    logger.info("[Geocode] 좌표 수집 완료 — 성공 %d, 기존보유 %d, 실패 %d (전체 %d)", hit, skip, miss, len(candidates))
+    return enriched
+
+
 def _enrich_with_poi(candidates: List[Dict], poi_collector: PoiCollector) -> List[Dict]:
     enriched = []
+    hit = skip = 0
     for c in candidates:
         result = dict(c)
         complex_code = c.get("complex_code") or c.get("apt_name", "unknown")
@@ -65,9 +107,15 @@ def _enrich_with_poi(candidates: List[Dict], poi_collector: PoiCollector) -> Lis
                 result["poi_stations"] = poi.subway_stations
                 result["poi_academies_count"] = poi.academies_count
                 result["_poi"] = poi
+                hit += 1
             except Exception as e:
-                logger.warning(f"[Orchestrator] POI 실패 {c.get('apt_name')}: {e}")
+                logger.warning("[POI] 수집 실패 %s: %s", c.get("apt_name"), e)
+                skip += 1
+        else:
+            logger.debug("[POI] lat/lng 없어 스킵: %s", c.get("apt_name"))
+            skip += 1
         enriched.append(result)
+    logger.info("[POI] 수집 완료 — 성공 %d, 스킵 %d", hit, skip)
     return enriched
 
 
@@ -94,10 +142,11 @@ def _enrich_with_building(candidates: List[Dict], db_path: str) -> List[Dict]:
                     }
                     for r in rows
                 }
+                logger.info("[Building] building_master 조회 %d건 → 매칭 %d건", len(mgm_pk_list), len(bm_map))
             except sqlite3.OperationalError as e:
-                logger.warning(f"[Orchestrator] building_master 조회 실패 (테이블 없음): {e}")
+                logger.warning("[Building] building_master 조회 실패 (테이블 없음): %s", e)
             except sqlite3.Error as e:
-                logger.error(f"[Orchestrator] building_master DB 오류: {e}")
+                logger.error("[Building] building_master DB 오류: %s", e)
 
     enriched = []
     for c in candidates:
@@ -123,10 +172,12 @@ def _resolve_workplace_coords(persona_data: Dict, geocoder) -> tuple:
     try:
         coords = geocoder.geocode(apt_name=station, district_code="", address=station)
     except Exception as e:
-        logger.warning(f"[Orchestrator] workplace_station 좌표 변환 실패 ({station}): {e}")
+        logger.warning("[Orchestrator] workplace_station 좌표 변환 실패 (%s): %s", station, e)
         return None, None, None
     if coords:
+        logger.info("[Orchestrator] workplace 좌표: %s → %.4f, %.4f", station, coords[0], coords[1])
         return station, coords[0], coords[1]
+    logger.warning("[Orchestrator] workplace_station 좌표 없음: %s — config 기본 목적지 사용", station)
     return None, None, None
 
 
@@ -140,6 +191,7 @@ def _enrich_with_commute(
     """각 candidate에 commute_transit_minutes 를 채운다.
     road_address 없으면 스킵. CommuteService 예외는 로그 후 무시."""
     enriched = []
+    hit = skip = 0
     for c in candidates:
         result = dict(c)
         road_address = c.get("road_address") or ""
@@ -160,9 +212,18 @@ def _enrich_with_commute(
                 )
                 if cr:
                     result["commute_transit_minutes"] = cr.duration_minutes
+                    hit += 1
+                else:
+                    skip += 1
             except Exception as e:
-                logger.warning(f"[Orchestrator] Commute 실패 {apt_name}: {e}")
+                logger.warning("[Commute] 실패 %s: %s", c.get("apt_name"), e)
+                skip += 1
+        else:
+            if not road_address:
+                logger.debug("[Commute] road_address 없어 스킵: %s", c.get("apt_name"))
+            skip += 1
         enriched.append(result)
+    logger.info("[Commute] 출퇴근 수집 완료 — 성공 %d, 스킵 %d", hit, skip)
     return enriched
 
 
@@ -184,8 +245,7 @@ def _enrich_with_trend(
         if apt_master_id:
             try:
                 trend = None
-                areas_to_try = preferred_areas
-                for area in areas_to_try:
+                for area in preferred_areas:
                     trend = trend_analyzer.get_trend(apt_master_id=apt_master_id, area_sqm=area)
                     if trend:
                         result["_trend_area_sqm"] = area
@@ -193,7 +253,7 @@ def _enrich_with_trend(
                 if trend:
                     result["_trend"] = trend
             except Exception as e:
-                logger.warning(f"[Orchestrator] 추세 실패 {c.get('apt_name')}: {e}")
+                logger.warning("[Trend] 추세 실패 %s: %s", c.get("apt_name"), e)
         enriched.append(result)
     return enriched
 
@@ -207,13 +267,17 @@ def _call_location_agent(llm: BaseLLMClient, prompt_loader: PromptLoader, candid
         }
         for c in candidates
     ]
-    _, system, user_tmpl = prompt_loader.load_with_cache_split("location_analyst")
-    user = user_tmpl.replace("{{candidates_poi_json}}", json.dumps(poi_input, ensure_ascii=False))
+    poi_json = json.dumps(poi_input, ensure_ascii=False)
+    logger.info("[LocationAgent] 입력 단지 수: %d, POI 데이터 있음: %d",
+                len(poi_input), sum(1 for c in candidates if c.get("_poi")))
+    metadata, prompt = prompt_loader.load("location_analyst", variables={"candidates_poi_json": poi_json})
     try:
-        result = llm.generate_json(system=system, user=user)
-        return {a["apt_name"]: a["text"] for a in result.get("analyses", [])}
+        result = llm.generate_json(prompt, metadata=metadata)
+        analyses = result.get("analyses", [])
+        logger.info("[LocationAgent] 분석 결과 %d건 반환", len(analyses))
+        return {a["apt_name"]: a["text"] for a in analyses}
     except Exception as e:
-        logger.warning(f"[Orchestrator] LocationAgent 실패: {e}")
+        logger.warning("[LocationAgent] 실패: %s", e)
         return {}
 
 
@@ -226,13 +290,16 @@ def _call_school_agent(llm: BaseLLMClient, prompt_loader: PromptLoader, candidat
         }
         for c in candidates
     ]
-    _, system, user_tmpl = prompt_loader.load_with_cache_split("school_analyst")
-    user = user_tmpl.replace("{{candidates_school_json}}", json.dumps(school_input, ensure_ascii=False))
+    school_json = json.dumps(school_input, ensure_ascii=False)
+    logger.info("[SchoolAgent] 입력 단지 수: %d", len(school_input))
+    metadata, prompt = prompt_loader.load("school_analyst", variables={"candidates_school_json": school_json})
     try:
-        result = llm.generate_json(system=system, user=user)
-        return {a["apt_name"]: a["text"] for a in result.get("analyses", [])}
+        result = llm.generate_json(prompt, metadata=metadata)
+        analyses = result.get("analyses", [])
+        logger.info("[SchoolAgent] 분석 결과 %d건 반환", len(analyses))
+        return {a["apt_name"]: a["text"] for a in analyses}
     except Exception as e:
-        logger.warning(f"[Orchestrator] SchoolAgent 실패: {e}")
+        logger.warning("[SchoolAgent] 실패: %s", e)
         return {}
 
 
@@ -252,18 +319,18 @@ def _call_strategy_agent(
     budget_str = f"{budget_available / 100_000_000:.1f}억원"
     user_goals = persona_data.get("user", {}).get("plans", {}).get("primary_goal", "실거주 및 투자 가치")
 
-    _, system, user_tmpl = prompt_loader.load_with_cache_split("strategy_analyst")
-    user = (
-        user_tmpl
-        .replace("{{macro_summary}}", macro_summary)
-        .replace("{{budget_summary}}", f"구매 가능 예산: {budget_str}")
-        .replace("{{user_goals}}", user_goals)
-        .replace("{{ranked_candidates_summary}}", candidates_summary)
-    )
+    metadata, prompt = prompt_loader.load("strategy_analyst", variables={
+        "macro_summary": macro_summary,
+        "budget_summary": f"구매 가능 예산: {budget_str}",
+        "user_goals": user_goals,
+        "ranked_candidates_summary": candidates_summary,
+    })
     try:
-        return llm.generate_json(system=system, user=user)
+        result = llm.generate_json(prompt, metadata=metadata)
+        logger.info("[StrategyAgent] 전략 생성 완료 (keys: %s)", list(result.keys()))
+        return result
     except Exception as e:
-        logger.warning(f"[Orchestrator] StrategyAgent 실패: {e}")
+        logger.warning("[StrategyAgent] 실패: %s", e)
         return {"market_diagnosis": "", "strategy": "", "action_short": "", "action_mid": "", "risks": []}
 
 
@@ -383,9 +450,9 @@ class ReportOrchestrator:
         poi_collector: PoiCollector,
         trend_analyzer: TrendAnalyzer,
         report_repository: ReportRepository,
-        re_db_path: str = "",        # building_master 조회용
-        commute_svc=None,            # Task 3에서 사용, 미리 추가
-        geocoder=None,               # Task 3에서 사용, 미리 추가
+        re_db_path: str = "",
+        commute_svc=None,
+        geocoder=None,
     ):
         self._llm = llm
         self._prompt_loader = prompt_loader
@@ -408,21 +475,26 @@ class ReportOrchestrator:
         dsr_rate = financial_cfg.get("dsr_rate", 0.40)
         loan_term_months = int(financial_cfg.get("loan_term_years", 30)) * 12
         budget_available = _calc_budget(persona_data, macro_summary, dsr_rate=dsr_rate, loan_term_months=loan_term_months)
-        logger.info(f"[ReportOrchestrator] 구매 가능 예산: {budget_available / 100_000_000:.1f}억")
+        logger.info("[ReportOrchestrator] 구매 가능 예산: %.1f억, 후보 %d건",
+                    budget_available / 100_000_000, len(candidates))
 
-        enriched = _enrich_with_poi(candidates, self._poi_collector)
+        # road_address → lat/lng (POI 수집 전처리)
+        enriched = _enrich_with_geocode(candidates, self._geocoder)
+        enriched = _enrich_with_poi(enriched, self._poi_collector)
         enriched = _enrich_with_building(enriched, self._re_db_path)
+
         if self._commute_svc and self._geocoder:
             dest, dest_lat, dest_lng = _resolve_workplace_coords(persona_data, self._geocoder)
-            if dest is None and persona_data.get("commute", {}).get("workplace_station"):
-                logger.warning("[ReportOrchestrator] workplace_station 좌표 조회 실패 — config 기본 목적지로 대체됨")
             enriched = _enrich_with_commute(enriched, self._commute_svc, dest, dest_lat, dest_lng)
+
         preferred_areas = persona_data.get("apartment_preferences", {}).get("preferred_area_sqm", [84.0])
         enriched = _enrich_with_trend(enriched, self._trend_analyzer, preferred_areas=preferred_areas)
 
         weights = persona_data.get("priority_weights", {})
         scored = ScoringEngine(weights, scoring_config).score_all(enriched)
         top5 = scored[:5]
+        logger.info("[ReportOrchestrator] 점수 Top5: %s",
+                    [(c.get("apt_name"), c.get("total_score")) for c in top5])
 
         location_analyses = _call_location_agent(self._llm, self._prompt_loader, top5)
         school_analyses = _call_school_agent(self._llm, self._prompt_loader, top5)
