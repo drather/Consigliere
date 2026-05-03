@@ -276,14 +276,16 @@ class TestEnrichWithCommute:
 
         assert result[0]["commute_transit_minutes"] == 22
 
-    def test_skips_when_no_road_address(self):
+    def test_attempts_commute_even_without_road_address(self):
+        """road_address 없어도 geocoder 캐시로 좌표 조회 가능하므로 CommutService.get()을 호출한다."""
         mock_svc = MagicMock()
+        mock_svc.get.return_value = None
         candidates = [{"apt_name": "주소없는단지", "district_code": "11680", "road_address": ""}]
 
         result = _enrich_with_commute(candidates, mock_svc, "삼성역", 37.5088, 127.0633)
 
+        mock_svc.get.assert_called_once()
         assert result[0].get("commute_transit_minutes") is None
-        mock_svc.get.assert_not_called()
 
     def test_handles_commute_service_exception_gracefully(self):
         mock_svc = MagicMock()

@@ -189,15 +189,16 @@ def _enrich_with_commute(
     dest_lng: Optional[float],
 ) -> List[Dict]:
     """각 candidate에 commute_transit_minutes 를 채운다.
-    road_address 없으면 스킵. CommuteService 예외는 로그 후 무시."""
+    road_address 없어도 geocoder 캐시로 좌표 조회 가능하므로 시도한다.
+    CommuteService 예외는 로그 후 무시."""
     enriched = []
     hit = skip = 0
     for c in candidates:
         result = dict(c)
-        road_address = c.get("road_address") or ""
-        if road_address and commute_svc is not None:
+        if commute_svc is not None:
             apt_name = c.get("apt_name", "")
             district_code = c.get("district_code", "")
+            road_address = c.get("road_address") or ""
             origin_key = f"{district_code}__{apt_name}"
             try:
                 cr = commute_svc.get(
@@ -219,8 +220,6 @@ def _enrich_with_commute(
                 logger.warning("[Commute] 실패 %s: %s", c.get("apt_name"), e)
                 skip += 1
         else:
-            if not road_address:
-                logger.debug("[Commute] road_address 없어 스킵: %s", c.get("apt_name"))
             skip += 1
         enriched.append(result)
     logger.info("[Commute] 출퇴근 수집 완료 — 성공 %d, 스킵 %d", hit, skip)
