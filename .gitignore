@@ -1,6 +1,9 @@
 # Worktrees
 .worktrees/
 
+# Playwright screenshots
+screenshots/
+
 # Environments
 .env
 .venv/
