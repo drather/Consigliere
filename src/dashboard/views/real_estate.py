@@ -128,7 +128,7 @@ def _render_commute_card(commute_data: dict):
             st.caption("조회 실패")
 
 
-def _render_apt_detail_panel(entry, apt_repo=None, tx_limit: int = 50) -> None:
+def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int = 50) -> None:
     """선택된 단지의 상세정보 + 실거래가 패널을 렌더링한다.
 
     Args:
@@ -230,6 +230,23 @@ def _render_apt_detail_panel(entry, apt_repo=None, tx_limit: int = 50) -> None:
             except Exception:
                 st.caption("서버 연결 실패 — FastAPI 서버가 실행 중인지 확인하세요")
 
+    # ── 건물 정보 (용적률·건폐율 from building_master) ───────────────────────
+    _pnu = getattr(entry, "pnu", None)
+    if _pnu and bm_repo is not None:
+        try:
+            _bm = bm_repo.get_by_mgm_pk(_pnu)
+        except Exception:
+            _bm = None
+        if _bm is not None and (_bm.floor_area_ratio is not None or _bm.building_coverage_ratio is not None):
+            st.markdown("#### 🏗️ 건물 정보 (건축물대장)")
+            _bc1, _bc2 = st.columns(2)
+            with _bc1:
+                _far = _bm.floor_area_ratio
+                st.metric("용적률", f"{_far:.1f}%" if _far is not None else "-")
+            with _bc2:
+                _bcr = _bm.building_coverage_ratio
+                st.metric("건폐율", f"{_bcr:.1f}%" if _bcr is not None else "-")
+
     # ── 실거래가 ──────────────────────────────────────────────────────────────
     st.markdown("### 📈 최근 실거래가")
 
@@ -324,10 +341,12 @@ def show_real_estate():
             try:
                 from modules.real_estate.apt_master_repository import AptMasterRepository
                 from modules.real_estate.apartment_repository import ApartmentRepository
+                from modules.real_estate.building_master.building_master_repository import BuildingMasterRepository
                 from modules.real_estate.config import RealEstateConfig
             except ImportError:
                 from src.modules.real_estate.apt_master_repository import AptMasterRepository
                 from src.modules.real_estate.apartment_repository import ApartmentRepository
+                from src.modules.real_estate.building_master.building_master_repository import BuildingMasterRepository
                 from src.modules.real_estate.config import RealEstateConfig
 
             _cfg = RealEstateConfig()
@@ -336,6 +355,7 @@ def show_real_estate():
             _map_limit = int(_cfg.get("apt_search_map_limit", 100))
             _repo = AptMasterRepository(db_path=_re_db_path)
             _apt_detail_repo = ApartmentRepository(db_path=_re_db_path)
+            _bm_repo = BuildingMasterRepository(db_path=_re_db_path)
 
             # apt_master 테이블이 비어 있으면 안내
             if _repo.count() == 0:
@@ -435,6 +455,7 @@ def show_real_estate():
                         _render_apt_detail_panel(
                             results[_sel_idx],
                             apt_repo=_apt_detail_repo,
+                            bm_repo=_bm_repo,
                             tx_limit=_tx_limit,
                         )
 

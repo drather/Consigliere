@@ -1,5 +1,6 @@
 import logging
 import math
+import time
 import requests
 from typing import List, Tuple
 
@@ -11,6 +12,10 @@ _WALKING_URL = "https://apis.openapi.sk.com/tmap/routes/pedestrian"
 
 _VALID_MODES = {"transit", "car", "walking"}
 
+# TMAP transit free tier: ~60 req/min 상한. 1.1s 간격 → 54 req/min으로 안전하게 처리.
+_RATE_LIMIT_DELAY_SEC = 1.1
+_RETRY_WAIT_SEC = 5.0  # 429 수신 시 재시도 대기
+
 
 class TmapClient:
     """T-map Open API 래퍼. transit / car / walking 3가지 경로를 조회한다."""
@@ -18,6 +23,7 @@ class TmapClient:
     def __init__(self, api_key: str, timeout: int = 10):
         self._api_key = api_key
         self._timeout = timeout
+        self._last_call_ts: float = 0.0
 
     # ── 기존 메서드 (변경 없음) ───────────────────────────────────────
 
@@ -41,14 +47,31 @@ class TmapClient:
     def _headers(self) -> dict:
         return {"appKey": self._api_key, "Content-Type": "application/json"}
 
+    def _throttle(self):
+        elapsed = time.monotonic() - self._last_call_ts
+        if elapsed < _RATE_LIMIT_DELAY_SEC:
+            time.sleep(_RATE_LIMIT_DELAY_SEC - elapsed)
+        self._last_call_ts = time.monotonic()
+
+    def _post_with_retry(self, url: str, payload: dict) -> requests.Response:
+        """429 시 1회 재시도."""
+        self._throttle()
+        resp = requests.post(url, json=payload, headers=self._headers(), timeout=self._timeout)
+        if resp.status_code == 429:
+            logger.warning("[TMAP] 429 Too Many Requests — %ss 대기 후 재시도", _RETRY_WAIT_SEC)
+            time.sleep(_RETRY_WAIT_SEC)
+            self._throttle()
+            resp = requests.post(url, json=payload, headers=self._headers(), timeout=self._timeout)
+        resp.raise_for_status()
+        return resp
+
     def _route_transit(self, olat, olng, dlat, dlng) -> Tuple[int, int]:
         payload = {
             "startX": str(olng), "startY": str(olat),
             "endX": str(dlng), "endY": str(dlat),
             "count": 1, "lang": 0, "format": "json",
         }
-        resp = requests.post(_TRANSIT_URL, json=payload, headers=self._headers(), timeout=self._timeout)
-        resp.raise_for_status()
+        resp = self._post_with_retry(_TRANSIT_URL, payload)
         data = resp.json()
         itineraries = data.get("metaData", {}).get("plan", {}).get("itineraries", [])
         if not itineraries:
@@ -63,8 +86,7 @@ class TmapClient:
             "reqCoordType": "WGS84GEO", "resCoordType": "WGS84GEO",
             "startName": "출발", "endName": "도착",
         }
-        resp = requests.post(url, json=payload, headers=self._headers(), timeout=self._timeout)
-        resp.raise_for_status()
+        resp = self._post_with_retry(url, payload)
         features = resp.json().get("features", [])
         if not features:
             raise ValueError(f"T-map {url}: empty features in response")
@@ -101,8 +123,7 @@ class TmapClient:
             "endX": str(dlng), "endY": str(dlat),
             "count": 1, "lang": 0, "format": "json",
         }
-        resp = requests.post(_TRANSIT_URL, json=payload, headers=self._headers(), timeout=self._timeout)
-        resp.raise_for_status()
+        resp = self._post_with_retry(_TRANSIT_URL, payload)
         data = resp.json()
         itineraries = data.get("metaData", {}).get("plan", {}).get("itineraries", [])
         if not itineraries:
@@ -121,8 +142,7 @@ class TmapClient:
             "reqCoordType": "WGS84GEO", "resCoordType": "WGS84GEO",
             "startName": "출발", "endName": "도착",
         }
-        resp = requests.post(url, json=payload, headers=self._headers(), timeout=self._timeout)
-        resp.raise_for_status()
+        resp = self._post_with_retry(url, payload)
         features = resp.json().get("features", [])
         if not features:
             raise ValueError(f"T-map {url}: empty features in response")
