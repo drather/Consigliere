@@ -54,14 +54,20 @@ LEFT JOIN SELECT에 `a.lat, a.lng` 추가.
 ### ISSUE-03: 출퇴근 시간 전부 미수집 (표시: "?분")
 
 **증상:** 모든 단지 `commute_transit_minutes = None`, `_score_commute = neutral(50)`.  
-**근본 원인 (환경 설정 누락):**
+**근본 원인 (데이터 누락):**
 
-`TMAP_API_KEY` 가 `.env` 및 `docker-compose.yaml` 에 미등록.  
-`TmapClient(api_key="")` → API 호출 실패 → CommuteService 예외 후 건너뜀.
+`TMAP_API_KEY` 는 `.env` 에 등록되어 있고 `docker-compose.yml` 의 `env_file: - .env` 지시자로 컨테이너에 주입됨 — 키 자체는 정상.
+
+실제 원인은 두 가지 경로 중 하나:
+1. **road_address NULL**: `apartments` 테이블에 해당 complex_code가 없으면 LEFT JOIN이 NULL 반환 → `_enrich_with_commute()` 가 road_address 없음으로 판단해 스킵.
+2. **`_resolve_workplace_coords()` 실패**: `GeocoderService.geocode()` 가 `workplace_station("삼성역")` 좌표를 반환하지 못하면 `dest=None` → CommuteService에 기본 config 좌표로 폴백 시도.
+
+CommuteService 내부 예외가 WARNING 로그로만 기록되어 사용자에게 노출 안 됨.
 
 **조치 계획:**  
-`.env.example` 에 `TMAP_API_KEY=` 항목 추가 (가이드).  
-실제 키 발급 후 `.env` 및 Docker 환경변수에 등록.
+API 서버 로그에서 `[Orchestrator] Commute 실패` WARNING 확인.  
+`apartments.road_address` 채움률 점검 (강남구/서초구 후보 기준).  
+CommuteService 폴백 동작이 config 기본 좌표(삼성역)를 제대로 사용하는지 단위 테스트 추가.
 
 ---
 
@@ -74,7 +80,7 @@ ISSUE-01~03 의 연쇄 효과 + 필터 설계 문제.
 
 | 기준 | 점수 | 원인 |
 |------|------|------|
-| commute | 50 (neutral) | TMAP 키 없음 (ISSUE-03) |
+| commute | 50 (neutral) | road_address NULL 또는 geocoder 실패 (ISSUE-03) |
 | liquidity | 100 (HIGH) | min_household_count=500 → 모두 500세대 이상 |
 | school | 50 (neutral) | POI 없음 (ISSUE-02) |
 | living_convenience | 50 (neutral) | POI 없음 (ISSUE-02) |

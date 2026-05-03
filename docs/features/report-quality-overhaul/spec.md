@@ -50,9 +50,11 @@ _build_markdown() → ReportRepository.save()
   - `_row_to_entry()`: lat/lng 키 가드 추가
 - 선행 조건: `apartments` 테이블에 `lat`, `lng` 컬럼이 있는지 확인 (`SELECT * FROM apartments LIMIT 1`)
 
-### P1: TMAP_API_KEY 환경 설정
-- `.env.example` 에 `TMAP_API_KEY=` 항목 추가
-- `docker-compose.yaml` environment 섹션에 `TMAP_API_KEY=${TMAP_API_KEY}` 추가
+### P1: 출퇴근 수집 실패 원인 진단 및 수정
+- API 서버 로그에서 `[Orchestrator] Commute 실패` WARNING 확인
+- `apartments.road_address` 채움률 점검: 강남구/서초구 후보 대상
+- CommuteService 단위 테스트: `dest=None` 시 config 기본 좌표(삼성역) 폴백 동작 검증
+- TMAP_API_KEY는 `.env` + `env_file: - .env` 로 이미 정상 주입됨 — 환경 설정 이슈 없음
 
 ### P2: 예산 적합성 기반 후보 정렬
 - 파일: `src/modules/real_estate/report_orchestrator.py`
