@@ -290,3 +290,15 @@ building_master_sigungu_codes:
   - "41800"
   - "41820"
   - "41830"
+
+daily_report:
+  days: 3                        # 분석 기간 (일)
+  top_k: 5                       # 기본 상위 단지 수
+  max_top_k: 10                  # 최대 상위 단지 수
+  storage_path: "data/daily_reports"
+  prior_period_days: 30          # 직전 비교 기간 (일)
+  max_new_commute_api_calls: 5   # 일일 TMAP API 신규 호출 상한 (캐시 히트는 제외)
+  scoring:
+    tx_weight: 0.4
+    price_weight: 0.3
+    persona_weight: 0.3
