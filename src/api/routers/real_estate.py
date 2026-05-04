@@ -637,6 +637,8 @@ def generate_daily_report(req: DailyReportRequest = None):
             return {
                 "status": "exists",
                 "date": date_str,
+                "top_k": None,
+                "total_transactions_analyzed": None,
                 "report_path": f"{storage_path}/daily_{date_str}.md",
                 "slack_sent": False,
             }
@@ -657,12 +659,7 @@ def generate_daily_report(req: DailyReportRequest = None):
         geocode_cache = cfg.get("geocode_cache_path", "data/geocode_cache.db")
         geocoder = GeocoderService(api_key=kakao_key, cache_path=geocode_cache)
 
-        commute_cfg = cfg.get("commute", {
-            "destination": "삼성역",
-            "destination_lat": 37.5088,
-            "destination_lng": 127.0633,
-            "cache_ttl_days": 90,
-        })
+        commute_cfg = cfg.get("commute", {})
         commute_db = cfg.get("commute_cache_db_path", "data/commute_cache.db")
         tmap_key = os.getenv("TMAP_API_KEY", "")
         commute_svc = CommuteService(
