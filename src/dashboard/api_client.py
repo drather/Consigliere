@@ -411,3 +411,43 @@ class DashboardClient:
             return {"error": f"HTTP {resp.status_code}"}
         except Exception as e:
             return {"error": str(e)}
+
+    @staticmethod
+    def list_daily_reports() -> list:
+        """데일리 리포트 날짜 목록 반환."""
+        try:
+            resp = requests.get(f"{API_BASE_URL}/dashboard/real-estate/daily-report/list", timeout=10)
+            if resp.status_code == 200:
+                return resp.json().get("dates", [])
+            return []
+        except Exception:
+            return []
+
+    @staticmethod
+    def get_daily_report(date_str: str) -> dict:
+        """특정 날짜 데일리 리포트 반환 (markdown 포함)."""
+        try:
+            resp = requests.get(
+                f"{API_BASE_URL}/dashboard/real-estate/daily-report/{date_str}",
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return {}
+        except Exception:
+            return {}
+
+    @staticmethod
+    def trigger_generate_daily_report(days: int = 3, top_k: int = 5, force: bool = False) -> dict:
+        """데일리 리포트 즉시 생성 트리거."""
+        try:
+            resp = requests.post(
+                f"{API_BASE_URL}/jobs/daily-report/generate",
+                json={"days": days, "top_k": top_k, "force": force},
+                timeout=300,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            return {"error": f"HTTP {resp.status_code}"}
+        except Exception as e:
+            return {"error": str(e)}
