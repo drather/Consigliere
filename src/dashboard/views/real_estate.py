@@ -551,7 +551,7 @@ def show_real_estate():
 
             if not items:
                 st.info("거시경제 데이터를 불러올 수 없습니다.")
-                st.caption("수집 Job을 먼저 실행하거나 '📋 Report Archive' 탭에서 거시경제 수집을 실행하세요.")
+                st.caption("수집 Job을 먼저 실행하거나 '💡 Insight' 탭 내 거시경제 수집 버튼을 사용하세요.")
             else:
                 from collections import defaultdict
                 by_category: dict = defaultdict(list)
@@ -674,9 +674,6 @@ def show_real_estate():
                         st.caption(f"출처: {meta.get('source', '-')}")
                         st.markdown(fact.get("content", ""))
 
-    # ──────────────────────────────────────────────────────────
-    # TAB 3: Report Archive
-    # ──────────────────────────────────────────────────────────
     # ──────────────────────────────────────────────────────────
     # TAB 3: 데일리 리포트
     # ──────────────────────────────────────────────────────────
