@@ -81,6 +81,15 @@ class CommuteService:
         self._repo.upsert(result)
         return result
 
+    def get_cached(
+        self,
+        origin_key: str,
+        dest: str,
+        mode: str,
+    ) -> Optional[CommuteResult]:
+        """캐시에 저장된 결과만 반환한다. 캐시 미스 시 None (API 미호출)."""
+        return self._repo.get(origin_key, dest, mode)
+
     def get_all_modes(
         self,
         origin_key: str,

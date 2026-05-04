@@ -235,7 +235,7 @@ class DailyReportOrchestrator:
             district_code = c.get("district_code", "")
             origin_key = f"{district_code}__{apt_name}"
 
-            cached = self._commute_svc._repo.get(origin_key, dest, "transit")
+            cached = self._commute_svc.get_cached(origin_key, dest, "transit")
             if cached is not None:
                 result["commute_transit_minutes"] = cached.duration_minutes
                 logger.debug("[DailyOrchestrator] 출퇴근 캐시 히트: %s", apt_name)

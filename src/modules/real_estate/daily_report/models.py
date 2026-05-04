@@ -10,7 +10,7 @@ class AggregatedTransaction:
     sigungu: str
     complex_code: Optional[str]
     recent_tx_count: int
-    avg_recent_price: float        # 만원 단위
+    avg_recent_price: float        # 원 단위
     price_change_pct: float        # 직전 30일 대비 변동률 (%)
     exclusive_area: float          # 가장 많이 거래된 면적 (㎡)
     household_count: int

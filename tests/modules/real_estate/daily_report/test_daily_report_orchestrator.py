@@ -147,13 +147,11 @@ class TestCommuteQuota:
     def test_cached_commute_does_not_consume_quota(self, tmp_path):
         from modules.real_estate.commute.models import CommuteResult
 
-        mock_repo = MagicMock()
-        mock_repo.get.return_value = CommuteResult(
+        mock_svc = MagicMock()
+        mock_svc.get_cached.return_value = CommuteResult(
             origin_key="11680__래미안", destination="삼성역", mode="transit",
             duration_minutes=18, distance_meters=900,
         )
-        mock_svc = MagicMock()
-        mock_svc._repo = mock_repo
 
         orch = _make_orchestrator(tmp_path)
         orch._commute_svc = mock_svc
@@ -165,10 +163,8 @@ class TestCommuteQuota:
         mock_svc.get.assert_not_called()
 
     def test_quota_zero_skips_uncached_candidates(self, tmp_path):
-        mock_repo = MagicMock()
-        mock_repo.get.return_value = None
         mock_svc = MagicMock()
-        mock_svc._repo = mock_repo
+        mock_svc.get_cached.return_value = None
 
         orch = _make_orchestrator(tmp_path)
         orch._commute_svc = mock_svc
@@ -182,10 +178,8 @@ class TestCommuteQuota:
     def test_quota_limits_new_api_calls(self, tmp_path):
         from modules.real_estate.commute.models import CommuteResult
 
-        mock_repo = MagicMock()
-        mock_repo.get.return_value = None
         mock_svc = MagicMock()
-        mock_svc._repo = mock_repo
+        mock_svc.get_cached.return_value = None
         mock_svc.get.return_value = CommuteResult(
             origin_key="x", destination="삼성역", mode="transit",
             duration_minutes=25, distance_meters=1200,
