@@ -1,6 +1,5 @@
-import json
-from datetime import date, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import date, datetime, timedelta
+from typing import Dict, List, Optional
 
 from core.llm import BaseLLMClient
 from core.prompt_loader import PromptLoader
@@ -174,7 +173,6 @@ class DailyReportOrchestrator:
             for c in candidates
         ]
 
-        from datetime import datetime
         report = DailyReport(
             date=date_str,
             analysis_period=date_range,
@@ -195,7 +193,6 @@ class DailyReportOrchestrator:
     @staticmethod
     def _to_dict(a: AggregatedTransaction) -> Dict:
         return {
-            "id": a.apt_master_id,
             "apt_master_id": a.apt_master_id,
             "apt_name": a.apt_name,
             "district_code": a.district_code,
@@ -254,9 +251,13 @@ class DailyReportOrchestrator:
                         dest_lat_override=dest_lat,
                         dest_lng_override=dest_lng,
                     )
+                    new_calls_used += 1
                     if cr:
                         result["commute_transit_minutes"] = cr.duration_minutes
-                    new_calls_used += 1
+                    else:
+                        logger.warning(
+                            "[DailyOrchestrator] 출퇴근 결과 없음 (quota 소모됨): %s", apt_name
+                        )
                     logger.info(
                         "[DailyOrchestrator] 출퇴근 API 호출 %d/%d: %s",
                         new_calls_used, max_new_calls, apt_name,
@@ -358,7 +359,6 @@ class DailyReportOrchestrator:
         return "\n".join(lines)
 
     def _empty_report(self, date_str: str, days: int, macro_summary: str) -> DailyReport:
-        from datetime import datetime
         markdown = (
             f"# 데일리 부동산 브리핑 — {date_str}\n\n"
             f"최근 {days}일 간 분석 가능한 실거래 데이터가 없습니다.\n"
