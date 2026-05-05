@@ -1,5 +1,25 @@
+import re
 from typing import List, Dict, Any
 from datetime import date
+
+
+def md_to_slack(text: str) -> str:
+    """Standard Markdown → Slack mrkdwn 변환.
+
+    Slack은 **bold** 대신 *bold*, 헤더(#) 미지원, --- 구분선 미지원.
+    """
+    # **bold** → *bold*  (이미 *x* 형태면 건드리지 않음)
+    text = re.sub(r'\*\*(.+?)\*\*', r'*\1*', text)
+    # # / ## / ### Heading → *Heading*
+    text = re.sub(r'^#{1,6}\s+(.+)$', r'*\1*', text, flags=re.MULTILINE)
+    # --- 구분선 → 빈 줄로 대체
+    text = re.sub(r'^-{3,}$', '', text, flags=re.MULTILINE)
+    # > blockquote → 들여쓰기 없이 plain text
+    text = re.sub(r'^>\s*', '', text, flags=re.MULTILINE)
+    # 연속 3개 이상 빈 줄 → 2개로 압축
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
 
 class RealEstatePresenter:
     """

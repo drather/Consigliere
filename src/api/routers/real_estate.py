@@ -26,6 +26,7 @@ from modules.real_estate.repository import ChromaRealEstateRepository
 from modules.real_estate.transaction_repository import TransactionRepository
 from modules.real_estate.apartment_repository import ApartmentRepository
 from modules.real_estate.apt_master_repository import AptMasterRepository
+from modules.real_estate.presenter import md_to_slack
 from core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -695,7 +696,7 @@ def generate_daily_report(req: DailyReportRequest = None):
         slack_sent = False
         try:
             slack = SlackSender()
-            slack.send(report.markdown)
+            slack.send(md_to_slack(report.markdown))
             slack_sent = True
             logger.info("[API] Slack 전송 완료 — daily report %s", date_str)
         except Exception as e:
