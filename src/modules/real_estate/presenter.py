@@ -7,6 +7,7 @@ def md_to_slack(text: str) -> str:
     """Standard Markdown → Slack mrkdwn 변환.
 
     Slack은 **bold** 대신 *bold*, 헤더(#) 미지원, --- 구분선 미지원.
+    <!-- stats --> ... <!-- /stats --> 블록은 Slack blockquote(> 접두사)로 변환.
     """
     # **bold** → *bold*  (이미 *x* 형태면 건드리지 않음)
     text = re.sub(r'\*\*(.+?)\*\*', r'*\1*', text)
@@ -14,8 +15,19 @@ def md_to_slack(text: str) -> str:
     text = re.sub(r'^#{1,6}\s+(.+)$', r'*\1*', text, flags=re.MULTILINE)
     # --- 구분선 → 빈 줄로 대체
     text = re.sub(r'^-{3,}$', '', text, flags=re.MULTILINE)
-    # > blockquote → 들여쓰기 없이 plain text
-    text = re.sub(r'^>\s*', '', text, flags=re.MULTILINE)
+    # <!-- stats --> ... <!-- /stats --> → Slack blockquote 박스
+    def _stats_to_blockquote(m: re.Match) -> str:
+        inner = m.group(1).strip()
+        quoted = '\n'.join(f'> {line}' for line in inner.split('\n') if line.strip())
+        return quoted
+    text = re.sub(
+        r'<!--\s*stats\s*-->\n(.*?)\n<!--\s*/stats\s*-->',
+        _stats_to_blockquote,
+        text,
+        flags=re.DOTALL,
+    )
+    # 나머지 HTML 주석 제거
+    text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
     # 연속 3개 이상 빈 줄 → 2개로 압축
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()

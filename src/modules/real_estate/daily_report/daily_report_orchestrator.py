@@ -322,40 +322,46 @@ class DailyReportOrchestrator:
             trend = c.get("_trend")
             trend_area = c.get("_trend_area_sqm", 84)
 
-            lines += [
-                f"### {i}. {name} — composite {score_pct}점",
-                "",
-                f"**거래:** {c.get('recent_tx_count', 0)}건 | 평균 {price_eok:.1f}억 | 전월比 {change:+.1f}%",
-                f"**위치:** {c.get('sigungu', '')} | **면적:** {c.get('exclusive_area', 84):.0f}㎡ | **세대수:** {c.get('household_count', 0)}세대",
+            # Stat block — wrapped in HTML comment markers so md_to_slack()
+            # can render it as a Slack blockquote box (invisible in web markdown)
+            stat_block = [
+                f"**거래:** {c.get('recent_tx_count', 0)}건  |  평균 {price_eok:.1f}억  |  전월比 {change:+.1f}%",
+                f"**위치:** {c.get('sigungu', '')}  |  **면적:** {c.get('exclusive_area', 84):.0f}㎡  |  **세대수:** {c.get('household_count', 0)}세대",
             ]
-
             if c.get("build_year"):
-                lines.append(
-                    f"**건물:** {c['build_year']}년 준공 | "
-                    f"용적률 {c.get('floor_area_ratio', '?')}% | "
+                stat_block.append(
+                    f"**건물:** {c['build_year']}년 준공  |  "
+                    f"용적률 {c.get('floor_area_ratio', '?')}%  |  "
                     f"건폐율 {c.get('building_coverage_ratio', '?')}%"
                 )
-
             commute = c.get("commute_transit_minutes")
-            lines.append(f"**출퇴근:** {'미수집' if commute is None else f'{commute}분 (대중교통)'}")
-
+            stat_block.append(
+                f"**출퇴근:** {'미수집' if commute is None else f'{commute}분 (대중교통)'}"
+            )
             poi = c.get("_poi")
             if poi:
                 stations = poi.subway_stations[:2] if hasattr(poi, "subway_stations") else []
                 s_str = ", ".join(
                     f"{s.get('name', '?')}({s.get('line', '?')})" for s in stations
                 ) or "없음"
-                lines.append(f"**역세권:** {s_str}")
-                lines.append(
-                    f"**편의시설:** 학교 {poi.schools_count}개, "
-                    f"학원 {poi.academies_count}개, 마트 {poi.marts_count}개"
+                stat_block.append(f"**역세권:** {s_str}")
+                stat_block.append(
+                    f"**편의시설:** 학교 {poi.schools_count}개  |  "
+                    f"학원 {poi.academies_count}개  |  마트 {poi.marts_count}개"
+                )
+            if trend:
+                stat_block.append(
+                    f"**시세추세 ({trend_area:.0f}㎡):** 평균 {trend.avg_price / 10000:.0f}만원  |  "
+                    f"변동 {trend.price_change_pct:+.1f}%  |  월거래 {trend.monthly_volume:.1f}건"
                 )
 
-            if trend:
-                lines.append(
-                    f"**시세추세 ({trend_area:.0f}㎡):** 평균 {trend.avg_price / 10000:.0f}만원 | "
-                    f"변동 {trend.price_change_pct:+.1f}% | 월거래 {trend.monthly_volume:.1f}건"
-                )
+            lines += [
+                f"### {i}. {name} — composite {score_pct}점",
+                "",
+                "<!-- stats -->",
+                *stat_block,
+                "<!-- /stats -->",
+            ]
 
             ins = insights_map.get(name, {})
             if ins:
