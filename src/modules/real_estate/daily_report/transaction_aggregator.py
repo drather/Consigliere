@@ -52,7 +52,9 @@ SELECT
         0.0
     )                              AS price_change_pct,
     COALESCE(ta.exclusive_area, 84.0) AS exclusive_area,
-    COALESCE(a.household_count, 0) AS household_count
+    COALESCE(a.household_count, 0) AS household_count,
+    a.road_address,
+    am.pnu
 FROM recent r
 JOIN apt_master am ON r.apt_master_id = am.id
 LEFT JOIN prior p ON r.apt_master_id = p.apt_master_id
@@ -111,6 +113,8 @@ class TransactionAggregator:
                 price_change_pct=r["price_change_pct"],
                 exclusive_area=r["exclusive_area"],
                 household_count=r["household_count"],
+                road_address=r["road_address"],
+                pnu=r["pnu"],
                 composite_score=self._composite_score(
                     recent_tx_count=r["recent_tx_count"],
                     max_tx_count=max_tx,

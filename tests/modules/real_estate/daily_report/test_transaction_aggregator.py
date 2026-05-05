@@ -19,7 +19,8 @@ def _setup_db(db_path: str) -> None:
                 tx_count INTEGER DEFAULT 0,
                 first_traded TEXT,
                 last_traded TEXT,
-                created_at TEXT NOT NULL DEFAULT ''
+                created_at TEXT NOT NULL DEFAULT '',
+                pnu TEXT
             );
             CREATE TABLE IF NOT EXISTS transactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

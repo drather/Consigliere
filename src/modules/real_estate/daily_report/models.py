@@ -15,6 +15,8 @@ class AggregatedTransaction:
     exclusive_area: float          # 가장 많이 거래된 면적 (㎡)
     household_count: int
     composite_score: float         # 0.0 ~ 1.0
+    road_address: Optional[str] = None   # geocode/commute용
+    pnu: Optional[str] = None            # 건물대장 조회용
 
 
 @dataclass

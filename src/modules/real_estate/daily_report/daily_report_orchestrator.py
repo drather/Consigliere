@@ -204,6 +204,8 @@ class DailyReportOrchestrator:
             "exclusive_area": a.exclusive_area,
             "household_count": a.household_count,
             "composite_score": a.composite_score,
+            "road_address": a.road_address,
+            "pnu": a.pnu,
         }
 
     def _enrich_with_commute_quota(
