@@ -149,7 +149,8 @@ class DailyReportOrchestrator:
         )
         try:
             llm_result = self._llm.generate_json(prompt, metadata=metadata)
-            market_summary = llm_result.get("market_summary", "")
+            market_bullets = llm_result.get("market_bullets", [])
+            market_summary = "\n".join(f"- {b}" for b in market_bullets) if market_bullets else ""
             candidate_insights = llm_result.get("candidate_insights", [])
         except Exception as e:
             logger.warning("[DailyOrchestrator] LLM 실패: %s", e)
@@ -284,6 +285,14 @@ class DailyReportOrchestrator:
         candidates: List[Dict],
         insights_map: Dict[str, Dict],
     ) -> str:
+        _SCORE_META = [
+            ("commute",            "⚡ 출퇴근편의성", 20),
+            ("liquidity",          "💰 환금성",       20),
+            ("price_potential",    "📈 가격상승가능성", 10),
+            ("living_convenience", "🛍️ 생활편의",      20),
+            ("school",             "🎒 학군",          20),
+        ]
+
         lines = [
             f"# 데일리 부동산 브리핑 — {date_str}",
             "",
@@ -350,12 +359,35 @@ class DailyReportOrchestrator:
 
             ins = insights_map.get(name, {})
             if ins:
-                lines += [
-                    "",
-                    f"> **거래 동향:** {ins.get('trading_comment', '')}",
-                    f"> **단지 특징:** {ins.get('characteristics_comment', '')}",
-                    f"> **전략 제안:** {ins.get('strategy_comment', '')}",
-                ]
+                lines.append("")
+
+                trading = ins.get("trading_bullets", [])
+                if trading:
+                    lines.append("**거래 동향**")
+                    lines.extend(f"- {b}" for b in trading)
+
+                chars = ins.get("characteristics_bullets", [])
+                if chars:
+                    lines.append("")
+                    lines.append("**단지 특징**")
+                    lines.extend(f"- {b}" for b in chars)
+
+                scores = ins.get("scores", {})
+                if scores:
+                    lines.append("")
+                    lines.append("**평가 점수**")
+                    for key, label, max_score in _SCORE_META:
+                        entry = scores.get(key, {})
+                        score_val = entry.get("score", "—")
+                        comment = entry.get("comment", "")
+                        lines.append(f"- {label} ({max_score}점): **{score_val}점** — {comment}")
+
+                strategy = ins.get("strategy_bullets", [])
+                if strategy:
+                    lines.append("")
+                    lines.append("**전략 제안**")
+                    lines.extend(f"- {b}" for b in strategy)
+
             lines += ["", "---", ""]
 
         return "\n".join(lines)
