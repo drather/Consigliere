@@ -27,20 +27,48 @@ output_format: json
 
 ```json
 {
-  "market_summary": "오늘 시장에서 주목할 패턴을 3~5문장으로 서술. 어떤 지역이 활발했고, 가격 방향은 어떠했으며, 페르소나 관점에서 오늘의 시장이 의미하는 바는 무엇인가.",
+  "market_bullets": [
+    "오늘 시장에서 주목할 패턴 (짧고 명확한 한 문장)",
+    "가격 방향이나 지역 특이사항 (짧고 명확한 한 문장)",
+    "페르소나 관점에서 오늘의 시장이 의미하는 바 (짧고 명확한 한 문장)"
+  ],
   "candidate_insights": [
     {
       "apt_name": "단지명 (candidates_text에 있는 이름 그대로)",
-      "trading_comment": "이 단지의 최근 거래 동향을 1~2문장으로 서술.",
-      "characteristics_comment": "단지 특징을 1~2문장으로 서술.",
-      "strategy_comment": "페르소나 관점에서 전략적 제안을 1~2문장으로 서술."
+      "trading_bullets": [
+        "거래 건수와 가격 동향 한 줄",
+        "전월 대비 변동률 의미 한 줄"
+      ],
+      "characteristics_bullets": [
+        "세대수·면적·준공연도 등 핵심 특징 한 줄",
+        "출퇴근·역세권·편의시설 중 주목할 점 한 줄"
+      ],
+      "scores": {
+        "commute":            {"score": 0, "comment": "출퇴근 시간 기반 한 줄 평가 (0~20점)"},
+        "liquidity":          {"score": 0, "comment": "세대수·거래량 기반 환금성 한 줄 평가 (0~20점)"},
+        "price_potential":    {"score": 0, "comment": "가격 변동률·추세 기반 한 줄 평가 (0~10점)"},
+        "living_convenience": {"score": 0, "comment": "역세권·마트·편의시설 기반 한 줄 평가 (0~20점)"},
+        "school":             {"score": 0, "comment": "학교·학원 수 기반 한 줄 평가 (0~20점)"}
+      },
+      "strategy_bullets": [
+        "페르소나 관점 핵심 판단 한 줄",
+        "구체적 액션 또는 주의사항 한 줄"
+      ]
     }
   ]
 }
 ```
+
+점수 기준:
+- commute: 30분 미만 20점, 30~45분 15점, 45~60분 10점, 60~90분 5점, 90분 초과 또는 미수집 0점
+- liquidity: 세대수 1000+ 20점, 500~999 15점, 300~499 10점, 300 미만 5점, 미수집 0점
+- price_potential: |변동률| 15% 초과 10점, 10~15% 7점, 5~10% 5점, 5% 미만 2점 (하락이면 절반 감점)
+- living_convenience: 역세권 있으면 +10, 마트 1개당 +2(최대 10점)
+- school: 학교 1개당 +1.5(최대 15점), 학원 15개 이상이면 +5점
 
 주의사항:
 - apt_name은 반드시 candidates_text에 나온 단지명 그대로 사용하세요.
 - candidate_insights 순서는 candidates_text 순서와 동일하게 유지하세요.
 - 숫자는 직접 계산하지 말고 주어진 데이터를 그대로 인용하세요.
 - 데이터가 없는 항목은 "미수집"으로 표기하세요.
+- market_bullets는 3~5개, trading_bullets·characteristics_bullets·strategy_bullets는 각 2~3개.

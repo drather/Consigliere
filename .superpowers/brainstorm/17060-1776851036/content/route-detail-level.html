@@ -1,0 +1,57 @@
+<h2>경로 상세 정보 — 어느 수준까지 보여줄까?</h2>
+<p class="subtitle">대시보드·리포트에서 출퇴근 경로를 표시하는 세 가지 방식</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>한 줄 요약</h3>
+      <p style="color:#aaa;font-size:0.85em;margin-bottom:8px">summary string만 저장, 파싱 단순</p>
+      <div style="background:#1e1e1e;border-radius:8px;padding:12px;font-family:monospace;font-size:0.82em;color:#e0e0e0">
+        🚌 대중교통: 도보 5분 → 302번 버스 → 잠실역 → 2호선 → 삼성역 (59분)<br>
+        🚗 자가용: 올림픽대로 → 테헤란로 (35분 · 15.0km)<br>
+        🚶 도보: 가락로 → 송파대로 → 삼성역 (90분 · 5.0km)
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>장점</h4><ul><li>구현 단순</li><li>캐시 가볍다</li></ul></div>
+        <div class="cons"><h4>단점</h4><ul><li>구조화 불가</li><li>아이콘/단계 분리 어려움</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>구조화 단계 목록 (추천)</h3>
+      <p style="color:#aaa;font-size:0.85em;margin-bottom:8px">legs[] JSON 저장, 대시보드에서 렌더링 가능</p>
+      <div style="background:#1e1e1e;border-radius:8px;padding:12px;font-size:0.82em;color:#e0e0e0">
+        <div style="margin-bottom:6px"><span style="background:#3a3a3a;border-radius:4px;padding:2px 6px">🚶 도보</span> 출발지 → 302번 정류장 <span style="color:#888">5분</span></div>
+        <div style="border-left:2px solid #555;margin-left:10px;padding-left:10px;color:#888;font-size:0.85em">가락로 방면 도보</div>
+        <div style="margin:6px 0"><span style="background:#3a3a3a;border-radius:4px;padding:2px 6px">🚌 302번 버스</span> 잠실역 방향 <span style="color:#888">12분 · 4정거장</span></div>
+        <div style="border-left:2px solid #555;margin-left:10px;padding-left:10px;color:#888;font-size:0.85em">가락시장 → 석촌 → 잠실 → 잠실역</div>
+        <div style="margin:6px 0"><span style="background:#3a3a3a;border-radius:4px;padding:2px 6px">🚇 2호선</span> 잠실 → 삼성 <span style="color:#888">8분 · 2정거장</span></div>
+        <div style="border-left:2px solid #555;margin-left:10px;padding-left:10px;color:#888;font-size:0.85em">잠실역 → 종합운동장 → 삼성역</div>
+        <div style="margin:6px 0"><span style="background:#3a3a3a;border-radius:4px;padding:2px 6px">🚶 도보</span> 삼성역 → 목적지 <span style="color:#888">3분</span></div>
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>장점</h4><ul><li>대시보드에서 단계별 렌더링</li><li>LLM이 환승 경로 정확히 인용</li></ul></div>
+        <div class="cons"><h4>단점</h4>  <ul><li>DB 컬럼 JSON TEXT로 저장</li><li>파싱 로직 추가</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>원시 API 응답 저장</h3>
+      <p style="color:#aaa;font-size:0.85em;margin-bottom:8px">전체 JSON blob 저장, 나중에 원하는 대로 파싱 가능</p>
+      <div style="background:#1e1e1e;border-radius:8px;padding:12px;font-family:monospace;font-size:0.75em;color:#e0e0e0;overflow:hidden;max-height:80px">
+        {"metaData":{"plan":{"itineraries":[{"totalTime":3540,"legs":[{"mode":"WALK","distance":400,"route":null...
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>장점</h4><ul><li>정보 손실 없음</li><li>미래 확장 자유도↑</li></ul></div>
+        <div class="cons"><h4>단점</h4><ul><li>DB 매우 무거움</li><li>모드별 스키마 달라 파싱 복잡</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

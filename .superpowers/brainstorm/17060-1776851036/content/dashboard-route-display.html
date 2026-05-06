@@ -1,0 +1,99 @@
+<h2>대시보드 경로 표시 방식</h2>
+<p class="subtitle">단지 상세 패널에서 출퇴근 경로를 어떻게 보여줄까?</p>
+
+<div class="options">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>탭 방식 (대중교통 / 자가용 / 도보)</h3>
+      <p style="color:#aaa;font-size:0.85em;margin-bottom:8px">모드별로 탭 전환, 한 화면에 하나의 경로</p>
+      <div class="mockup">
+        <div class="mockup-header">🏢 송파파크데일1단지 — 출퇴근 (삼성역)</div>
+        <div class="mockup-body" style="padding:0">
+          <div style="display:flex;border-bottom:1px solid #333;background:#1a1a1a">
+            <div style="padding:8px 16px;border-bottom:2px solid #4a9eff;color:#4a9eff;font-size:0.85em;cursor:pointer">🚌 대중교통 59분</div>
+            <div style="padding:8px 16px;color:#666;font-size:0.85em;cursor:pointer">🚗 자가용 35분</div>
+            <div style="padding:8px 16px;color:#666;font-size:0.85em;cursor:pointer">🚶 도보 90분</div>
+          </div>
+          <div style="padding:14px">
+            <div style="display:flex;align-items:flex-start;margin-bottom:12px">
+              <div style="width:32px;height:32px;border-radius:50%;background:#2a4a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.9em">🚶</div>
+              <div style="margin-left:10px">
+                <div style="font-size:0.85em;font-weight:600;color:#e0e0e0">도보</div>
+                <div style="font-size:0.78em;color:#888">출발지 → 가락시장 정류장 · 5분</div>
+              </div>
+              <div style="margin-left:auto;font-size:0.78em;color:#aaa">400m</div>
+            </div>
+            <div style="border-left:2px dashed #444;margin-left:16px;padding-left:20px;margin-bottom:12px">
+              <div style="display:flex;align-items:flex-start">
+                <div style="width:32px;height:32px;border-radius:50%;background:#2a3a4a;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.9em">🚌</div>
+                <div style="margin-left:10px">
+                  <div style="font-size:0.85em;font-weight:600;color:#e0e0e0">302번 버스</div>
+                  <div style="font-size:0.78em;color:#888">가락시장 → 잠실역 · 12분 · 4정거장</div>
+                  <div style="font-size:0.72em;color:#555;margin-top:2px">가락시장 → 석촌 → 잠실 → 잠실역</div>
+                </div>
+                <div style="margin-left:auto;font-size:0.78em;color:#aaa">3.2km</div>
+              </div>
+            </div>
+            <div style="border-left:2px dashed #444;margin-left:16px;padding-left:20px;margin-bottom:12px">
+              <div style="display:flex;align-items:flex-start">
+                <div style="width:32px;height:32px;border-radius:50%;background:#3a2a4a;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.9em">🚇</div>
+                <div style="margin-left:10px">
+                  <div style="font-size:0.85em;font-weight:600;color:#e0e0e0">2호선</div>
+                  <div style="font-size:0.78em;color:#888">잠실역 → 삼성역 · 8분 · 2정거장</div>
+                </div>
+                <div style="margin-left:auto;font-size:0.78em;color:#aaa">4.1km</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:flex-start">
+              <div style="width:32px;height:32px;border-radius:50%;background:#4a3a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.9em">🚶</div>
+              <div style="margin-left:10px">
+                <div style="font-size:0.85em;font-weight:600;color:#e0e0e0">도보</div>
+                <div style="font-size:0.78em;color:#888">삼성역 5번 출구 → 목적지 · 3분</div>
+              </div>
+              <div style="margin-left:auto;font-size:0.78em;color:#aaa">200m</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>3단 카드 방식 (모드 나란히)</h3>
+      <p style="color:#aaa;font-size:0.85em;margin-bottom:8px">대중교통·자가용·도보를 한 화면에 요약 카드로</p>
+      <div class="mockup">
+        <div class="mockup-header">🏢 송파파크데일1단지 — 출퇴근 (삼성역)</div>
+        <div class="mockup-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+            <div style="background:#1e2a1e;border-radius:8px;padding:10px;border:1px solid #2a4a2a">
+              <div style="font-size:0.8em;color:#88cc88;margin-bottom:4px">🚌 대중교통</div>
+              <div style="font-size:1.4em;font-weight:700;color:#e0e0e0">59분</div>
+              <div style="font-size:0.72em;color:#666;margin-top:6px;line-height:1.5">
+                도보 5분<br>→ 302번 버스<br>→ 잠실역 환승<br>→ 2호선 삼성역
+              </div>
+            </div>
+            <div style="background:#1e1e2a;border-radius:8px;padding:10px;border:1px solid #2a2a4a">
+              <div style="font-size:0.8em;color:#8888cc;margin-bottom:4px">🚗 자가용</div>
+              <div style="font-size:1.4em;font-weight:700;color:#e0e0e0">35분</div>
+              <div style="font-size:0.72em;color:#666;margin-top:6px;line-height:1.5">
+                올림픽대로<br>→ 잠실대교<br>→ 테헤란로<br>→ 삼성역
+              </div>
+            </div>
+            <div style="background:#2a1e1e;border-radius:8px;padding:10px;border:1px solid #4a2a2a">
+              <div style="font-size:0.8em;color:#cc8888;margin-bottom:4px">🚶 도보</div>
+              <div style="font-size:1.4em;font-weight:700;color:#e0e0e0">90분</div>
+              <div style="font-size:0.72em;color:#666;margin-top:6px;line-height:1.5">
+                가락로<br>→ 송파대로<br>→ 올림픽대로<br>→ 삼성역
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
