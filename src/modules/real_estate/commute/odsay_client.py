@@ -26,7 +26,7 @@ class OdsayClient:
         mode: str = "transit",
     ) -> Tuple[int, int]:
         """Returns (duration_minutes, distance_meters)."""
-        duration, distance, _, _ = self.route_with_legs(origin_lat, origin_lng, dest_lat, dest_lng)
+        duration, distance, _, _ = self.route_with_legs(origin_lat, origin_lng, dest_lat, dest_lng, mode=mode)
         return duration, distance
 
     def route_with_legs(
@@ -38,6 +38,8 @@ class OdsayClient:
         mode: str = "transit",
     ) -> Tuple[int, int, List[dict], str]:
         """Returns (duration_minutes, distance_meters, legs, route_summary)."""
+        if mode != "transit":
+            raise ValueError(f"OdsayClient only supports 'transit', got '{mode}'")
         params = {
             "apiKey": self._api_key,
             "SX": str(origin_lng),

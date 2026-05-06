@@ -82,6 +82,13 @@ class TestOdsayClientRouteDuration:
         assert duration == 45
         assert distance == 800
 
+    def test_non_transit_mode_raises(self):
+        """transit 이외 모드는 ValueError를 발생시킨다."""
+        from modules.real_estate.commute.odsay_client import OdsayClient
+        client = OdsayClient(api_key="test-key")
+        with pytest.raises(ValueError, match="transit"):
+            client.route(37.49, 127.06, 37.51, 127.07, mode="car")
+
     def test_empty_path_raises_value_error(self):
         """path가 비어 있으면 ValueError를 발생시킨다."""
         from modules.real_estate.commute.odsay_client import OdsayClient
