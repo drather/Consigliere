@@ -613,7 +613,9 @@ def generate_daily_report(req: DailyReportRequest = None):
     from modules.real_estate.trend_analyzer import TrendAnalyzer
     from modules.real_estate.commute.commute_service import CommuteService
     from modules.real_estate.commute.commute_repository import CommuteRepository
+    from modules.real_estate.commute.odsay_client import OdsayClient
     from modules.real_estate.commute.tmap_client import TmapClient
+    from modules.real_estate.commute.hybrid_commute_client import HybridCommuteClient
     from modules.real_estate.report_orchestrator import _calc_budget
     from modules.real_estate.daily_report.transaction_aggregator import TransactionAggregator
     from modules.real_estate.daily_report.daily_report_repository import DailyReportRepository
@@ -665,7 +667,10 @@ def generate_daily_report(req: DailyReportRequest = None):
         tmap_key = os.getenv("TMAP_API_KEY", "")
         commute_svc = CommuteService(
             repo=CommuteRepository(db_path=commute_db, ttl_days=int(commute_cfg.get("cache_ttl_days", 90))),
-            tmap_client=TmapClient(api_key=tmap_key),
+            tmap_client=HybridCommuteClient(
+                odsay=OdsayClient(api_key=os.getenv("ODSAY_API_KEY", "")),
+                tmap=TmapClient(api_key=tmap_key),
+            ),
             geocoder=geocoder,
             config=commute_cfg,
         )

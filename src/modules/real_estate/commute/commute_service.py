@@ -3,7 +3,7 @@ from typing import Dict, Optional
 
 from .models import CommuteResult
 from .commute_repository import CommuteRepository
-from .tmap_client import TmapClient
+from .hybrid_commute_client import HybridCommuteClient
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class CommuteService:
     def __init__(
         self,
         repo: CommuteRepository,
-        tmap_client: TmapClient,
+        tmap_client: HybridCommuteClient,
         geocoder,          # GeocoderService (DIP — 인터페이스 의존)
         config: dict,
     ):

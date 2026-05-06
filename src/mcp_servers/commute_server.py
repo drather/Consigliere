@@ -13,7 +13,9 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".en
 
 import yaml
 from mcp.server.fastmcp import FastMCP
+from modules.real_estate.commute.odsay_client import OdsayClient
 from modules.real_estate.commute.tmap_client import TmapClient
+from modules.real_estate.commute.hybrid_commute_client import HybridCommuteClient
 from modules.real_estate.commute.commute_repository import CommuteRepository
 from modules.real_estate.commute.commute_service import CommuteService
 from modules.real_estate.geocoder import GeocoderService
@@ -37,7 +39,10 @@ os.makedirs(os.path.dirname(_commute_db), exist_ok=True)
 
 _commute_service = CommuteService(
     repo=CommuteRepository(db_path=_commute_db, ttl_days=int(_commute_cfg.get("cache_ttl_days", 90))),
-    tmap_client=TmapClient(api_key=os.getenv("TMAP_API_KEY", "")),
+    tmap_client=HybridCommuteClient(
+        odsay=OdsayClient(api_key=os.getenv("ODSAY_API_KEY", "")),
+        tmap=TmapClient(api_key=os.getenv("TMAP_API_KEY", "")),
+    ),
     geocoder=GeocoderService(api_key=os.getenv("KAKAO_API_KEY", "")),
     config=_commute_cfg,
 )

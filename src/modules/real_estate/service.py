@@ -28,7 +28,9 @@ from .apartment_repository import ApartmentRepository
 # NOTE: _normalize_name is also defined in apartment_repository.py — extract to shared utils when refactoring
 from .transaction_repository import TransactionRepository, _normalize_name
 from .apt_master_repository import AptMasterRepository
+from .commute.odsay_client import OdsayClient
 from .commute.tmap_client import TmapClient
+from .commute.hybrid_commute_client import HybridCommuteClient
 from .commute.commute_repository import CommuteRepository
 from .commute.commute_service import CommuteService
 from .geocoder import GeocoderService
@@ -106,7 +108,10 @@ class RealEstateAgent:
         tmap_key = os.getenv("TMAP_API_KEY", "")
         self.commute_service = CommuteService(
             repo=CommuteRepository(db_path=commute_db, ttl_days=int(commute_cfg.get("cache_ttl_days", 90))),
-            tmap_client=TmapClient(api_key=tmap_key),
+            tmap_client=HybridCommuteClient(
+                odsay=OdsayClient(api_key=os.getenv("ODSAY_API_KEY", "")),
+                tmap=TmapClient(api_key=tmap_key),
+            ),
             geocoder=GeocoderService(api_key=kakao_key),
             config=commute_cfg,
         )
