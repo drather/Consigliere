@@ -1,6 +1,5 @@
 import os
 import sys
-import math
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -17,13 +16,13 @@ ODSAY_RESPONSE = {
             "subPath": [
                 {
                     "trafficType": 3,     # 도보
-                    "sectionTime": 300,   # 초
+                    "sectionTime": 5,     # 분 단위
                     "startName": "출발지",
                     "endName": "강남역",
                 },
                 {
                     "trafficType": 1,     # 지하철
-                    "sectionTime": 900,   # 초
+                    "sectionTime": 15,    # 분 단위
                     "startName": "강남역",
                     "endName": "서울역",
                     "lane": [{"name": "2호선"}],
@@ -37,7 +36,7 @@ ODSAY_RESPONSE = {
                 },
                 {
                     "trafficType": 2,     # 버스
-                    "sectionTime": 600,   # 초
+                    "sectionTime": 10,    # 분 단위
                     "startName": "서울역",
                     "endName": "종로3가역",
                     "lane": [{"busNo": "150"}],
@@ -50,7 +49,7 @@ ODSAY_RESPONSE = {
                 },
                 {
                     "trafficType": 3,     # 도보
-                    "sectionTime": 180,   # 초
+                    "sectionTime": 3,     # 분 단위
                     "startName": "종로3가역",
                     "endName": "목적지",
                 },

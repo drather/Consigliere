@@ -1,5 +1,4 @@
 import logging
-import math
 import requests
 from typing import List, Tuple
 
@@ -70,7 +69,7 @@ class OdsayClient:
                 "mode": mode,
                 "from_name": sp.get("startName", ""),
                 "to_name": sp.get("endName", ""),
-                "duration_minutes": math.ceil(sp.get("sectionTime", 0) / 60),
+                "duration_minutes": int(sp.get("sectionTime", 0)),  # ODsay sectionTime은 분 단위
             }
             if mode in ("BUS", "SUBWAY"):
                 lane = sp.get("lane", [{}])[0] if sp.get("lane") else {}
