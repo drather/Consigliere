@@ -1,10 +1,13 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-04-30
-**Current Active Feature:** 없음 (대기 중)
+**Last Updated:** 2026-05-07
+**Current Active Feature:** 없음 (다음 작업 확정 대기)
 
 ## 현재 포커스
 - **Branch:** `master`
-- **Status:** ✅ feature/apt-ratios 롤백 + 컨텍스트 업데이트 완료 (2026-04-30)
+- **Status:** ✅ ODsay 대중교통 API 교체 완료 (2026-05-07)
+  - `OdsayClient` + `HybridCommuteClient` 신규 구현
+  - Tmap transit(일 10회) → ODsay(일 1,000회) 교체
+  - 주입처 4곳 교체, 51개 commute 테스트 PASS
 
 ## 선행 브랜치 (미머지)
 - **Branch:** `feature/real-estate-sqlite-redesign`
@@ -98,7 +101,25 @@
 
 ## 다음 작업 로드맵
 
-### 1순위 — E2E 테스트 코드 업데이트
+### 1순위 — 카카오 POI 기반 입지 분석
+- **목표:** 단지 주변 주요 시설(편의점, 마트, 병원, 지하철역 등)을 카카오 로컬 API로 수집하여 입지 점수 산출
+- **배경:** 현재 `poi_collector.py` 존재하나 리포트/대시보드에 미통합. 실거래 분석에 입지 요소 추가 필요
+- **작업:**
+  - 카카오 로컬 API (`/v2/local/search/category`) 카테고리별 POI 수집
+  - 단지 기준 반경 N km 내 시설 수 집계 → 입지 점수 모델
+  - 리포트 및 대시보드에 입지 분석 섹션 추가
+- **참고:** 카카오 API 키 이미 `.env`에 존재 (`KAKAO_API_KEY`)
+
+### 2순위 — 학교알리미 기반 학군 분석
+- **목표:** 단지 인근 초/중/고교 학업성취도, 학급당 학생 수 등 학군 데이터 수집 및 점수화
+- **배경:** 학군은 부동산 가치에 큰 영향. 학교알리미(schoolinfo.go.kr) 공공 API 활용
+- **작업:**
+  - 학교알리미 OpenAPI 키 발급 및 `.env` 등록
+  - 단지 → 학군구역 매핑 (행정구역 코드 기반)
+  - 학교 데이터 수집 클라이언트 + 저장소 구현
+  - 리포트 및 대시보드에 학군 분석 섹션 추가
+
+### 3순위 — E2E 테스트 코드 업데이트
 - **목표:** Transaction-First 전환 이후 변경된 Tab1(아파트 탐색) UX에 맞게 E2E 테스트 정비
 - **배경:** `test_e2e_real_estate.py`가 `ApartmentMasterRepository` 기반 UI를 테스트하고 있어 `AptMasterRepository` 전환 후 깨질 가능성 있음
 - **작업:**
