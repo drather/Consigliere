@@ -59,6 +59,15 @@ scoring:
 poi:
   walk_speed_mpm: 67
 
+school:
+  radius_km: 1.0
+  students_per_class_ideal: 20
+  students_per_class_warning: 28
+  nearby_school_high: 3
+  nearby_school_mid: 1
+  score_weight_density: 0.30
+  score_weight_class_size: 0.70
+
 districts:
   # ── 서울특별시 (25개 구) ──────────────────────
   - code: "11110"

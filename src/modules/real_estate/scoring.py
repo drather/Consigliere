@@ -76,7 +76,11 @@ class ScoringEngine:
         return _household_score(households, self.household_thresholds)
 
     def _score_school(self, c: Dict) -> int:
-        """POI 학원 수 우선, 없으면 school_zone_notes fallback."""
+        """school_score 직접 값 우선, 없으면 POI 학원 수, 없으면 school_zone_notes fallback."""
+        school_score = c.get("school_score")
+        if school_score is not None:
+            return int(school_score)
+
         poi_academies = c.get("poi_academies_count")
         if poi_academies is not None:
             if poi_academies >= self.poi_academy_high:
