@@ -132,3 +132,67 @@ class TestCollectByDistrict:
         assert "schools_saved" in result
         assert "student_records_saved" in result
         assert "teacher_records_saved" in result
+
+
+class TestCalculateScore:
+    def _svc_with_data(self):
+        repo = SchoolRepository(db_path=":memory:")
+        svc = SchoolService(
+            client=_make_client(),
+            repo=repo,
+            geocoder=None,
+            config={
+                "radius_km": 1.0,
+                "students_per_class_ideal": 20,
+                "students_per_class_warning": 28,
+                "nearby_school_high": 3,
+                "nearby_school_mid": 1,
+                "score_weight_density": 0.30,
+                "score_weight_class_size": 0.70,
+            },
+        )
+        svc.collect_by_district("11", "11650")
+        return svc
+
+    def test_calculate_score_returns_school_score(self):
+        svc = self._svc_with_data()
+        score = svc.calculate_score("1234567890", "반포초등학교", "11650")
+        assert score.complex_code == "1234567890"
+        assert 0 <= score.score <= 100
+
+    def test_calculate_score_saved_to_repo(self):
+        svc = self._svc_with_data()
+        svc.calculate_score("1234567890", "반포초등학교", "11650")
+        saved = svc._repo.get_score("1234567890", "total")
+        assert saved is not None
+
+    def test_calculate_score_no_schools_returns_neutral(self):
+        repo = SchoolRepository(db_path=":memory:")
+        svc = SchoolService(client=_make_client(schools=[]), repo=repo, geocoder=None)
+        score = svc.calculate_score("9999", "없는단지", "99999")
+        assert score.score == 50
+        assert score.nearby_school_count == 0
+
+    def test_calculate_score_with_geocoder(self):
+        from unittest.mock import MagicMock
+        geocoder = MagicMock()
+        geocoder.geocode.return_value = (37.505, 127.001)
+        repo = SchoolRepository(db_path=":memory:")
+        svc = SchoolService(
+            client=_make_client(),
+            repo=repo,
+            geocoder=geocoder,
+            config={
+                "radius_km": 5.0,  # large radius to catch mock school at 37.5050, 127.0010
+                "students_per_class_ideal": 20,
+                "students_per_class_warning": 28,
+                "nearby_school_high": 3,
+                "nearby_school_mid": 1,
+                "score_weight_density": 0.30,
+                "score_weight_class_size": 0.70,
+            },
+        )
+        svc.collect_by_district("11", "11650")
+        score = svc.calculate_score("1234567890", "반포초등학교", "11650")
+        geocoder.geocode.assert_called_once_with("반포초등학교", "11650")
+        assert score.complex_code == "1234567890"

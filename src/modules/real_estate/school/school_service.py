@@ -27,6 +27,7 @@ except ImportError:
 
 from modules.real_estate.school.models import (
     SchoolInfo,
+    SchoolScore,
     SchoolStudentRecord,
     SchoolTeacherRecord,
 )
@@ -44,6 +45,34 @@ _SECONDARY_GRADE_SUFFIXES = ["11", "12", "13"]
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _calc_score(
+    nearby_count: int,
+    avg_per_class: float,
+    ideal: int,
+    warning: int,
+    high_count: int,
+    mid_count: int,
+    w_density: float,
+    w_class: float,
+) -> int:
+    """Calculate a 0-100 school district score from class-size and density sub-scores."""
+    if avg_per_class <= ideal:
+        class_score = 100
+    elif avg_per_class <= warning:
+        class_score = 60
+    else:
+        class_score = 20
+
+    if nearby_count >= high_count:
+        density_score = 100
+    elif nearby_count >= mid_count:
+        density_score = 60
+    else:
+        density_score = 20
+
+    return round(class_score * w_class + density_score * w_density)
 
 
 def _safe_int(val: Any, default: int = 0) -> int:
@@ -140,9 +169,106 @@ class SchoolService:
             "teacher_records_saved": teacher_records_saved,
         }
 
-    def calculate_score(self, complex_code: str, lat: float, lng: float) -> None:
-        """Calculate school district score for a complex. (Task 5 — not yet implemented)"""
-        raise NotImplementedError("calculate_score() will be implemented in Task 5")
+    def calculate_score(
+        self,
+        complex_code: str,
+        apt_name: str,
+        district_code: str,
+        radius_km: Optional[float] = None,
+    ) -> SchoolScore:
+        """Calculate school district score for a real-estate complex.
+
+        Resolves nearby schools via geocoding (if geocoder is available) or falls back
+        to all schools in the district. Computes a weighted score from class-size and
+        density sub-scores, persists the result, and returns a SchoolScore.
+        """
+        # 1. Read config values with defaults
+        ideal = int(self._config.get("students_per_class_ideal", 20))
+        warning = int(self._config.get("students_per_class_warning", 28))
+        high_count = int(self._config.get("nearby_school_high", 3))
+        mid_count = int(self._config.get("nearby_school_mid", 1))
+        w_density = float(self._config.get("score_weight_density", 0.30))
+        w_class = float(self._config.get("score_weight_class_size", 0.70))
+        cfg_radius = float(self._config.get("radius_km", 1.0))
+        effective_radius = radius_km if radius_km is not None else cfg_radius
+
+        now = _now_iso()
+
+        # 2. Resolve lat/lng via geocoder
+        lat: Optional[float] = None
+        lng: Optional[float] = None
+        if self._geocoder is not None:
+            coords = self._geocoder.geocode(apt_name, district_code)
+            if coords:
+                lat, lng = coords
+
+        # 3. Find nearby schools
+        if lat is not None and lng is not None:
+            nearby = self._repo.get_schools_near(lat, lng, effective_radius, sgg_code=district_code)
+        else:
+            # Fallback: aggregate all kinds across the district
+            nearby = []
+            for kind in _SCHOOL_KINDS:
+                nearby.extend(self._repo.get_all_schools_by_sgg(district_code, kind))
+
+        # 4. No schools found → neutral score
+        if not nearby:
+            result = SchoolScore(
+                complex_code=complex_code,
+                school_kind="total",
+                nearby_school_count=0,
+                avg_students_per_class=0.0,
+                avg_students_per_teacher=0.0,
+                score=50,
+                collected_at=now,
+            )
+            self._repo.upsert_school_score(result)
+            return result
+
+        # 5. Collect student records for each nearby school and compute avg students_per_class
+        all_per_class: list[float] = []
+        all_per_teacher: list[float] = []
+        for school in nearby:
+            records = self._repo.get_student_records(school.school_code)
+            for rec in records:
+                if rec.students_per_class > 0:
+                    all_per_class.append(rec.students_per_class)
+            teacher_records = self._repo.get_teacher_records(school.school_code)
+            for trec in teacher_records:
+                if trec.students_per_teacher > 0:
+                    all_per_teacher.append(trec.students_per_teacher)
+
+        avg_per_class = (
+            round(sum(all_per_class) / len(all_per_class), 2) if all_per_class else 0.0
+        )
+        avg_per_teacher = (
+            round(sum(all_per_teacher) / len(all_per_teacher), 2) if all_per_teacher else 0.0
+        )
+
+        # 6. Calculate composite score
+        score = _calc_score(
+            nearby_count=len(nearby),
+            avg_per_class=avg_per_class if avg_per_class > 0 else 0.0,
+            ideal=ideal,
+            warning=warning,
+            high_count=high_count,
+            mid_count=mid_count,
+            w_density=w_density,
+            w_class=w_class,
+        )
+
+        # 7. Persist and return
+        result = SchoolScore(
+            complex_code=complex_code,
+            school_kind="total",
+            nearby_school_count=len(nearby),
+            avg_students_per_class=avg_per_class,
+            avg_students_per_teacher=avg_per_teacher,
+            score=score,
+            collected_at=now,
+        )
+        self._repo.upsert_school_score(result)
+        return result
 
     # ------------------------------------------------------------------
     # Parsing helpers
