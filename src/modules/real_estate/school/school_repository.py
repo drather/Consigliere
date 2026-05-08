@@ -128,18 +128,21 @@ class SchoolRepository:
             })
 
     def get_schools_by_sgg(self, sgg_code: str, school_kind: str) -> List[SchoolInfo]:
+        """Return schools that have at least one student record (for scoring use)."""
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT * FROM school_info WHERE sgg_code=? AND school_kind=?",
+                "SELECT * FROM school_info WHERE sgg_code=? AND school_kind=?"
+                " AND school_code IN (SELECT DISTINCT school_code FROM school_student_records)",
                 (sgg_code, school_kind),
             ).fetchall()
         return [_row_to_school(r) for r in rows]
 
-    def get_all_schools_by_sgg(self, sgg_code: str) -> List[SchoolInfo]:
+    def get_all_schools_by_sgg(self, sgg_code: str, school_kind: str) -> List[SchoolInfo]:
+        """Return all schools in the SGG for the given kind (no student-record filter)."""
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT * FROM school_info WHERE sgg_code=?",
-                (sgg_code,),
+                "SELECT * FROM school_info WHERE sgg_code=? AND school_kind=?",
+                (sgg_code, school_kind),
             ).fetchall()
         return [_row_to_school(r) for r in rows]
 
@@ -184,11 +187,11 @@ class SchoolRepository:
                 "collected_at": r.collected_at or datetime.now(timezone.utc).isoformat(),
             })
 
-    def get_student_records(self, school_code: str) -> List[SchoolStudentRecord]:
+    def get_student_records(self, school_code: str, year: int) -> List[SchoolStudentRecord]:
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT * FROM school_student_records WHERE school_code=?",
-                (school_code,),
+                "SELECT * FROM school_student_records WHERE school_code=? AND year=?",
+                (school_code, year),
             ).fetchall()
         return [_row_to_student(r) for r in rows]
 
@@ -212,11 +215,11 @@ class SchoolRepository:
                 "collected_at": r.collected_at or datetime.now(timezone.utc).isoformat(),
             })
 
-    def get_teacher_records(self, school_code: str) -> List[SchoolTeacherRecord]:
+    def get_teacher_records(self, school_code: str, year: int) -> List[SchoolTeacherRecord]:
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT * FROM school_teacher_records WHERE school_code=?",
-                (school_code,),
+                "SELECT * FROM school_teacher_records WHERE school_code=? AND year=?",
+                (school_code, year),
             ).fetchall()
         return [_row_to_teacher(r) for r in rows]
 

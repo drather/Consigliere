@@ -128,6 +128,8 @@ class TestSchoolRepository:
     def test_upsert_and_get_school(self):
         repo = self._repo()
         repo.upsert_school(_make_school())
+        # get_schools_by_sgg requires a student record; add one so the school is returned
+        repo.upsert_student_record(_make_student_record())
         results = repo.get_schools_by_sgg("11650", "02")
         assert len(results) == 1
         assert results[0].school_name == "반포초등학교"
@@ -136,6 +138,7 @@ class TestSchoolRepository:
         repo = self._repo()
         repo.upsert_school(_make_school())
         repo.upsert_school(_make_school(school_name="반포초등학교(수정)"))
+        repo.upsert_student_record(_make_student_record())
         results = repo.get_schools_by_sgg("11650", "02")
         assert len(results) == 1
         assert results[0].school_name == "반포초등학교(수정)"
@@ -144,8 +147,42 @@ class TestSchoolRepository:
         repo = self._repo()
         repo.upsert_school(_make_school(school_code="A001", school_kind="02"))
         repo.upsert_school(_make_school(school_code="A002", school_kind="03"))
+        # Add student records for both schools
+        repo.upsert_student_record(_make_student_record(school_code="A001"))
+        repo.upsert_student_record(_make_student_record(school_code="A002"))
         assert len(repo.get_schools_by_sgg("11650", "02")) == 1
         assert len(repo.get_schools_by_sgg("11650", "03")) == 1
+
+    def test_get_schools_by_sgg_excludes_schools_without_student_records(self):
+        repo = self._repo()
+        # School with student record
+        repo.upsert_school(_make_school(school_code="WITH_REC"))
+        repo.upsert_student_record(_make_student_record(school_code="WITH_REC"))
+        # School without any student record
+        repo.upsert_school(_make_school(school_code="NO_REC"))
+        results = repo.get_schools_by_sgg("11650", "02")
+        assert len(results) == 1
+        assert results[0].school_code == "WITH_REC"
+
+    def test_get_all_schools_by_sgg_filters_kind(self):
+        repo = self._repo()
+        repo.upsert_school(_make_school(school_code="A001", school_kind="02"))
+        repo.upsert_school(_make_school(school_code="A002", school_kind="03"))
+        # No student records needed — get_all_schools_by_sgg has no student-record filter
+        results_02 = repo.get_all_schools_by_sgg("11650", "02")
+        results_03 = repo.get_all_schools_by_sgg("11650", "03")
+        assert len(results_02) == 1
+        assert results_02[0].school_code == "A001"
+        assert len(results_03) == 1
+        assert results_03[0].school_code == "A002"
+
+    def test_get_all_schools_by_sgg_returns_school_without_student_records(self):
+        repo = self._repo()
+        repo.upsert_school(_make_school(school_code="NO_REC"))
+        # No student record inserted
+        results = repo.get_all_schools_by_sgg("11650", "02")
+        assert len(results) == 1
+        assert results[0].school_code == "NO_REC"
 
     def test_get_schools_near_radius(self):
         repo = self._repo()
@@ -167,17 +204,37 @@ class TestSchoolRepository:
         repo = self._repo()
         repo.upsert_school(_make_school())
         repo.upsert_student_record(_make_student_record())
-        records = repo.get_student_records("S000001234")
+        records = repo.get_student_records("S000001234", 2025)
         assert len(records) == 1
         assert records[0].students_per_class == 25.0
+
+    def test_get_student_records_filters_by_year(self):
+        repo = self._repo()
+        repo.upsert_school(_make_school())
+        repo.upsert_student_record(_make_student_record(year=2024))
+        repo.upsert_student_record(_make_student_record(year=2025, grade="2"))
+        assert len(repo.get_student_records("S000001234", 2024)) == 1
+        assert repo.get_student_records("S000001234", 2024)[0].year == 2024
+        assert len(repo.get_student_records("S000001234", 2025)) == 1
+        assert len(repo.get_student_records("S000001234", 2023)) == 0
 
     def test_upsert_teacher_record(self):
         repo = self._repo()
         repo.upsert_school(_make_school())
         repo.upsert_teacher_record(_make_teacher_record())
-        records = repo.get_teacher_records("S000001234")
+        records = repo.get_teacher_records("S000001234", 2025)
         assert len(records) == 1
         assert records[0].total_teachers == 30
+
+    def test_get_teacher_records_filters_by_year(self):
+        repo = self._repo()
+        repo.upsert_school(_make_school())
+        repo.upsert_teacher_record(_make_teacher_record(year=2024))
+        repo.upsert_teacher_record(_make_teacher_record(year=2025))
+        assert len(repo.get_teacher_records("S000001234", 2024)) == 1
+        assert repo.get_teacher_records("S000001234", 2024)[0].year == 2024
+        assert len(repo.get_teacher_records("S000001234", 2025)) == 1
+        assert len(repo.get_teacher_records("S000001234", 2023)) == 0
 
     def test_upsert_and_get_score(self):
         repo = self._repo()
