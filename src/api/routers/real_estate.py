@@ -774,7 +774,7 @@ def get_school_score(
     school_service: SchoolService = Depends(get_school_service),
 ):
     try:
-        cached = school_service._repo.get_score(complex_code, "total")
+        cached = school_service.get_cached_score(complex_code, "total")
         if cached:
             return {
                 "complex_code": cached.complex_code,

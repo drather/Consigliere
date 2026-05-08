@@ -173,6 +173,18 @@ class TestCalculateScore:
         assert score.score == 50
         assert score.nearby_school_count == 0
 
+    def test_get_cached_score_returns_none_when_missing(self):
+        svc = self._svc_with_data()
+        result = svc.get_cached_score("NOTEXIST", "total")
+        assert result is None
+
+    def test_get_cached_score_returns_saved_score(self):
+        svc = self._svc_with_data()
+        svc.calculate_score("1234567890", "반포초등학교", "11650")
+        result = svc.get_cached_score("1234567890", "total")
+        assert result is not None
+        assert 0 <= result.score <= 100
+
     def test_calculate_score_with_geocoder(self):
         from unittest.mock import MagicMock
         geocoder = MagicMock()

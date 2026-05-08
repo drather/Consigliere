@@ -274,6 +274,11 @@ class SchoolService:
         self._repo.upsert_school_score(result)
         return result
 
+    def get_cached_score(
+        self, complex_code: str, school_kind: str = "total"
+    ) -> Optional[SchoolScore]:
+        return self._repo.get_score(complex_code, school_kind)
+
     # ------------------------------------------------------------------
     # Parsing helpers
     # ------------------------------------------------------------------
