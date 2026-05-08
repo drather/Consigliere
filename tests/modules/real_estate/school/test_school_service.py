@@ -108,12 +108,17 @@ class TestCollectByDistrict:
         svc.collect_by_district("11", "11650")
         records = svc._repo.get_student_records("S000001234")  # no year = all records
         assert len(records) >= 1
+        # grade key must be the full suffix, not just the last digit
+        # (avoids collision between elementary "21" and middle "11")
+        assert records[0].grade == "21"
 
     def test_collect_saves_teacher_records(self):
         svc = self._svc()
         svc.collect_by_district("11", "11650")
         records = svc._repo.get_teacher_records("S000001234")  # no year = all records
         assert len(records) >= 1
+        # students_per_teacher must be > 0 (student total looked up from student rows)
+        assert records[0].students_per_teacher > 0
 
     def test_collect_handles_api_empty_gracefully(self):
         client = _make_client(schools=[], students=[], teachers=[])

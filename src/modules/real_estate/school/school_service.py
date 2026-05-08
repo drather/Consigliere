@@ -109,19 +109,26 @@ class SchoolService:
                 continue
 
             # 2. Collect student counts
-            student_rows = self._client.get_student_counts(sido_code, sgg_code, kind, pban_yr)
-            for raw in student_rows:
+            raw_students = self._client.get_student_counts(sido_code, sgg_code, kind, pban_yr)
+            # Build school_code → total_students map for teacher ratio calculation.
+            # STDNT_SUM exists in apiType=10 (student) rows, not in apiType=17 (teacher) rows.
+            student_total_map: Dict[str, int] = {}
+            for raw in raw_students:
+                code = raw.get("SCHUL_CODE", "")
+                total = _safe_int(raw.get("STDNT_SUM", 0))
+                if code and total:
+                    student_total_map[code] = total
                 records = self._parse_student_records(raw, year, now)
                 for rec in records:
                     self._repo.upsert_student_record(rec)
                     student_records_saved += 1
 
             # 3. Collect teacher counts
-            teacher_rows = self._client.get_teacher_counts(sido_code, sgg_code, kind, pban_yr)
-            for raw in teacher_rows:
-                # total_students for students_per_teacher ratio
-                school_code = raw.get("SCHUL_CODE", "")
-                total_students = _safe_int(raw.get("STDNT_SUM", 0))
+            raw_teachers = self._client.get_teacher_counts(sido_code, sgg_code, kind, pban_yr)
+            for raw in raw_teachers:
+                # Look up total_students from student rows (STDNT_SUM is not in apiType=17)
+                code = raw.get("SCHUL_CODE", "")
+                total_students = student_total_map.get(code, 0)
                 rec = self._parse_teacher_record(raw, year, total_students, now)
                 if rec is not None:
                     self._repo.upsert_teacher_record(rec)
@@ -203,8 +210,9 @@ class SchoolService:
             female_classes = _safe_int(raw.get(f"COL_{suffix}2", 0))
             class_count = male_classes + female_classes
 
-            # grade number is the last character of the suffix (e.g. "21" -> "1", "11" -> "1")
-            grade = suffix[-1]
+            # use the full suffix as the opaque grade key (e.g. "21", "22", "11", "12")
+            # avoids collision: suffix[-1] would map both "21" and "11" to "1"
+            grade = suffix
 
             students_per_class = (
                 round(student_count / class_count, 2) if class_count > 0 else 0.0
