@@ -7,12 +7,16 @@ apiType=0 (학교기본정보):
   ADRES, LTTUD, LGTUD, FOND_SC_CODE, FOND_YMD
 
 apiType=10 (학생현황) — one row per school, year-level aggregation:
-  SCHUL_CODE, STDNT_SUM (total), STDNT_SUM_21..26 (grade 1-6 totals),
-  COL_2G1/COL_2G2 pattern = COL_{2}{grade}{1=male/2=female} class counts
-  e.g. COL_211=grade1 male classes, COL_212=grade1 female classes
+  SCHUL_CODE, STDNT_SUM (total students),
+  STDNT_SUM_21..26 (grade 1-6 totals for elementary),
+  STDNT_SUM_11..13 (grade 1-3 for middle/high),
+  MVIN_SUM (전입생), MVT_SUM (전출생),
+  COL_2XX1/COL_2XX2 = per-grade 전입/전출 student counts (NOT class counts)
+  NOTE: class count data is NOT available via this API.
 
 apiType=17 (교원현황):
   SCHUL_CODE, COL_1 (total teachers), ML_TOI_FGR (male), FML_TOI_FGR (female)
+  students_per_teacher = STDNT_SUM (from apiType=10) / COL_1
 """
 
 from datetime import datetime, timezone
@@ -49,24 +53,24 @@ def _now_iso() -> str:
 
 def _calc_score(
     nearby_count: int,
-    avg_per_class: float,
+    avg_per_teacher: float,
     ideal: int,
     warning: int,
     high_count: int,
     mid_count: int,
     w_density: float,
-    w_class: float,
-    has_class_data: bool = True,
+    w_quality: float,
+    has_quality_data: bool = True,
 ) -> int:
-    """Calculate a 0-100 school district score from class-size and density sub-scores."""
-    if not has_class_data:
-        class_score = 50
-    elif avg_per_class <= ideal:
-        class_score = 100
-    elif avg_per_class <= warning:
-        class_score = 60
+    """Calculate a 0-100 school district score from teacher-ratio and density sub-scores."""
+    if not has_quality_data:
+        quality_score = 50
+    elif avg_per_teacher <= ideal:
+        quality_score = 100
+    elif avg_per_teacher <= warning:
+        quality_score = 60
     else:
-        class_score = 20
+        quality_score = 20
 
     if nearby_count >= high_count:
         density_score = 100
@@ -75,7 +79,7 @@ def _calc_score(
     else:
         density_score = 20
 
-    return round(class_score * w_class + density_score * w_density)
+    return round(quality_score * w_quality + density_score * w_density)
 
 
 def _safe_int(val: Any, default: int = 0) -> int:
@@ -119,9 +123,11 @@ class SchoolService:
         Returns:
             dict with keys: schools_saved, student_records_saved, teacher_records_saved
         """
-        year = datetime.now(timezone.utc).year
-        pban_yr = str(year)
+        now_year = datetime.now(timezone.utc).year
         now = _now_iso()
+        # Try current year first; fall back to previous year if API hasn't published yet
+        # (e.g. 2026 data published 2026-05-30, so early 2026 runs get 0 records)
+        _pban_candidates = [str(now_year), str(now_year - 1)]
 
         schools_saved = 0
         student_records_saved = 0
@@ -140,8 +146,15 @@ class SchoolService:
             if not school_map:
                 continue
 
-            # 2. Collect student counts
-            raw_students = self._client.get_student_counts(sido_code, sgg_code, kind, pban_yr)
+            # 2. Collect student counts (try current year, fall back to previous if unpublished)
+            raw_students: List[Dict] = []
+            data_year = now_year
+            for pban_yr in _pban_candidates:
+                raw_students = self._client.get_student_counts(sido_code, sgg_code, kind, pban_yr)
+                if raw_students:
+                    data_year = int(pban_yr)
+                    break
+
             # Build school_code → total_students map for teacher ratio calculation.
             # STDNT_SUM exists in apiType=10 (student) rows, not in apiType=17 (teacher) rows.
             student_total_map: Dict[str, int] = {}
@@ -150,18 +163,19 @@ class SchoolService:
                 total = _safe_int(raw.get("STDNT_SUM", 0))
                 if code and total:
                     student_total_map[code] = total
-                records = self._parse_student_records(raw, year, now)
+                records = self._parse_student_records(raw, data_year, now)
                 for rec in records:
                     self._repo.upsert_student_record(rec)
                     student_records_saved += 1
 
-            # 3. Collect teacher counts
-            raw_teachers = self._client.get_teacher_counts(sido_code, sgg_code, kind, pban_yr)
+            # 3. Collect teacher counts (use same pban_yr as student data)
+            teacher_pban_yr = str(data_year)
+            raw_teachers = self._client.get_teacher_counts(sido_code, sgg_code, kind, teacher_pban_yr)
             for raw in raw_teachers:
                 # Look up total_students from student rows (STDNT_SUM is not in apiType=17)
                 code = raw.get("SCHUL_CODE", "")
                 total_students = student_total_map.get(code, 0)
-                rec = self._parse_teacher_record(raw, year, total_students, now)
+                rec = self._parse_teacher_record(raw, data_year, total_students, now)
                 if rec is not None:
                     self._repo.upsert_teacher_record(rec)
                     teacher_records_saved += 1
@@ -186,12 +200,12 @@ class SchoolService:
         density sub-scores, persists the result, and returns a SchoolScore.
         """
         # 1. Read config values with defaults
-        ideal = int(self._config.get("students_per_class_ideal", 20))
-        warning = int(self._config.get("students_per_class_warning", 28))
+        ideal = int(self._config.get("students_per_teacher_ideal", 12))
+        warning = int(self._config.get("students_per_teacher_warning", 18))
         high_count = int(self._config.get("nearby_school_high", 3))
         mid_count = int(self._config.get("nearby_school_mid", 1))
         w_density = float(self._config.get("score_weight_density", 0.30))
-        w_class = float(self._config.get("score_weight_class_size", 0.70))
+        w_quality = float(self._config.get("score_weight_quality", 0.70))
         cfg_radius = float(self._config.get("radius_km", 1.0))
         effective_radius = radius_km if radius_km is not None else cfg_radius
 
@@ -228,22 +242,14 @@ class SchoolService:
             self._repo.upsert_school_score(result)
             return result
 
-        # 5. Collect student records for each nearby school and compute avg students_per_class
-        all_per_class: list[float] = []
+        # 5. Collect teacher records for each nearby school and compute avg students_per_teacher
         all_per_teacher: list[float] = []
         for school in nearby:
-            records = self._repo.get_student_records(school.school_code)
-            for rec in records:
-                if rec.students_per_class > 0:
-                    all_per_class.append(rec.students_per_class)
             teacher_records = self._repo.get_teacher_records(school.school_code)
             for trec in teacher_records:
                 if trec.students_per_teacher > 0:
                     all_per_teacher.append(trec.students_per_teacher)
 
-        avg_per_class = (
-            round(sum(all_per_class) / len(all_per_class), 2) if all_per_class else 0.0
-        )
         avg_per_teacher = (
             round(sum(all_per_teacher) / len(all_per_teacher), 2) if all_per_teacher else 0.0
         )
@@ -251,14 +257,14 @@ class SchoolService:
         # 6. Calculate composite score
         score = _calc_score(
             nearby_count=len(nearby),
-            avg_per_class=avg_per_class,
+            avg_per_teacher=avg_per_teacher,
             ideal=ideal,
             warning=warning,
             high_count=high_count,
             mid_count=mid_count,
             w_density=w_density,
-            w_class=w_class,
-            has_class_data=bool(all_per_class),
+            w_quality=w_quality,
+            has_quality_data=bool(all_per_teacher),
         )
 
         # 7. Persist and return
@@ -266,7 +272,7 @@ class SchoolService:
             complex_code=complex_code,
             school_kind="total",
             nearby_school_count=len(nearby),
-            avg_students_per_class=avg_per_class,
+            avg_students_per_class=0.0,
             avg_students_per_teacher=avg_per_teacher,
             score=score,
             collected_at=now,
@@ -322,17 +328,15 @@ class SchoolService:
         apiType=10 returns one row per school with all grades aggregated.
         Grade keys follow the pattern:
           STDNT_SUM_{suffix}  — student count for that grade
-          COL_{suffix}1       — male class count for that grade
-          COL_{suffix}2       — female class count for that grade
+          COL_{suffix}1/2     — 전입/전출 student counts (NOT class counts)
 
+        class_count and students_per_class are not available from this API.
         Elementary (02): suffixes 21..26 (grade 1-6)
         Middle/High (03/04): suffixes 11..13 (grade 1-3)
         """
         school_code = raw.get("SCHUL_CODE", "")
         records: List[SchoolStudentRecord] = []
 
-        # Determine which grade suffixes to try
-        # Try elementary suffixes first; if none found try secondary
         all_suffixes = _ELEMENTARY_GRADE_SUFFIXES + _SECONDARY_GRADE_SUFFIXES
 
         for suffix in all_suffixes:
@@ -341,27 +345,19 @@ class SchoolService:
                 continue
 
             student_count = _safe_int(raw.get(stdnt_key, 0))
-            male_classes = _safe_int(raw.get(f"COL_{suffix}1", 0))
-            female_classes = _safe_int(raw.get(f"COL_{suffix}2", 0))
-            class_count = male_classes + female_classes
-
             # use the full suffix as the opaque grade key (e.g. "21", "22", "11", "12")
             # avoids collision: suffix[-1] would map both "21" and "11" to "1"
             grade = suffix
-
-            students_per_class = (
-                round(student_count / class_count, 2) if class_count > 0 else 0.0
-            )
 
             records.append(
                 SchoolStudentRecord(
                     school_code=school_code,
                     year=year,
                     grade=grade,
-                    class_count=class_count,
+                    class_count=0,           # not available via schoolinfo API
                     student_count=student_count,
-                    students_per_class=students_per_class,
-                    male_count=0,   # apiType=10 does not provide per-grade gender breakdown
+                    students_per_class=0.0,  # not available via schoolinfo API
+                    male_count=0,
                     female_count=0,
                     collected_at=now,
                 )

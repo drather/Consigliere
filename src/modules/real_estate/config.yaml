@@ -61,12 +61,12 @@ poi:
 
 school:
   radius_km: 1.0
-  students_per_class_ideal: 20
-  students_per_class_warning: 28
+  students_per_teacher_ideal: 12
+  students_per_teacher_warning: 18
   nearby_school_high: 3
   nearby_school_mid: 1
   score_weight_density: 0.30
-  score_weight_class_size: 0.70
+  score_weight_quality: 0.70
 
 districts:
   # ── 서울특별시 (25개 구) ──────────────────────
