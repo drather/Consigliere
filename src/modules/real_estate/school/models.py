@@ -10,11 +10,11 @@ class SchoolInfo:
     sido_code: str
     sgg_code: str
     address: str
-    lat: Optional[float]
-    lng: Optional[float]
     establishment_type: str     # 공립/사립
-    founding_year: Optional[int]
     collected_at: str
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    founding_year: Optional[int] = None
 
 
 @dataclass
