@@ -1,8 +1,21 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-05-07
-**Current Active Feature:** 없음 (다음 작업 확정 대기)
+**Last Updated:** 2026-05-09
+**Current Active Feature:** 학교알리미 학군 분석 구현 완료 (2026-05-08)
+- SchoolInfoClient (apiType=0/10/17, pban_yr 필수) + SchoolRepository + SchoolService 구현
+- scoring.py school_score 통합 (SchoolService 점수 우선, POI/키워드 fallback)
+- API 엔드포인트 2개: POST /jobs/school/collect, GET /dashboard/real-estate/school/{complex_code}
+- 대시보드 Tab1 학군 분석 expander 추가 (반경 1km 학교 수 / 학급당 학생수 / 교사 1인당 / 학군점수)
+- 46 테스트 PASS
+- feature/school-district-analysis 브랜치, master 머지 대기
 
 ## 현재 포커스
+- **Branch:** `feature/school-district-analysis`
+- **Status:** ✅ 구현 완료, master 머지 대기
+  - 실데이터 검증: 서울 서초구(11650) 초등학교 24개 수집 확인
+  - 2026년 학생/교원 현황은 2026-05-30 공개 예정 (API 응답: "2026년 정보는 2026년 05월 30일 공개됩니다")
+  - pban_yr=2025 폴백 로직 필요 (현재 현재연도 고정)
+
+## 선행 완료 작업
 - **Branch:** `master`
 - **Status:** ✅ ODsay 대중교통 API 교체 완료 (2026-05-07)
   - `OdsayClient` + `HybridCommuteClient` 신규 구현

@@ -1,5 +1,20 @@
 # Project Consigliere: History
-**Last Updated:** 2026-04-30
+**Last Updated:** 2026-05-09
+
+## 2026-05-08: 학교알리미 기반 학군 분석 구현
+
+- **Feature:** `feature/school-district-analysis` 브랜치
+- **신규 패키지:** `src/modules/real_estate/school/`
+  - `SchoolInfoClient` — 학교알리미 OpenAPI (apiType=0=기본정보, 10=학생, 17=교원; pban_yr 필수)
+  - `SchoolRepository` — school_info/school_student_records/school_teacher_records/school_scores 테이블
+  - `SchoolService` — collect_by_district() + calculate_score() (학급당학생수 70% + 반경학교수 30%)
+- **실측 발견:** apiType 1~9는 모두 미공시. apiType=10 학생현황(STDNT_SUM, STDNT_SUM_XX), apiType=17 교원현황(COL_1, ML_TOI_FGR, FML_TOI_FGR)
+- **실데이터 검증 (2026-05-09):** 서울 서초구(11650) 초등학교 24개 수집 확인 (schools_saved=52 전체, 초등=24). 2026년 학생/교원 데이터는 2026-05-30 공개 예정 — API 응답: "2026년 정보는 2026년 05월 30일 공개됩니다"
+- **학군 점수:** 학급당 학생수(70%) + 반경 1km 학교 수(30%), data_absent_neutral=50
+- **통합:** scoring.py `_score_school()` — school_score 필드 우선 처리
+- **API:** POST /jobs/school/collect, GET /dashboard/real-estate/school/{complex_code}
+- **대시보드:** Tab1 단지 상세 패널 학군 분석 expander
+- **테스트:** 46개 PASS
 
 ## 2026-04-27~30: 주소 기반 2차 매핑 + 용적률/건폐율 탐색 (롤백)
 
