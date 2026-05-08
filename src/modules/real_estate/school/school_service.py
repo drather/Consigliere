@@ -56,9 +56,12 @@ def _calc_score(
     mid_count: int,
     w_density: float,
     w_class: float,
+    has_class_data: bool = True,
 ) -> int:
     """Calculate a 0-100 school district score from class-size and density sub-scores."""
-    if avg_per_class <= ideal:
+    if not has_class_data:
+        class_score = 50
+    elif avg_per_class <= ideal:
         class_score = 100
     elif avg_per_class <= warning:
         class_score = 60
@@ -248,13 +251,14 @@ class SchoolService:
         # 6. Calculate composite score
         score = _calc_score(
             nearby_count=len(nearby),
-            avg_per_class=avg_per_class if avg_per_class > 0 else 0.0,
+            avg_per_class=avg_per_class,
             ideal=ideal,
             warning=warning,
             high_count=high_count,
             mid_count=mid_count,
             w_density=w_density,
             w_class=w_class,
+            has_class_data=bool(all_per_class),
         )
 
         # 7. Persist and return

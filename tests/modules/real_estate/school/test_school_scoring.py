@@ -33,3 +33,9 @@ def test_score_weight_sum_is_bounded():
         for avg in [15, 24, 32]:
             score = _calc_score(nearby_count=nearby, avg_per_class=avg, **DEFAULT_CFG)
             assert 0 <= score <= 100
+
+
+def test_score_no_class_data_uses_neutral():
+    score = _calc_score(nearby_count=3, avg_per_class=0.0, has_class_data=False, **DEFAULT_CFG)
+    # class_score=50, density_score=100 → round(50*0.70 + 100*0.30) = round(35+30) = 65
+    assert score == round(50 * 0.70 + 100 * 0.30)
