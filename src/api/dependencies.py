@@ -111,3 +111,21 @@ _commute_service = CommuteService(
 
 def get_commute_service() -> CommuteService:
     return _commute_service
+
+
+from modules.real_estate.school.school_info_client import SchoolInfoClient
+from modules.real_estate.school.school_repository import SchoolRepository as SchoolRepo
+from modules.real_estate.school.school_service import SchoolService
+
+_school_cfg = _re_config.get("school", {})
+_school_repo = SchoolRepo(db_path=_re_db_path)
+_school_service = SchoolService(
+    client=SchoolInfoClient(),
+    repo=_school_repo,
+    geocoder=GeocoderService(api_key=os.getenv("KAKAO_API_KEY", "")),
+    config=_school_cfg,
+)
+
+
+def get_school_service() -> SchoolService:
+    return _school_service
