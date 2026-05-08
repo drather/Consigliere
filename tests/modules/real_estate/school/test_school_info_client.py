@@ -77,12 +77,15 @@ class TestSchoolInfoClient:
         client = self._client()
         with patch("requests.get", return_value=_mock_get(BASE_SCHOOL_RESPONSE)) as mock_get:
             client.get_school_list("11", "11650", "02")
-        call_url = mock_get.call_args[0][0]
-        assert "schoolinfo.go.kr" in call_url
-        assert "apiKey=test_key" in call_url
-        assert "sidoCode=11" in call_url
-        assert "sggCode=11650" in call_url
-        assert "schulKndCode=02" in call_url
+        call_kwargs = mock_get.call_args
+        url_arg = call_kwargs[0][0] if call_kwargs[0] else call_kwargs[1].get("url", "")
+        params_arg = call_kwargs[1].get("params", {}) if call_kwargs[1] else {}
+        assert "schoolinfo.go.kr" in url_arg
+        assert params_arg.get("apiKey") == "test_key"
+        assert params_arg.get("sidoCode") == "11"
+        assert params_arg.get("sggCode") == "11650"
+        assert params_arg.get("schulKndCode") == "02"
+        assert params_arg.get("apiType") == "0"
 
     def test_get_school_list_empty_on_api_error(self):
         client = self._client()
@@ -93,14 +96,14 @@ class TestSchoolInfoClient:
     def test_get_student_counts_returns_list(self):
         client = self._client()
         with patch("requests.get", return_value=_mock_get(BASE_STUDENT_RESPONSE)):
-            result = client.get_student_counts("11", "11650", "02")
+            result = client.get_student_counts("11", "11650", "02", pban_yr="2025")
         assert len(result) == 1
         assert result[0]["SCHUL_CODE"] == "S000001234"
 
     def test_get_teacher_counts_returns_list(self):
         client = self._client()
         with patch("requests.get", return_value=_mock_get(BASE_TEACHER_RESPONSE)):
-            result = client.get_teacher_counts("11", "11650", "02")
+            result = client.get_teacher_counts("11", "11650", "02", pban_yr="2025")
         assert len(result) == 1
 
     def test_get_school_list_returns_empty_on_failure_result(self):

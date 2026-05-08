@@ -43,11 +43,12 @@ class SchoolInfoClient:
         }
         if pban_yr:
             params["pbanYr"] = pban_yr
+        if api_type in (_API_TYPE_STUDENT, _API_TYPE_TEACHER) and not pban_yr:
+            logger.warning(f"[SchoolInfoClient] apiType={api_type} requires pbanYr — skipping request")
+            return []
         try:
-            query = "&".join(f"{k}={v}" for k, v in params.items())
-            full_url = f"{_BASE_URL}?{query}"
             logger.info(f"[SchoolInfoClient] apiType={api_type} sido={sido_code} sgg={sgg_code} kind={school_kind} pbanYr={pban_yr}")
-            resp = requests.get(full_url, timeout=15)
+            resp = requests.get(_BASE_URL, params=params, timeout=15)
             resp.raise_for_status()
             data = resp.json()
             if data.get("resultCode") != "success":
