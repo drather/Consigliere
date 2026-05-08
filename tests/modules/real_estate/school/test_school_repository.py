@@ -256,6 +256,23 @@ class TestSchoolRepository:
         assert len(repo.get_teacher_records("S000001234", 2025)) == 1
         assert len(repo.get_teacher_records("S000001234", 2023)) == 0
 
+    def test_get_student_records_no_year_returns_all(self):
+        repo = self._repo()
+        repo.upsert_school(_make_school())
+        repo.upsert_student_record(_make_student_record(year=2024))
+        repo.upsert_student_record(_make_student_record(year=2025, grade="2"))
+        # No year argument — should return both records across years
+        all_records = repo.get_student_records("S000001234")
+        assert len(all_records) == 2
+
+    def test_get_teacher_records_no_year_returns_all(self):
+        repo = self._repo()
+        repo.upsert_school(_make_school())
+        repo.upsert_teacher_record(_make_teacher_record(year=2024))
+        repo.upsert_teacher_record(_make_teacher_record(year=2025))
+        all_records = repo.get_teacher_records("S000001234")
+        assert len(all_records) == 2
+
     def test_upsert_and_get_score(self):
         repo = self._repo()
         repo.upsert_school_score(_make_score())

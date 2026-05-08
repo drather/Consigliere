@@ -203,12 +203,20 @@ class SchoolRepository:
                 "collected_at": r.collected_at or datetime.now(timezone.utc).isoformat(),
             })
 
-    def get_student_records(self, school_code: str, year: int) -> List[SchoolStudentRecord]:
+    def get_student_records(
+        self, school_code: str, year: Optional[int] = None
+    ) -> List[SchoolStudentRecord]:
         with self._conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM school_student_records WHERE school_code=? AND year=?",
-                (school_code, year),
-            ).fetchall()
+            if year is None:
+                rows = conn.execute(
+                    "SELECT * FROM school_student_records WHERE school_code=?",
+                    (school_code,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM school_student_records WHERE school_code=? AND year=?",
+                    (school_code, year),
+                ).fetchall()
         return [_row_to_student(r) for r in rows]
 
     def upsert_teacher_record(self, r: SchoolTeacherRecord) -> None:
@@ -231,12 +239,20 @@ class SchoolRepository:
                 "collected_at": r.collected_at or datetime.now(timezone.utc).isoformat(),
             })
 
-    def get_teacher_records(self, school_code: str, year: int) -> List[SchoolTeacherRecord]:
+    def get_teacher_records(
+        self, school_code: str, year: Optional[int] = None
+    ) -> List[SchoolTeacherRecord]:
         with self._conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM school_teacher_records WHERE school_code=? AND year=?",
-                (school_code, year),
-            ).fetchall()
+            if year is None:
+                rows = conn.execute(
+                    "SELECT * FROM school_teacher_records WHERE school_code=?",
+                    (school_code,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM school_teacher_records WHERE school_code=? AND year=?",
+                    (school_code, year),
+                ).fetchall()
         return [_row_to_teacher(r) for r in rows]
 
     def upsert_school_score(self, sc: SchoolScore) -> None:
