@@ -1,5 +1,6 @@
 import math
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -84,16 +85,25 @@ class SchoolRepository:
             self._shared_conn = None
         self._init_db()
 
-    def _conn(self) -> sqlite3.Connection:
+    @contextmanager
+    def _conn(self):
         if self._shared_conn is not None:
-            return self._shared_conn
-        conn = sqlite3.connect(self._db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+            yield self._shared_conn
+        else:
+            conn = sqlite3.connect(self._db_path)
+            conn.row_factory = sqlite3.Row
+            try:
+                yield conn
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
 
     def _init_db(self) -> None:
-        conn = self._conn()
-        conn.executescript(_DDL)
+        with self._conn() as conn:
+            conn.executescript(_DDL)
 
     def upsert_school(self, s: SchoolInfo) -> None:
         sql = """
@@ -147,12 +157,18 @@ class SchoolRepository:
         return [_row_to_school(r) for r in rows]
 
     def get_schools_near(
-        self, lat: float, lng: float, radius_km: float
+        self, lat: float, lng: float, radius_km: float,
+        sgg_code: str | None = None,
     ) -> List[SchoolInfo]:
+        if sgg_code is not None:
+            sql = ("SELECT * FROM school_info"
+                   " WHERE lat IS NOT NULL AND lng IS NOT NULL AND sgg_code = ?")
+            params: tuple = (sgg_code,)
+        else:
+            sql = "SELECT * FROM school_info WHERE lat IS NOT NULL AND lng IS NOT NULL"
+            params = ()
         with self._conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM school_info WHERE lat IS NOT NULL AND lng IS NOT NULL"
-            ).fetchall()
+            rows = conn.execute(sql, params).fetchall()
         return [
             _row_to_school(r) for r in rows
             if _haversine_km(lat, lng, r["lat"], r["lng"]) <= radius_km

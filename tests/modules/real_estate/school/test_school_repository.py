@@ -200,6 +200,26 @@ class TestSchoolRepository:
         result = repo.get_schools_near(lat=37.510, lng=127.005, radius_km=1.0)
         assert result == []
 
+    def test_get_schools_near_sgg_code_excludes_other_districts(self):
+        repo = self._repo()
+        # Two schools close together but in different sgg_codes
+        repo.upsert_school(_make_school(
+            school_code="SGG_MATCH", sgg_code="11650",
+            lat=37.510, lng=127.005,
+        ))
+        repo.upsert_school(_make_school(
+            school_code="SGG_OTHER", sgg_code="11680",
+            lat=37.510, lng=127.006,  # also within 1 km
+        ))
+        # Without sgg_code filter — both returned
+        all_near = repo.get_schools_near(lat=37.510, lng=127.005, radius_km=1.0)
+        assert len(all_near) == 2
+        # With sgg_code filter — only the matching district school returned
+        filtered = repo.get_schools_near(lat=37.510, lng=127.005, radius_km=1.0,
+                                         sgg_code="11650")
+        assert len(filtered) == 1
+        assert filtered[0].school_code == "SGG_MATCH"
+
     def test_upsert_student_record(self):
         repo = self._repo()
         repo.upsert_school(_make_school())
