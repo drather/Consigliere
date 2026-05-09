@@ -83,3 +83,65 @@ def test_nature_neutral_when_no_park():
     dim = NatureDimension({"close_m": 300, "medium_m": 800, "data_absent_neutral": 50})
     assert dim.score({"poi_park_nearest_m": 0}) == 50
     assert dim.score({}) == 50
+
+
+from modules.real_estate.location.dimensions.commercial import CommercialDimension
+from modules.real_estate.location.dimensions.price_potential import PricePotentialDimension
+from modules.real_estate.location.dimensions.liquidity import LiquidityDimension
+from modules.real_estate.location.dimensions.school_premium import SchoolPremiumDimension
+
+# ── CommercialDimension ──────────────────────────────────────
+def test_commercial_high():
+    dim = CommercialDimension({"high_count": 30, "medium_count": 10, "data_absent_neutral": 50})
+    c = {"poi_restaurant_count": 25, "poi_cafe_count": 10}
+    assert dim.score(c) == 100  # total 35 >= 30
+
+def test_commercial_medium():
+    dim = CommercialDimension({"high_count": 30, "medium_count": 10, "data_absent_neutral": 50})
+    c = {"poi_restaurant_count": 8, "poi_cafe_count": 5}
+    assert dim.score(c) == 60  # total 13 >= 10
+
+def test_commercial_low():
+    dim = CommercialDimension({"high_count": 30, "medium_count": 10, "data_absent_neutral": 50})
+    c = {"poi_restaurant_count": 3, "poi_cafe_count": 2}
+    assert dim.score(c) == 20  # total 5 < 10
+
+# ── PricePotentialDimension ──────────────────────────────────
+_PP_CFG = {
+    "recon_age_years": 30, "recon_far_max": 200,
+    "recon_score_map": {"HIGH": 100, "MEDIUM": 60, "LOW": 20, "COMPLETED": 50, "UNKNOWN": 50},
+    "data_absent_neutral": 50,
+}
+
+def test_price_potential_high_old_low_far():
+    dim = PricePotentialDimension(_PP_CFG)
+    c = {"build_year": 1990, "floor_area_ratio": 150}  # age 36 + FAR 150 → both conditions → HIGH
+    assert dim.score(c) == 100
+
+def test_price_potential_gtx_boosts_score():
+    dim = PricePotentialDimension(_PP_CFG)
+    c = {"reconstruction_potential": "LOW", "gtx_benefit": True}
+    assert dim.score(c) == min(100, 20 + 30)  # 50
+
+def test_price_potential_fallback_recon_map():
+    dim = PricePotentialDimension(_PP_CFG)
+    assert dim.score({"reconstruction_potential": "HIGH"}) == 100
+    assert dim.score({"reconstruction_potential": "UNKNOWN"}) == 50
+
+# ── LiquidityDimension ───────────────────────────────────────
+def test_liquidity_high():
+    dim = LiquidityDimension({"high_households": 500, "medium_households": 300, "data_absent_neutral": 50})
+    assert dim.score({"household_count": 600}) == 100
+
+def test_liquidity_neutral_when_missing():
+    dim = LiquidityDimension({"high_households": 500, "medium_households": 300, "data_absent_neutral": 50})
+    assert dim.score({}) == 50
+
+# ── SchoolPremiumDimension ───────────────────────────────────
+def test_school_premium_passthrough():
+    dim = SchoolPremiumDimension({"data_absent_neutral": 50})
+    assert dim.score({"school_score": 90}) == 90
+
+def test_school_premium_neutral_when_missing():
+    dim = SchoolPremiumDimension({"data_absent_neutral": 50})
+    assert dim.score({}) == 50
