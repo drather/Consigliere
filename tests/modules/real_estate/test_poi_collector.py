@@ -2,6 +2,7 @@ import os
 import sys
 import sqlite3
 import json
+import tempfile
 import pytest
 from unittest.mock import patch, MagicMock
 from datetime import datetime, timedelta
@@ -140,3 +141,31 @@ def test_poi_data_has_new_fields():
     assert hasattr(poi, "cafe_count")
     assert poi.convenience_count == 0
     assert poi.park_nearest_m == 0
+
+
+def test_migrate_adds_columns_to_old_schema():
+    _OLD_DDL = """
+    CREATE TABLE IF NOT EXISTS poi_cache (
+        complex_code    TEXT PRIMARY KEY,
+        lat             REAL,
+        lng             REAL,
+        subway_stations TEXT,
+        schools_count   INTEGER,
+        academies_count INTEGER,
+        marts_count     INTEGER,
+        collected_at    TEXT
+    );
+    """
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+    try:
+        with sqlite3.connect(db_path) as conn:
+            conn.executescript(_OLD_DDL)
+        collector = PoiCollector(api_key="dummy", db_path=db_path)
+        with sqlite3.connect(db_path) as conn:
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(poi_cache)")}
+        expected_new = {"convenience_count", "pharmacy_count", "medical_count",
+                        "park_nearest_m", "restaurant_count", "cafe_count"}
+        assert expected_new.issubset(cols)
+    finally:
+        os.unlink(db_path)

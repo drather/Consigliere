@@ -160,7 +160,7 @@ class PoiCollector:
 
         park_nearest_m = 0
         if parks:
-            park_nearest_m = min(int(p.get("distance", 0)) for p in parks)
+            park_nearest_m = min(int(p.get("distance") or 0) for p in parks)
 
         poi = PoiData(
             complex_code=complex_code,
@@ -204,7 +204,7 @@ class PoiCollector:
     def _parse_stations(self, docs: List[Dict]) -> List[Dict]:
         result = []
         for d in docs:
-            dist_m = int(d.get("distance", 0))
+            dist_m = int(d.get("distance") or 0)
             walk_min = round(dist_m / self._walk_speed_mpm)
             result.append({"name": d.get("place_name", ""), "walk_minutes": walk_min})
         return result
