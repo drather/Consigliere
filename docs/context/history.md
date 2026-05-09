@@ -1,6 +1,21 @@
 # Project Consigliere: History
 **Last Updated:** 2026-05-09
 
+## 2026-05-09: Location Scoring Redesign — 실거주/투자 이중 점수 체계
+
+- **Feature:** `feature/location-scoring-redesign` 브랜치
+- **핵심 변경:** 단일 ScoringEngine(5차원) → LocationScorer(실거주 5차원 + 투자 4차원) 전면 교체
+- **신규 패키지:** `src/modules/real_estate/location/`
+  - `BaseDimension` ABC + 9개 구현체 (transportation, education, living_infra, medical, nature, commercial, price_potential, liquidity, school_premium)
+  - `LocationScorer` — config.yaml에서 차원/가중치 읽어 이중 점수 계산, 가중치 normalize 내장
+  - `LocationRepository` — location_scores 테이블 SQLite upsert/get
+- **POI 확장:** PoiCollector에 편의점·약국·병원·공원·음식점·카페 6개 카테고리 추가, DB AUTO MIGRATE
+- **데일리 Job:** `POST /jobs/poi/collect?limit=N` — apt_master 중 미수집/만료 단지 선제 워밍
+- **대시보드:** 실거주/투자 2-score 카드 + 항목별 breakdown expander (리포트 생성 전: 안내 메시지)
+- **삭제:** scoring.py, test_scoring*.py (ScoringEngine 완전 제거)
+- **아키텍처 결정:** 수집 트리거 = 리포트 생성(on-demand) + 데일리 Job(선제), 대시보드는 cache 읽기 전용
+- **테스트:** 649 PASS (location 33 + poi 7 + school 45 + 기타)
+
 ## 2026-05-08: 학교알리미 기반 학군 분석 구현
 
 - **Feature:** `feature/school-district-analysis` 브랜치

@@ -10,7 +10,7 @@
 
 ## 현재 포커스
 - **Branch:** `feature/location-scoring-redesign`
-- **Status:** 🔄 구현 중 (2026-05-09)
+- **Status:** ✅ 구현 완료, master 머지 대기 (2026-05-09)
   - 기존 ScoringEngine(5차원) → LocationScorer(실거주 5차원 + 투자 4차원) 전면 교체
   - POI 수집 6개 카테고리 추가 (편의점·약국·병원·공원·음식점·카페)
   - 8-task 구현 계획: `docs/superpowers/plans/2026-05-09-location-scoring-redesign.md`
