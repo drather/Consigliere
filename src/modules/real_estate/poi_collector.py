@@ -115,7 +115,7 @@ class PoiCollector:
             if key not in seen:
                 seen.add(key)
                 schools.append(doc)
-        academies = self._search("학원", lat, lng, self.ACADEMY_RADIUS, size=15)
+        academies = self._search_paged("학원", lat, lng, self.ACADEMY_RADIUS, max_pages=3)
         marts = self._search("대형마트 백화점", lat, lng, self.MART_RADIUS, size=15)
 
         poi = PoiData(
@@ -135,6 +135,21 @@ class PoiCollector:
         resp = requests.get(_KAKAO_KEYWORD_URL, params=params, headers=headers, timeout=10)
         resp.raise_for_status()
         return resp.json().get("documents", [])
+
+    def _search_paged(self, query: str, lat: float, lng: float, radius: int, max_pages: int = 3) -> List[Dict]:
+        """Paginate Kakao local API (size=15 per page) to collect up to max_pages*15 results."""
+        all_docs: List[Dict] = []
+        headers = {"Authorization": f"KakaoAK {self._api_key}"}
+        for page in range(1, max_pages + 1):
+            params = {"query": query, "y": str(lat), "x": str(lng),
+                      "radius": radius, "size": 15, "page": page}
+            resp = requests.get(_KAKAO_KEYWORD_URL, params=params, headers=headers, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            all_docs.extend(data.get("documents", []))
+            if data.get("meta", {}).get("is_end", True):
+                break
+        return all_docs
 
     def _parse_stations(self, docs: List[Dict]) -> List[Dict]:
         result = []

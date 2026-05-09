@@ -59,6 +59,15 @@ scoring:
 poi:
   walk_speed_mpm: 67
 
+school:
+  radius_km: 1.0
+  transfer_rate_high: 0.06    # ≥6% 전입률 → 학군 HIGH (사람들이 이 학군 때문에 이사 옴)
+  transfer_rate_medium: 0.03  # ≥3% → MEDIUM
+  nearby_school_high: 3
+  nearby_school_mid: 1
+  score_weight_density: 0.30
+  score_weight_quality: 0.70
+
 districts:
   # ── 서울특별시 (25개 구) ──────────────────────
   - code: "11110"

@@ -16,9 +16,11 @@ from api.dependencies import (
     get_apt_master_repo,
     get_commute_service,
     get_building_master_service,
+    get_school_service,
 )
 from modules.real_estate.building_master.building_master_service import BuildingMasterService
 from modules.real_estate.commute.commute_service import CommuteService
+from modules.real_estate.school.school_service import SchoolService
 from modules.real_estate.service import RealEstateAgent
 from modules.real_estate.monitor.service import TransactionMonitorService
 from modules.real_estate.news.service import NewsService
@@ -744,3 +746,57 @@ def get_daily_report(date_str: str):
     if md is None:
         raise HTTPException(status_code=404, detail=f"리포트 없음: {date_str}")
     return {"date": date_str, "markdown": md}
+
+
+class SchoolCollectRequest(BaseModel):
+    sido_code: str = Field("11", description="시도코드 (예: 11=서울)")
+    sgg_code: str = Field(..., description="시군구코드 5자리 (예: 11650=서초구)")
+
+
+@router.post("/jobs/school/collect")
+def collect_school_data(
+    request: SchoolCollectRequest,
+    school_service: SchoolService = Depends(get_school_service),
+):
+    try:
+        result = school_service.collect_by_district(request.sido_code, request.sgg_code)
+        return {"status": "success", **result}
+    except Exception as e:
+        logger.error(f"[School Collect] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/dashboard/real-estate/school/{complex_code}")
+def get_school_score(
+    complex_code: str,
+    apt_name: str = "",
+    district_code: str = "",
+    school_service: SchoolService = Depends(get_school_service),
+):
+    try:
+        cached = school_service.get_cached_score(complex_code, "total")
+        if cached:
+            return {
+                "complex_code": cached.complex_code,
+                "school_kind": cached.school_kind,
+                "nearby_school_count": cached.nearby_school_count,
+                "avg_students_per_class": cached.avg_students_per_class,
+                "avg_students_per_teacher": cached.avg_students_per_teacher,
+                "score": cached.score,
+                "collected_at": cached.collected_at,
+            }
+        if apt_name and district_code:
+            score = school_service.calculate_score(complex_code, apt_name, district_code)
+            return {
+                "complex_code": score.complex_code,
+                "school_kind": score.school_kind,
+                "nearby_school_count": score.nearby_school_count,
+                "avg_students_per_class": score.avg_students_per_class,
+                "avg_students_per_teacher": score.avg_students_per_teacher,
+                "score": score.score,
+                "collected_at": score.collected_at,
+            }
+        return {"complex_code": complex_code, "score": 50, "message": "데이터 미수집"}
+    except Exception as e:
+        logger.error(f"[School Score] {e}")
+        raise HTTPException(status_code=500, detail=str(e))

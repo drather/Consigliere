@@ -230,6 +230,38 @@ def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int =
             except Exception:
                 st.caption("서버 연결 실패 — FastAPI 서버가 실행 중인지 확인하세요")
 
+        # 학군 분석 카드
+        with st.expander("📚 학군 분석", expanded=False):
+            try:
+                import requests as _req
+                _district = getattr(entry, "district_code", "") or ""
+                _ccode = getattr(entry, "complex_code", "") or ""
+                _apt_nm = getattr(entry, "apt_name", "") or ""
+                school_resp = _req.get(
+                    f"http://localhost:8000/dashboard/real-estate/school/{_ccode}",
+                    params={"apt_name": _apt_nm, "district_code": _district},
+                    timeout=5,
+                )
+                if school_resp.status_code == 200:
+                    sd = school_resp.json()
+                    sc1, sc2, sc3, sc4 = st.columns(4)
+                    with sc1:
+                        st.metric("반경 1km 학교 수", f"{sd.get('nearby_school_count', '-')}개")
+                    with sc2:
+                        avg_cls = sd.get("avg_students_per_class") or 0
+                        st.metric("학급당 평균 학생수", f"{avg_cls:.1f}명" if avg_cls else "-")
+                    with sc3:
+                        avg_tch = sd.get("avg_students_per_teacher") or 0
+                        st.metric("교사 1인당 학생수", f"{avg_tch:.1f}명" if avg_tch else "-")
+                    with sc4:
+                        st.metric("학군 점수", f"{sd.get('score', '-')}/100")
+                    if sd.get("message"):
+                        st.caption(sd["message"])
+                else:
+                    st.caption("학군 정보 조회 실패")
+            except Exception:
+                st.caption("서버 연결 실패 — FastAPI 서버가 실행 중인지 확인하세요")
+
     # ── 건물 정보 (용적률·건폐율 from building_master) ───────────────────────
     _pnu = getattr(entry, "pnu", None)
     if _pnu and bm_repo is not None:
