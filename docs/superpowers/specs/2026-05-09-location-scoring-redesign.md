@@ -206,34 +206,42 @@ scoring:
 
 ## 데이터 흐름
 
+**수집 트리거는 리포트 생성 한 곳뿐이다.** 대시보드는 캐시에서 읽기만 한다.
+
 ```
-[수집 단계]
-PoiCollector.collect(complex_code, lat, lng)
-  → Kakao Local API (기존 4개 + 신규 6개 카테고리)
-  → poi_cache 테이블 upsert (30일 TTL)
+[리포트 생성 시] ← 유일한 수집 트리거
+  후보 단지 선정
+  → PoiCollector.collect(complex_code, lat, lng)
+       캐시 히트(30일 이내) → poi_cache에서 즉시 반환
+       캐시 미스/만료      → Kakao API 수집 후 poi_cache 저장
+  → candidate dict 구성:
+       poi_cache     → POI 수치 전체
+       school_scores → school_score (전입률 기반)
+       commute_cache → commute_minutes, transit_minutes
+       apt_master    → household_count, reconstruction_potential, gtx_benefit
+  → LocationScorer.score(candidate) → LocationScore
+  → location_scores 테이블 upsert (complex_code별 최신 점수 보관)
+  → LLM 인사이트 주입: residential_total, investment_total + breakdown
+  → 리포트 저장
 
-[scoring 단계]
-candidate dict 구성:
-  poi_cache     → POI 수치 전체
-  school_scores → school_score (전입률 기반)
-  commute_cache → commute_minutes, transit_minutes
-  apt_master    → household_count, reconstruction_potential, gtx_benefit
-
-LocationScorer.score(candidate) → LocationScore
-  각 Dimension.score(candidate) → 0-100
-  weighted sum → residential_total, investment_total
-
-[출력]
-Dashboard: 두 점수 카드 + breakdown 테이블
-LLM Report: residential_total, investment_total + breakdown dict 주입
+[대시보드 단지 상세 패널] ← 읽기 전용, API 호출 없음
+  location_scores 테이블 조회
+    값 있음 → 실거주/투자 점수 카드 + breakdown 표시
+    값 없음 → "리포트 생성 후 표시됩니다" 안내
 ```
+
+이 방식의 이점:
+- API 호출이 리포트 생성이라는 의도적 액션에만 묶임
+- 대시보드는 항상 빠름 (DB 읽기만, 수집 대기 없음)
+- 30일 TTL은 리포트 재생성 시 자동 갱신
 
 ### ScoringEngine 교체 범위
 
 기존 `ScoringEngine` 호출처 전부를 `LocationScorer`로 교체:
-- `src/api/routers/real_estate.py` — scoring 엔드포인트
-- `src/dashboard/views/real_estate.py` — 단지 상세 패널
+- `src/modules/real_estate/report_service.py` — 리포트 생성 파이프라인 (수집 + scoring)
 - `src/modules/real_estate/daily_report_service.py` — 일일 리포트
+- `src/dashboard/views/real_estate.py` — 단지 상세 패널 (읽기 전용)
+- `src/api/routers/real_estate.py` — scoring 엔드포인트
 - `scoring.py` 파일 자체 삭제
 
 ---
