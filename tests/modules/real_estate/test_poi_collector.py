@@ -66,6 +66,16 @@ class TestPoiCollectorCollect:
             _make_kakao_response(mock_parks),
             {"documents": mock_restaurants, "meta": {"total_count": 10, "is_end": True}},
             {"documents": mock_cafes, "meta": {"total_count": 5, "is_end": True}},
+            # 9 nuisance queries (all empty — no nuisance near this location)
+            _make_kakao_response([]),  # 화장장
+            _make_kakao_response([]),  # 납골당
+            _make_kakao_response([]),  # 자원회수시설
+            _make_kakao_response([]),  # 하수처리장
+            _make_kakao_response([]),  # 교도소
+            _make_kakao_response([]),  # 구치소
+            _make_kakao_response([]),  # 도축장
+            _make_kakao_response([]),  # 장례식장
+            _make_kakao_response([]),  # 변전소
         ]
 
         with patch("requests.get") as mock_get:
@@ -89,6 +99,8 @@ class TestPoiCollectorCollect:
         assert result.park_nearest_m == 350
         assert result.restaurant_count == 10
         assert result.cafe_count == 5
+        assert result.nuisance_high_count == 0
+        assert result.nuisance_mid_count == 0
 
     def test_collect_caches_result(self, collector, db_path):
         mock_response = _make_kakao_response([])
@@ -100,21 +112,26 @@ class TestPoiCollectorCollect:
             assert mock_get.call_count == first_call_count  # 캐시 히트 → 추가 호출 없음
 
     def test_collect_refreshes_after_ttl(self, collector, db_path):
-        # Insert an expired cache row directly via SQL (14-column schema)
         old_date = (datetime.now() - timedelta(days=40)).strftime("%Y-%m-%d %H:%M:%S")
         conn = sqlite3.connect(db_path)
         conn.execute(
-            "INSERT INTO poi_cache VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            ("OLD_CODE", 37.0, 127.0, "[]", 0, 0, 0, 0, 0, 0, 0, 0, 0, old_date),
+            """INSERT INTO poi_cache
+               (complex_code, lat, lng, subway_stations,
+                schools_count, academies_count, marts_count,
+                convenience_count, pharmacy_count, medical_count,
+                park_nearest_m, restaurant_count, cafe_count,
+                nuisance_high_count, nuisance_mid_count, collected_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            ("OLD_CODE", 37.0, 127.0, "[]", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, old_date),
         )
         conn.commit()
         conn.close()
 
-        mock_response = _make_kakao_response([])
+        empty = _make_kakao_response([])
         with patch("requests.get") as mock_get:
-            mock_get.return_value = MagicMock(status_code=200, json=lambda: mock_response)
+            mock_get.return_value = MagicMock(status_code=200, json=lambda: empty)
             collector.collect("OLD_CODE", 37.0, 127.0)
-            assert mock_get.call_count > 0  # TTL 만료 → 재수집
+            assert mock_get.call_count > 0
 
     def test_collect_returns_empty_on_api_failure(self, collector):
         with patch("requests.get") as mock_get:
@@ -167,5 +184,69 @@ def test_migrate_adds_columns_to_old_schema():
         expected_new = {"convenience_count", "pharmacy_count", "medical_count",
                         "park_nearest_m", "restaurant_count", "cafe_count"}
         assert expected_new.issubset(cols)
+    finally:
+        os.unlink(db_path)
+
+
+def test_poi_data_has_nuisance_fields():
+    poi = PoiData(complex_code="X001")
+    assert hasattr(poi, "nuisance_high_count")
+    assert hasattr(poi, "nuisance_mid_count")
+    assert poi.nuisance_high_count == 0
+    assert poi.nuisance_mid_count == 0
+
+
+def test_nuisance_high_detected(db_path):
+    collector = PoiCollector(api_key="test_key", db_path=db_path)
+    crematorium_result = _make_kakao_response([_make_place("서울시립승화원", 800)])
+    empty = _make_kakao_response([])
+
+    # 20 API calls total:
+    # 11 existing (지하철역, 초등학교, 중학교, 학원x1page, 마트, 편의점, 약국, 병원, 공원, 음식점x1page, 카페x1page)
+    # + 9 nuisance (화장장=HIT, 납골당, 자원회수시설, 하수처리장, 교도소, 구치소, 도축장, 장례식장, 변전소)
+    responses = [empty] * 11 + [crematorium_result] + [empty] * 8
+
+    with patch("requests.get") as mock_get:
+        mock_get.side_effect = [MagicMock(status_code=200, json=lambda r=r: r) for r in responses]
+        result = collector.collect("NUISANCE_TEST", 37.5, 127.0)
+
+    assert result.nuisance_high_count == 1
+    assert result.nuisance_mid_count == 0
+
+
+def test_nuisance_clean(db_path):
+    collector = PoiCollector(api_key="test_key", db_path=db_path)
+    empty = _make_kakao_response([])
+    responses = [empty] * 20  # 11 existing + 9 nuisance = all empty
+
+    with patch("requests.get") as mock_get:
+        mock_get.side_effect = [MagicMock(status_code=200, json=lambda r=r: r) for r in responses]
+        result = collector.collect("CLEAN_TEST", 37.5, 127.0)
+
+    assert result.nuisance_high_count == 0
+    assert result.nuisance_mid_count == 0
+
+
+def test_migrate_adds_nuisance_columns():
+    _OLD_DDL = """
+    CREATE TABLE IF NOT EXISTS poi_cache (
+        complex_code TEXT PRIMARY KEY, lat REAL, lng REAL,
+        subway_stations TEXT, schools_count INTEGER, academies_count INTEGER,
+        marts_count INTEGER, convenience_count INTEGER DEFAULT 0,
+        pharmacy_count INTEGER DEFAULT 0, medical_count INTEGER DEFAULT 0,
+        park_nearest_m INTEGER DEFAULT 0, restaurant_count INTEGER DEFAULT 0,
+        cafe_count INTEGER DEFAULT 0, collected_at TEXT
+    );
+    """
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+    try:
+        with sqlite3.connect(db_path) as conn:
+            conn.executescript(_OLD_DDL)
+        PoiCollector(api_key="dummy", db_path=db_path)
+        with sqlite3.connect(db_path) as conn:
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(poi_cache)")}
+        assert "nuisance_high_count" in cols
+        assert "nuisance_mid_count" in cols
     finally:
         os.unlink(db_path)

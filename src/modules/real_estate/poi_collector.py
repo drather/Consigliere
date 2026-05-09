@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS poi_cache (
     park_nearest_m      INTEGER DEFAULT 0,
     restaurant_count    INTEGER DEFAULT 0,
     cafe_count          INTEGER DEFAULT 0,
+    nuisance_high_count INTEGER DEFAULT 0,
+    nuisance_mid_count  INTEGER DEFAULT 0,
     collected_at        TEXT
 );
 """
@@ -71,6 +73,8 @@ class PoiData:
     park_nearest_m: int = 0    # 0 = no park within radius
     restaurant_count: int = 0
     cafe_count: int = 0
+    nuisance_high_count: int = 0
+    nuisance_mid_count: int = 0
     collected_at: str = ""
 
     @property
@@ -96,6 +100,20 @@ class PoiCollector:
     RESTAURANT_RADIUS = 500
     CAFE_RADIUS = 500
 
+    _NUISANCE_HIGH_QUERIES = [
+        ("화장장",       1000),
+        ("납골당",       1000),
+        ("자원회수시설", 1500),
+        ("하수처리장",   1500),
+        ("교도소",       1000),
+        ("구치소",       1000),
+        ("도축장",       1000),
+    ]
+    _NUISANCE_MID_QUERIES = [
+        ("장례식장", 500),
+        ("변전소",   300),
+    ]
+
     def __init__(self, api_key: str, db_path: str, ttl_days: Optional[int] = None):
         self._api_key = api_key
         self._db_path = db_path
@@ -110,12 +128,14 @@ class PoiCollector:
 
     def _migrate(self) -> None:
         new_cols = [
-            ("convenience_count", "INTEGER DEFAULT 0"),
-            ("pharmacy_count",    "INTEGER DEFAULT 0"),
-            ("medical_count",     "INTEGER DEFAULT 0"),
-            ("park_nearest_m",    "INTEGER DEFAULT 0"),
-            ("restaurant_count",  "INTEGER DEFAULT 0"),
-            ("cafe_count",        "INTEGER DEFAULT 0"),
+            ("convenience_count",   "INTEGER DEFAULT 0"),
+            ("pharmacy_count",      "INTEGER DEFAULT 0"),
+            ("medical_count",       "INTEGER DEFAULT 0"),
+            ("park_nearest_m",      "INTEGER DEFAULT 0"),
+            ("restaurant_count",    "INTEGER DEFAULT 0"),
+            ("cafe_count",          "INTEGER DEFAULT 0"),
+            ("nuisance_high_count", "INTEGER DEFAULT 0"),
+            ("nuisance_mid_count",  "INTEGER DEFAULT 0"),
         ]
         with sqlite3.connect(self._db_path) as conn:
             for col, typedef in new_cols:
@@ -162,6 +182,15 @@ class PoiCollector:
         if parks:
             park_nearest_m = min(int(p.get("distance") or 0) for p in parks)
 
+        nuisance_high_count = sum(
+            1 for kw, radius in self._NUISANCE_HIGH_QUERIES
+            if self._search(kw, lat, lng, radius, size=1)
+        )
+        nuisance_mid_count = sum(
+            1 for kw, radius in self._NUISANCE_MID_QUERIES
+            if self._search(kw, lat, lng, radius, size=1)
+        )
+
         poi = PoiData(
             complex_code=complex_code,
             subway_stations=self._parse_stations(stations),
@@ -174,6 +203,8 @@ class PoiCollector:
             park_nearest_m=park_nearest_m,
             restaurant_count=len(restaurants),
             cafe_count=len(cafes),
+            nuisance_high_count=nuisance_high_count,
+            nuisance_mid_count=nuisance_mid_count,
             collected_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         )
         self._save_cache(complex_code, lat, lng, poi)
@@ -214,13 +245,14 @@ class PoiCollector:
             row = conn.execute(
                 """SELECT subway_stations, schools_count, academies_count, marts_count,
                           convenience_count, pharmacy_count, medical_count,
-                          park_nearest_m, restaurant_count, cafe_count, collected_at
+                          park_nearest_m, restaurant_count, cafe_count,
+                          nuisance_high_count, nuisance_mid_count, collected_at
                    FROM poi_cache WHERE complex_code = ?""",
                 (complex_code,),
             ).fetchone()
         if not row:
             return None
-        if self._is_expired(row[10]):
+        if self._is_expired(row[12]):
             return None
         return PoiData(
             complex_code=complex_code,
@@ -234,7 +266,9 @@ class PoiCollector:
             park_nearest_m=row[7] or 0,
             restaurant_count=row[8] or 0,
             cafe_count=row[9] or 0,
-            collected_at=row[10],
+            nuisance_high_count=row[10] or 0,
+            nuisance_mid_count=row[11] or 0,
+            collected_at=row[12],
         )
 
     def _save_cache(self, complex_code: str, lat: float, lng: float, poi: PoiData) -> None:
@@ -244,14 +278,16 @@ class PoiCollector:
                    (complex_code, lat, lng, subway_stations,
                     schools_count, academies_count, marts_count,
                     convenience_count, pharmacy_count, medical_count,
-                    park_nearest_m, restaurant_count, cafe_count, collected_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    park_nearest_m, restaurant_count, cafe_count,
+                    nuisance_high_count, nuisance_mid_count, collected_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     complex_code, lat, lng,
                     json.dumps(poi.subway_stations, ensure_ascii=False),
                     poi.schools_count, poi.academies_count, poi.marts_count,
                     poi.convenience_count, poi.pharmacy_count, poi.medical_count,
                     poi.park_nearest_m, poi.restaurant_count, poi.cafe_count,
+                    poi.nuisance_high_count, poi.nuisance_mid_count,
                     poi.collected_at,
                 ),
             )
