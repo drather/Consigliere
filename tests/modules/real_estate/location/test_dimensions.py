@@ -217,3 +217,29 @@ def test_school_premium_passthrough():
 def test_school_premium_neutral_when_missing():
     dim = SchoolPremiumDimension({"data_absent_neutral": 50})
     assert dim.score({}) == 50
+
+
+from modules.real_estate.location.dimensions.nuisance import NuisanceDimension
+
+_NUISANCE_CFG = {"high_score": 20, "mid_score": 60, "clean_score": 100, "data_absent_neutral": 50}
+
+# ── NuisanceDimension ────────────────────────────────────────
+def test_nuisance_clean():
+    dim = NuisanceDimension(_NUISANCE_CFG)
+    assert dim.score({"poi_nuisance_high_count": 0, "poi_nuisance_mid_count": 0}) == 100
+
+def test_nuisance_mid_only():
+    dim = NuisanceDimension(_NUISANCE_CFG)
+    assert dim.score({"poi_nuisance_high_count": 0, "poi_nuisance_mid_count": 1}) == 60
+
+def test_nuisance_high():
+    dim = NuisanceDimension(_NUISANCE_CFG)
+    assert dim.score({"poi_nuisance_high_count": 1, "poi_nuisance_mid_count": 0}) == 20
+
+def test_nuisance_high_dominates_mid():
+    dim = NuisanceDimension(_NUISANCE_CFG)
+    assert dim.score({"poi_nuisance_high_count": 2, "poi_nuisance_mid_count": 1}) == 20
+
+def test_nuisance_absent_data_returns_neutral():
+    dim = NuisanceDimension(_NUISANCE_CFG)
+    assert dim.score({}) == 50
