@@ -114,6 +114,8 @@ def _enrich_with_poi(candidates: List[Dict], poi_collector: PoiCollector) -> Lis
                 result["poi_park_nearest_m"] = poi.park_nearest_m
                 result["poi_restaurant_count"] = poi.restaurant_count
                 result["poi_cafe_count"] = poi.cafe_count
+                result["poi_nuisance_high_count"] = poi.nuisance_high_count
+                result["poi_nuisance_mid_count"]  = poi.nuisance_mid_count
                 hit += 1
             except Exception as e:
                 logger.warning("[POI] 수집 실패 %s: %s", c.get("apt_name"), e)
