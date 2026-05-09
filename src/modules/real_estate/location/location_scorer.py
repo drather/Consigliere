@@ -12,6 +12,7 @@ from modules.real_estate.location.dimensions.commercial import CommercialDimensi
 from modules.real_estate.location.dimensions.price_potential import PricePotentialDimension
 from modules.real_estate.location.dimensions.liquidity import LiquidityDimension
 from modules.real_estate.location.dimensions.school_premium import SchoolPremiumDimension
+from modules.real_estate.location.dimensions.nuisance import NuisanceDimension
 
 
 @dataclass
@@ -34,6 +35,7 @@ _DIMENSION_REGISTRY: Dict[str, type] = {
     "price_potential": PricePotentialDimension,
     "liquidity":       LiquidityDimension,
     "school_premium":  SchoolPremiumDimension,
+    "nuisance":        NuisanceDimension,
 }
 
 
