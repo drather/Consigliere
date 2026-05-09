@@ -240,8 +240,12 @@ class PoiCollector:
     def _save_cache(self, complex_code: str, lat: float, lng: float, poi: PoiData) -> None:
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
-                """INSERT OR REPLACE INTO poi_cache VALUES
-                   (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                """INSERT OR REPLACE INTO poi_cache
+                   (complex_code, lat, lng, subway_stations,
+                    schools_count, academies_count, marts_count,
+                    convenience_count, pharmacy_count, medical_count,
+                    park_nearest_m, restaurant_count, cafe_count, collected_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     complex_code, lat, lng,
                     json.dumps(poi.subway_stations, ensure_ascii=False),
