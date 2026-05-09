@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS school_teacher_records (
     year                    INTEGER NOT NULL,
     total_teachers          INTEGER NOT NULL DEFAULT 0,
     students_per_teacher    REAL NOT NULL DEFAULT 0,
+    transfer_in_rate        REAL NOT NULL DEFAULT 0,
     collected_at            TEXT NOT NULL,
     UNIQUE(school_code, year)
 );
@@ -104,6 +105,17 @@ class SchoolRepository:
     def _init_db(self) -> None:
         with self._conn() as conn:
             conn.executescript(_DDL)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        with self._conn() as conn:
+            try:
+                conn.execute(
+                    "ALTER TABLE school_teacher_records"
+                    " ADD COLUMN transfer_in_rate REAL NOT NULL DEFAULT 0.0"
+                )
+            except Exception:
+                pass  # column already exists
 
     def upsert_school(self, s: SchoolInfo) -> None:
         sql = """
@@ -222,12 +234,13 @@ class SchoolRepository:
     def upsert_teacher_record(self, r: SchoolTeacherRecord) -> None:
         sql = """
         INSERT INTO school_teacher_records
-            (school_code, year, total_teachers, students_per_teacher, collected_at)
+            (school_code, year, total_teachers, students_per_teacher, transfer_in_rate, collected_at)
         VALUES
-            (:school_code, :year, :total_teachers, :students_per_teacher, :collected_at)
+            (:school_code, :year, :total_teachers, :students_per_teacher, :transfer_in_rate, :collected_at)
         ON CONFLICT(school_code, year) DO UPDATE SET
             total_teachers=excluded.total_teachers,
             students_per_teacher=excluded.students_per_teacher,
+            transfer_in_rate=excluded.transfer_in_rate,
             collected_at=excluded.collected_at
         """
         with self._conn() as conn:
@@ -236,6 +249,7 @@ class SchoolRepository:
                 "year": r.year,
                 "total_teachers": r.total_teachers,
                 "students_per_teacher": r.students_per_teacher,
+                "transfer_in_rate": r.transfer_in_rate,
                 "collected_at": r.collected_at or datetime.now(timezone.utc).isoformat(),
             })
 
@@ -327,6 +341,7 @@ def _row_to_teacher(r: sqlite3.Row) -> SchoolTeacherRecord:
         total_teachers=r["total_teachers"],
         students_per_teacher=r["students_per_teacher"],
         collected_at=r["collected_at"],
+        transfer_in_rate=r["transfer_in_rate"],
     )
 
 

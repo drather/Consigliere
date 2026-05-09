@@ -53,21 +53,24 @@ def _now_iso() -> str:
 
 def _calc_score(
     nearby_count: int,
-    avg_per_teacher: float,
-    ideal: int,
-    warning: int,
+    avg_transfer_rate: float,
+    transfer_high: float,
+    transfer_medium: float,
     high_count: int,
     mid_count: int,
     w_density: float,
     w_quality: float,
     has_quality_data: bool = True,
 ) -> int:
-    """Calculate a 0-100 school district score from teacher-ratio and density sub-scores."""
+    """Calculate a 0-100 school district score from transfer-rate and density sub-scores.
+
+    transfer_rate = MVIN_SUM / STDNT_SUM — 전입생 비율이 높을수록 학군 수요가 높음.
+    """
     if not has_quality_data:
         quality_score = 50
-    elif avg_per_teacher <= ideal:
+    elif avg_transfer_rate >= transfer_high:
         quality_score = 100
-    elif avg_per_teacher <= warning:
+    elif avg_transfer_rate >= transfer_medium:
         quality_score = 60
     else:
         quality_score = 20
@@ -155,14 +158,18 @@ class SchoolService:
                     data_year = int(pban_yr)
                     break
 
-            # Build school_code → total_students map for teacher ratio calculation.
-            # STDNT_SUM exists in apiType=10 (student) rows, not in apiType=17 (teacher) rows.
+            # Build school_code → total_students and mvin_count maps.
+            # STDNT_SUM / MVIN_SUM exist in apiType=10 rows, not in apiType=17 (teacher) rows.
             student_total_map: Dict[str, int] = {}
+            mvin_sum_map: Dict[str, int] = {}
             for raw in raw_students:
                 code = raw.get("SCHUL_CODE", "")
                 total = _safe_int(raw.get("STDNT_SUM", 0))
+                mvin = _safe_int(raw.get("MVIN_SUM", 0))
                 if code and total:
                     student_total_map[code] = total
+                if code and mvin:
+                    mvin_sum_map[code] = mvin
                 records = self._parse_student_records(raw, data_year, now)
                 for rec in records:
                     self._repo.upsert_student_record(rec)
@@ -172,10 +179,10 @@ class SchoolService:
             teacher_pban_yr = str(data_year)
             raw_teachers = self._client.get_teacher_counts(sido_code, sgg_code, kind, teacher_pban_yr)
             for raw in raw_teachers:
-                # Look up total_students from student rows (STDNT_SUM is not in apiType=17)
                 code = raw.get("SCHUL_CODE", "")
                 total_students = student_total_map.get(code, 0)
-                rec = self._parse_teacher_record(raw, data_year, total_students, now)
+                mvin_count = mvin_sum_map.get(code, 0)
+                rec = self._parse_teacher_record(raw, data_year, total_students, mvin_count, now)
                 if rec is not None:
                     self._repo.upsert_teacher_record(rec)
                     teacher_records_saved += 1
@@ -200,8 +207,8 @@ class SchoolService:
         density sub-scores, persists the result, and returns a SchoolScore.
         """
         # 1. Read config values with defaults
-        ideal = int(self._config.get("students_per_teacher_ideal", 12))
-        warning = int(self._config.get("students_per_teacher_warning", 18))
+        transfer_high = float(self._config.get("transfer_rate_high", 0.06))
+        transfer_medium = float(self._config.get("transfer_rate_medium", 0.03))
         high_count = int(self._config.get("nearby_school_high", 3))
         mid_count = int(self._config.get("nearby_school_mid", 1))
         w_density = float(self._config.get("score_weight_density", 0.30))
@@ -242,29 +249,35 @@ class SchoolService:
             self._repo.upsert_school_score(result)
             return result
 
-        # 5. Collect teacher records for each nearby school and compute avg students_per_teacher
+        # 5. Collect teacher records — gather both per_teacher (display) and transfer_rate (scoring)
         all_per_teacher: list[float] = []
+        all_transfer_rates: list[float] = []
         for school in nearby:
             teacher_records = self._repo.get_teacher_records(school.school_code)
             for trec in teacher_records:
                 if trec.students_per_teacher > 0:
                     all_per_teacher.append(trec.students_per_teacher)
+                if trec.transfer_in_rate > 0:
+                    all_transfer_rates.append(trec.transfer_in_rate)
 
         avg_per_teacher = (
             round(sum(all_per_teacher) / len(all_per_teacher), 2) if all_per_teacher else 0.0
         )
+        avg_transfer_rate = (
+            round(sum(all_transfer_rates) / len(all_transfer_rates), 4) if all_transfer_rates else 0.0
+        )
 
-        # 6. Calculate composite score
+        # 6. Calculate composite score using transfer_rate as quality signal
         score = _calc_score(
             nearby_count=len(nearby),
-            avg_per_teacher=avg_per_teacher,
-            ideal=ideal,
-            warning=warning,
+            avg_transfer_rate=avg_transfer_rate,
+            transfer_high=transfer_high,
+            transfer_medium=transfer_medium,
             high_count=high_count,
             mid_count=mid_count,
             w_density=w_density,
             w_quality=w_quality,
-            has_quality_data=bool(all_per_teacher),
+            has_quality_data=bool(all_transfer_rates),
         )
 
         # 7. Persist and return
@@ -370,6 +383,7 @@ class SchoolService:
         raw: Dict[str, Any],
         year: int,
         total_students: int,
+        mvin_count: int,
         now: str,
     ) -> Optional[SchoolTeacherRecord]:
         """Parse SchoolTeacherRecord from apiType=17 response row.
@@ -378,6 +392,7 @@ class SchoolService:
           COL_1         — total teacher headcount
           ML_TOI_FGR    — male teacher count
           FML_TOI_FGR   — female teacher count
+        mvin_count comes from MVIN_SUM in the apiType=10 row (looked up by school_code).
         """
         school_code = raw.get("SCHUL_CODE", "")
         if not school_code:
@@ -385,7 +400,6 @@ class SchoolService:
 
         total_teachers = _safe_int(raw.get("COL_1", 0))
         if total_teachers == 0:
-            # Try summing male+female as fallback
             total_teachers = (
                 _safe_int(raw.get("ML_TOI_FGR", 0))
                 + _safe_int(raw.get("FML_TOI_FGR", 0))
@@ -394,6 +408,9 @@ class SchoolService:
         students_per_teacher = (
             round(total_students / total_teachers, 2) if total_teachers > 0 else 0.0
         )
+        transfer_in_rate = (
+            round(mvin_count / total_students, 4) if total_students > 0 else 0.0
+        )
 
         return SchoolTeacherRecord(
             school_code=school_code,
@@ -401,4 +418,5 @@ class SchoolService:
             total_teachers=total_teachers,
             students_per_teacher=students_per_teacher,
             collected_at=now,
+            transfer_in_rate=transfer_in_rate,
         )

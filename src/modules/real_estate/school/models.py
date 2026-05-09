@@ -37,6 +37,7 @@ class SchoolTeacherRecord:
     total_teachers: int
     students_per_teacher: float
     collected_at: str
+    transfer_in_rate: float = 0.0  # MVIN_SUM / STDNT_SUM — 전입생 비율
 
 
 @dataclass

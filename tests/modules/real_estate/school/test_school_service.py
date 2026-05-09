@@ -24,8 +24,7 @@ _SCHOOL_LIST = [
 ]
 
 # apiType=10 (student counts) real fields:
-# SCHUL_CODE, STDNT_SUM (total), STDNT_SUM_21..26 (by grade),
-# COL_211/COL_212 (grade1 male/female class count), etc.
+# SCHUL_CODE, STDNT_SUM (total), MVIN_SUM (전입생 수), STDNT_SUM_21..26 (by grade)
 _STUDENT_LIST = [
     {
         "SCHUL_CODE": "S000001234",
@@ -35,6 +34,8 @@ _STUDENT_LIST = [
         "ADRCD_CD": "1165000000",
         "ADRCD_NM": "서울특별시 서초구",
         "STDNT_SUM": 595,
+        "MVIN_SUM": 48,            # 전입생 수 — transfer_in_rate = 48/595 ≈ 0.0807
+        "MVT_SUM": 35,
         "STDNT_SUM_21": 100,
         "STDNT_SUM_22": 105,
         "STDNT_SUM_23": 102,
@@ -43,16 +44,6 @@ _STUDENT_LIST = [
         "STDNT_SUM_26": 84,
         "COL_211": 2,
         "COL_212": 2,
-        "COL_221": 3,
-        "COL_222": 3,
-        "COL_231": 3,
-        "COL_232": 2,
-        "COL_241": 3,
-        "COL_242": 3,
-        "COL_251": 3,
-        "COL_252": 2,
-        "COL_261": 2,
-        "COL_262": 2,
         "FOND_SC_CODE": "공립",
         "PBAN_EXCP_YN": "N",
     }
@@ -117,8 +108,9 @@ class TestCollectByDistrict:
         svc.collect_by_district("11", "11650")
         records = svc._repo.get_teacher_records("S000001234")  # no year = all records
         assert len(records) >= 1
-        # students_per_teacher must be > 0 (student total looked up from student rows)
         assert records[0].students_per_teacher > 0
+        # transfer_in_rate must be > 0 when MVIN_SUM is provided (48/595 ≈ 0.0807)
+        assert records[0].transfer_in_rate > 0
 
     def test_collect_handles_api_empty_gracefully(self):
         client = _make_client(schools=[], students=[], teachers=[])
@@ -143,12 +135,12 @@ class TestCalculateScore:
             geocoder=None,
             config={
                 "radius_km": 1.0,
-                "students_per_class_ideal": 20,
-                "students_per_class_warning": 28,
+                "transfer_rate_high": 0.06,
+                "transfer_rate_medium": 0.03,
                 "nearby_school_high": 3,
                 "nearby_school_mid": 1,
                 "score_weight_density": 0.30,
-                "score_weight_class_size": 0.70,
+                "score_weight_quality": 0.70,
             },
         )
         svc.collect_by_district("11", "11650")
@@ -196,12 +188,12 @@ class TestCalculateScore:
             geocoder=geocoder,
             config={
                 "radius_km": 5.0,  # large radius to catch mock school at 37.5050, 127.0010
-                "students_per_class_ideal": 20,
-                "students_per_class_warning": 28,
+                "transfer_rate_high": 0.06,
+                "transfer_rate_medium": 0.03,
                 "nearby_school_high": 3,
                 "nearby_school_mid": 1,
                 "score_weight_density": 0.30,
-                "score_weight_class_size": 0.70,
+                "score_weight_quality": 0.70,
             },
         )
         svc.collect_by_district("11", "11650")
