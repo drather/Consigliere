@@ -15,7 +15,7 @@ from core.llm import BaseLLMClient
 from core.prompt_loader import PromptLoader
 from core.logger import get_logger
 from .candidate_filter import CandidateFilter
-from .scoring import ScoringEngine
+from .location.location_scorer import LocationScorer
 from .presenter import RealEstatePresenter
 
 logger = get_logger(__name__)
@@ -77,9 +77,18 @@ class InsightOrchestrator:
         horea_scores = self._validate_horea(interest_areas, news_articles)
 
         # Step 3: 점수 계산 (Python 수식)
-        priority_weights = persona_data.get("priority_weights", {})
-        engine = ScoringEngine(weights=priority_weights, config=scoring_config)
-        scored = engine.score_all(filtered, horea_scores=horea_scores)
+        scorer = LocationScorer(scoring_config)
+        scored = []
+        for candidate in filtered:
+            loc_score = scorer.score(candidate)
+            result = dict(candidate)
+            result["residential_score"] = loc_score.residential_total
+            result["investment_score"] = loc_score.investment_total
+            result["total_score"] = round(
+                (loc_score.residential_total + loc_score.investment_total) / 2, 1
+            )
+            scored.append(result)
+        scored.sort(key=lambda x: x["total_score"], reverse=True)
         top_candidates = scored[:top_n]
         logger.info(f"[Orchestrator] 상위 {len(top_candidates)}개 선정 (전체 {len(scored)}개 중)")
 

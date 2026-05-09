@@ -25,7 +25,8 @@ from core.logger import get_logger
 from .config import RealEstateConfig
 from .poi_collector import PoiCollector, PoiData
 from .trend_analyzer import TrendAnalyzer, TrendData
-from .scoring import ScoringEngine
+from .location.location_scorer import LocationScorer
+from .location.location_repository import LocationRepository
 from .report_repository import ReportRepository, ProfessionalReport
 
 logger = get_logger(__name__)
@@ -107,6 +108,12 @@ def _enrich_with_poi(candidates: List[Dict], poi_collector: PoiCollector) -> Lis
                 result["poi_stations"] = poi.subway_stations
                 result["poi_academies_count"] = poi.academies_count
                 result["_poi"] = poi
+                result["poi_convenience_count"] = poi.convenience_count
+                result["poi_pharmacy_count"] = poi.pharmacy_count
+                result["poi_medical_count"] = poi.medical_count
+                result["poi_park_nearest_m"] = poi.park_nearest_m
+                result["poi_restaurant_count"] = poi.restaurant_count
+                result["poi_cafe_count"] = poi.cafe_count
                 hit += 1
             except Exception as e:
                 logger.warning("[POI] 수집 실패 %s: %s", c.get("apt_name"), e)
@@ -489,8 +496,22 @@ class ReportOrchestrator:
         preferred_areas = persona_data.get("apartment_preferences", {}).get("preferred_area_sqm", [84.0])
         enriched = _enrich_with_trend(enriched, self._trend_analyzer, preferred_areas=preferred_areas)
 
-        weights = persona_data.get("priority_weights", {})
-        scored = ScoringEngine(weights, scoring_config).score_all(enriched)
+        loc_scorer = LocationScorer(scoring_config)
+        loc_repo = LocationRepository(self._re_db_path)
+        scored = []
+        for candidate in enriched:
+            loc_score = loc_scorer.score(candidate)
+            loc_repo.upsert_score(loc_score)
+            result = dict(candidate)
+            result["residential_score"] = loc_score.residential_total
+            result["investment_score"] = loc_score.investment_total
+            result["residential_breakdown"] = loc_score.residential_breakdown
+            result["investment_breakdown"] = loc_score.investment_breakdown
+            result["total_score"] = round(
+                (loc_score.residential_total + loc_score.investment_total) / 2, 1
+            )
+            scored.append(result)
+        scored.sort(key=lambda x: x["total_score"], reverse=True)
         top5 = scored[:5]
         logger.info("[ReportOrchestrator] 점수 Top5: %s",
                     [(c.get("apt_name"), c.get("total_score")) for c in top5])
