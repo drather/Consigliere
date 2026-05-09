@@ -56,3 +56,72 @@ def test_location_repository_upsert_is_idempotent():
     repo.upsert_score(score2)
     result = repo.get_score("A001")
     assert result.residential_total == 80
+
+
+from modules.real_estate.location.location_scorer import LocationScorer
+
+_CONFIG = {
+    "data_absent_neutral": 50,
+    "residential_dimensions": [
+        {"id": "transportation", "weight": 0.5},
+        {"id": "education",      "weight": 0.5},
+    ],
+    "investment_dimensions": [
+        {"id": "liquidity",       "weight": 0.5},
+        {"id": "price_potential", "weight": 0.5},
+    ],
+    "thresholds": {
+        "transportation": {"subway_close_min": 5, "commute_high_min": 20, "commute_medium_min": 35},
+        "price_potential": {
+            "recon_age_years": 30, "recon_far_max": 200,
+            "recon_score_map": {"HIGH": 100, "MEDIUM": 60, "LOW": 20, "COMPLETED": 50, "UNKNOWN": 50},
+        },
+        "liquidity": {"high_households": 500, "medium_households": 300},
+    },
+}
+
+def test_location_scorer_returns_location_score():
+    scorer = LocationScorer(_CONFIG)
+    candidate = {
+        "complex_code": "A001",
+        "poi_stations": [{"walk_minutes": 3}],
+        "commute_minutes": 15,
+        "school_score": 80,
+        "household_count": 600,
+        "reconstruction_potential": "HIGH",
+    }
+    result = scorer.score(candidate)
+    assert result.complex_code == "A001"
+    assert 0 <= result.residential_total <= 100
+    assert 0 <= result.investment_total <= 100
+    assert "transportation" in result.residential_breakdown
+    assert "education" in result.residential_breakdown
+
+def test_location_scorer_breakdown_matches_total():
+    scorer = LocationScorer(_CONFIG)
+    candidate = {
+        "complex_code": "B002",
+        "poi_stations": [{"walk_minutes": 3}],
+        "commute_minutes": 15,
+        "school_score": 80,
+        "household_count": 600,
+        "reconstruction_potential": "HIGH",
+    }
+    result = scorer.score(candidate)
+    expected_residential = round(
+        result.residential_breakdown["transportation"] * 0.5
+        + result.residential_breakdown["education"] * 0.5
+    )
+    assert result.residential_total == expected_residential
+
+def test_location_scorer_weights_normalize():
+    config = dict(_CONFIG)
+    config["residential_dimensions"] = [
+        {"id": "transportation", "weight": 2},
+        {"id": "education",      "weight": 2},
+    ]
+    scorer = LocationScorer(config)
+    candidate = {"complex_code": "C003", "school_score": 100,
+                 "poi_stations": [{"walk_minutes": 3}], "commute_minutes": 10}
+    result = scorer.score(candidate)
+    assert result.residential_total == 100

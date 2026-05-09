@@ -35,26 +35,57 @@ report:
   report_storage_path: "data/real_estate_reports"
 
 scoring:
-  commute_thresholds: [20, 35]      # 분 기준: HIGH(≤20), MEDIUM(≤35), LOW(>35)
-  household_thresholds: [300, 500]  # 세대수 기준: HIGH(≥500), MEDIUM(≥300), LOW(<300)
-  school_keywords:                  # 학군 HIGH 판정 키워드
-    - "학원가"
-    - "명문"
-    - "특목고"
-    - "자사고"
-  reconstruction_score_map:         # 재건축 잠재력 → 점수
-    HIGH: 100
-    MEDIUM: 60
-    LOW: 20
-    COMPLETED: 50
-    UNKNOWN: 50
   data_absent_neutral: 50
-  poi_close_station_walk_minutes: 5
-  poi_academy_high_threshold: 30
-  poi_academy_medium_threshold: 15
-  reconstruction_age_years: 30
-  reconstruction_far_max: 200
-  area_tolerance_sqm: 5.0
+  residential_dimensions:
+    - id: transportation
+      weight: 0.25
+    - id: education
+      weight: 0.20
+    - id: living_infra
+      weight: 0.20
+    - id: medical
+      weight: 0.15
+    - id: nature
+      weight: 0.20
+  investment_dimensions:
+    - id: price_potential
+      weight: 0.30
+    - id: commercial
+      weight: 0.25
+    - id: liquidity
+      weight: 0.20
+    - id: school_premium
+      weight: 0.25
+  thresholds:
+    transportation:
+      subway_close_min: 5
+      commute_high_min: 20
+      commute_medium_min: 35
+    living_infra:
+      high_count: 5
+      medium_count: 2
+    medical:
+      high_count: 3
+      medium_count: 1
+    nature:
+      close_m: 300
+      medium_m: 800
+    commercial:
+      high_count: 30
+      medium_count: 10
+    liquidity:
+      high_households: 500
+      medium_households: 300
+    school_premium: {}
+    price_potential:
+      recon_age_years: 30
+      recon_far_max: 200
+      recon_score_map:
+        HIGH: 100
+        MEDIUM: 60
+        LOW: 20
+        COMPLETED: 50
+        UNKNOWN: 50
 
 poi:
   walk_speed_mpm: 67
