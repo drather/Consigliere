@@ -800,3 +800,72 @@ def get_school_score(
     except Exception as e:
         logger.error(f"[School Score] {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── POI 수집 Job ──────────────────────────────────────────────────────────────
+
+@router.post("/jobs/poi/collect")
+def collect_poi(
+    limit: int = 10,
+    apt_master_repo: AptMasterRepository = Depends(get_apt_master_repo),
+):
+    """apt_master 기준 POI 미수집 or 만료(>30일) 단지를 최대 limit개 수집."""
+    import os
+    import sqlite3
+    from datetime import datetime, timedelta
+    from modules.real_estate.config import RealEstateConfig
+    from modules.real_estate.geocoder import GeocoderService
+    from modules.real_estate.poi_collector import PoiCollector
+
+    try:
+        cfg = RealEstateConfig()
+        re_db = cfg.get("real_estate_db_path", "data/real_estate.db")
+        kakao_key = os.getenv("KAKAO_API_KEY", "")
+        geocode_cache = cfg.get("geocode_cache_path", "data/geocode_cache.db")
+        ttl_days = int(cfg.get("poi_cache_ttl_days", 30))
+
+        geocoder = GeocoderService(api_key=kakao_key, cache_path=geocode_cache)
+        poi_collector = PoiCollector(api_key=kakao_key, db_path=re_db, ttl_days=ttl_days)
+
+        # Identify complex_codes that have no POI cache or expired cache
+        cutoff = (datetime.now() - timedelta(days=ttl_days)).strftime("%Y-%m-%d %H:%M:%S")
+        with sqlite3.connect(re_db) as conn:
+            cached_codes = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT complex_code FROM poi_cache WHERE collected_at > ?", (cutoff,)
+                ).fetchall()
+            }
+
+        # Pull apt_master entries that have a complex_code and are not in fresh cache
+        # search() with no filters returns all entries (with road_address from apartments JOIN)
+        all_entries = apt_master_repo.search(limit=10000)
+        candidates = [
+            e for e in all_entries
+            if e.complex_code and e.complex_code not in cached_codes
+        ][:limit]
+
+        collected = 0
+        for entry in candidates:
+            coords = geocoder.geocode(
+                apt_name=entry.apt_name,
+                district_code=entry.district_code,
+                address=entry.road_address,
+            )
+            if coords is None:
+                logger.warning(
+                    "[POI Collect] geocode 실패 — %s (%s)", entry.apt_name, entry.complex_code
+                )
+                continue
+            lat, lng = coords
+            poi_collector.collect(entry.complex_code, lat, lng)
+            collected += 1
+            logger.info(
+                "[POI Collect] 수집 완료 — %s (%d/%d)", entry.apt_name, collected, len(candidates)
+            )
+
+        return {"collected": collected, "requested": limit}
+
+    except Exception as e:
+        logger.error("[POI Collect] 오류: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
