@@ -92,19 +92,91 @@ from modules.real_estate.location.dimensions.school_premium import SchoolPremium
 
 # ── CommercialDimension ──────────────────────────────────────
 def test_commercial_high():
-    dim = CommercialDimension({"high_count": 30, "medium_count": 10, "data_absent_neutral": 50})
+    cfg = {"high_count": 30, "medium_count": 10, "data_absent_neutral": 50}
+    dim = CommercialDimension(cfg)
     c = {"poi_restaurant_count": 25, "poi_cafe_count": 10}
-    assert dim.score(c) == 100  # total 35 >= 30
+    # volume: 35>=30 → 100; diversity: restaurant(25>=3✅) cafe(10>=2✅) others(0) → 2/6*100=33
+    # round(100*0.5 + 33*0.5) = round(66.5) = 67
+    assert dim.score(c) == 67
 
 def test_commercial_medium():
-    dim = CommercialDimension({"high_count": 30, "medium_count": 10, "data_absent_neutral": 50})
+    cfg = {"high_count": 30, "medium_count": 10, "data_absent_neutral": 50}
+    dim = CommercialDimension(cfg)
     c = {"poi_restaurant_count": 8, "poi_cafe_count": 5}
-    assert dim.score(c) == 60  # total 13 >= 10
+    # volume: 13>=10 → 60; diversity: restaurant(8>=3✅) cafe(5>=2✅) → 2/6*100=33
+    # round(60*0.5 + 33*0.5) = round(46.5) = 47
+    assert dim.score(c) == 47
 
 def test_commercial_low():
-    dim = CommercialDimension({"high_count": 30, "medium_count": 10, "data_absent_neutral": 50})
+    cfg = {"high_count": 30, "medium_count": 10, "data_absent_neutral": 50}
+    dim = CommercialDimension(cfg)
     c = {"poi_restaurant_count": 3, "poi_cafe_count": 2}
-    assert dim.score(c) == 20  # total 5 < 10
+    # volume: 5<10 → 20; diversity: restaurant(3>=3✅) cafe(2>=2✅) → 2/6*100=33
+    # round(20*0.5 + 33*0.5) = round(26.5) = 27
+    assert dim.score(c) == 27
+
+def test_commercial_high_volume_all_diversity():
+    cfg = {
+        "high_count": 30, "medium_count": 10, "data_absent_neutral": 50,
+        "diversity_min_count": {"restaurant": 3, "cafe": 2, "convenience": 1,
+                                "pharmacy": 1, "medical": 1, "mart": 1},
+    }
+    dim = CommercialDimension(cfg)
+    c = {
+        "poi_restaurant_count": 45, "poi_cafe_count": 20,
+        "poi_convenience_count": 5, "poi_pharmacy_count": 3,
+        "poi_medical_count": 3, "poi_marts_count": 1,
+    }
+    # volume: 65>=30 → 100; diversity: 6/6 → 100
+    assert dim.score(c) == 100
+
+def test_commercial_high_volume_3_diversity():
+    cfg = {
+        "high_count": 30, "medium_count": 10, "data_absent_neutral": 50,
+        "diversity_min_count": {"restaurant": 3, "cafe": 2, "convenience": 1,
+                                "pharmacy": 1, "medical": 1, "mart": 1},
+    }
+    dim = CommercialDimension(cfg)
+    c = {
+        "poi_restaurant_count": 45, "poi_cafe_count": 20,
+        "poi_convenience_count": 5,
+        "poi_pharmacy_count": 0, "poi_medical_count": 0, "poi_marts_count": 0,
+    }
+    # volume: 65>=30 → 100; diversity: 3/6 → 50
+    # round(100*0.5 + 50*0.5) = 75
+    assert dim.score(c) == 75
+
+def test_commercial_low_volume_all_diversity():
+    cfg = {
+        "high_count": 30, "medium_count": 10, "data_absent_neutral": 50,
+        "diversity_min_count": {"restaurant": 3, "cafe": 2, "convenience": 1,
+                                "pharmacy": 1, "medical": 1, "mart": 1},
+    }
+    dim = CommercialDimension(cfg)
+    c = {
+        "poi_restaurant_count": 3, "poi_cafe_count": 2,
+        "poi_convenience_count": 1, "poi_pharmacy_count": 1,
+        "poi_medical_count": 1, "poi_marts_count": 1,
+    }
+    # volume: 5<10 → 20; diversity: 6/6 → 100
+    # round(20*0.5 + 100*0.5) = 60
+    assert dim.score(c) == 60
+
+def test_commercial_single_category_dominant():
+    cfg = {"high_count": 30, "medium_count": 10, "data_absent_neutral": 50}
+    dim = CommercialDimension(cfg)
+    c = {"poi_restaurant_count": 45, "poi_cafe_count": 20}
+    # volume: 65>=30 → 100; diversity: restaurant(✅) cafe(✅) others(0) → 2/6=33
+    # round(100*0.5 + 33*0.5) = 67
+    assert dim.score(c) == 67
+
+def test_commercial_diversity_boundary():
+    cfg = {"high_count": 30, "medium_count": 10, "data_absent_neutral": 50}
+    dim = CommercialDimension(cfg)
+    c = {"poi_restaurant_count": 3, "poi_cafe_count": 1}
+    # restaurant(3>=3✅) cafe(1<2❌) → 1/6=17
+    # volume: 4<10 → 20; round(20*0.5 + 17*0.5) = round(18.5) = 19
+    assert dim.score(c) == 19
 
 # ── PricePotentialDimension ──────────────────────────────────
 _PP_CFG = {
