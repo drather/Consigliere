@@ -231,9 +231,27 @@ scoring:
 ```
 
 이 방식의 이점:
-- API 호출이 리포트 생성이라는 의도적 액션에만 묶임
 - 대시보드는 항상 빠름 (DB 읽기만, 수집 대기 없음)
-- 30일 TTL은 리포트 재생성 시 자동 갱신
+- 30일 TTL은 데일리 Job 또는 리포트 재생성 시 자동 갱신
+
+### 데일리 POI 수집 Job (캐시 선제 워밍)
+
+리포트 생성 외에 데일리 Job도 캐시를 점진적으로 채운다.
+
+```
+[POST /jobs/poi/collect] ← n8n 일일 스케줄
+  apt_master에서 POI 미수집 or 30일 만료된 단지 N개 선택
+  → PoiCollector.collect() × N  (일일 호출 한도 내)
+  → poi_cache 적재
+
+config:
+  daily_report:
+    max_new_poi_api_calls: 10   # 단지당 ~10 API calls, 하루 10단지 신규 수집
+```
+
+- 데일리 Job이 점진적으로 캐시를 워밍 → 리포트 생성 시 캐시 히트율 높아짐
+- 리포트 생성은 캐시 미스 시에만 on-demand 수집 (fallback)
+- 기존 `max_new_commute_api_calls` 패턴과 동일한 구조
 
 ### ScoringEngine 교체 범위
 
