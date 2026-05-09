@@ -44,14 +44,27 @@ class TestPoiCollectorCollect:
         mock_middle = [_make_school("언주중학교", 820)]
         mock_academies = [_make_place(f"학원{i}", 500) for i in range(15)]
         mock_marts = [_make_place("이마트", 300), _make_place("홈플러스", 900)]
+        mock_convenience = [_make_place("GS25", 200), _make_place("CU", 300)]
+        mock_pharmacies = [_make_place("약국", 400)]
+        mock_medical = [_make_place("내과", 500)]
+        mock_parks = [{"place_name": "중앙공원", "distance": "350"}]
+        mock_restaurants = [_make_place(f"음식점{i}", 300) for i in range(10)]
+        mock_cafes = [_make_place(f"카페{i}", 200) for i in range(5)]
 
-        # 5 API calls: 지하철역, 초등학교, 중학교, 학원, 마트
+        # 11 API calls: 지하철역, 초등학교, 중학교, 학원(paged), 마트,
+        #               편의점, 약국, 병원, 공원, 음식점(paged), 카페(paged)
         responses = [
             _make_kakao_response(mock_stations),
             _make_kakao_response(mock_elem),
             _make_kakao_response(mock_middle),
-            _make_kakao_response(mock_academies),
+            {"documents": mock_academies, "meta": {"total_count": 15, "is_end": True}},
             _make_kakao_response(mock_marts),
+            _make_kakao_response(mock_convenience),
+            _make_kakao_response(mock_pharmacies),
+            _make_kakao_response(mock_medical),
+            _make_kakao_response(mock_parks),
+            {"documents": mock_restaurants, "meta": {"total_count": 10, "is_end": True}},
+            {"documents": mock_cafes, "meta": {"total_count": 5, "is_end": True}},
         ]
 
         with patch("requests.get") as mock_get:
@@ -69,6 +82,12 @@ class TestPoiCollectorCollect:
         assert result.schools_count == 2
         assert result.academies_count == 15
         assert result.marts_count == 2
+        assert result.convenience_count == 2
+        assert result.pharmacy_count == 1
+        assert result.medical_count == 1
+        assert result.park_nearest_m == 350
+        assert result.restaurant_count == 10
+        assert result.cafe_count == 5
 
     def test_collect_caches_result(self, collector, db_path):
         mock_response = _make_kakao_response([])
@@ -80,22 +99,12 @@ class TestPoiCollectorCollect:
             assert mock_get.call_count == first_call_count  # 캐시 히트 → 추가 호출 없음
 
     def test_collect_refreshes_after_ttl(self, collector, db_path):
-        conn = sqlite3.connect(db_path)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS poi_cache (
-                complex_code TEXT PRIMARY KEY,
-                lat REAL, lng REAL,
-                subway_stations TEXT,
-                schools_count INTEGER,
-                academies_count INTEGER,
-                marts_count INTEGER,
-                collected_at TEXT
-            )
-        """)
+        # Insert an expired cache row directly via SQL (14-column schema)
         old_date = (datetime.now() - timedelta(days=40)).strftime("%Y-%m-%d %H:%M:%S")
+        conn = sqlite3.connect(db_path)
         conn.execute(
-            "INSERT INTO poi_cache VALUES (?,?,?,?,?,?,?,?)",
-            ("OLD_CODE", 37.0, 127.0, "[]", 0, 0, 0, old_date),
+            "INSERT INTO poi_cache VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("OLD_CODE", 37.0, 127.0, "[]", 0, 0, 0, 0, 0, 0, 0, 0, 0, old_date),
         )
         conn.commit()
         conn.close()
@@ -119,3 +128,15 @@ class TestPoiCollectorCollect:
         stations = [{"place_name": "역삼역", "distance": "350"}]
         result = collector._parse_stations(stations)
         assert result[0]["walk_minutes"] == 5
+
+
+def test_poi_data_has_new_fields():
+    poi = PoiData(complex_code="X001")
+    assert hasattr(poi, "convenience_count")
+    assert hasattr(poi, "pharmacy_count")
+    assert hasattr(poi, "medical_count")
+    assert hasattr(poi, "park_nearest_m")
+    assert hasattr(poi, "restaurant_count")
+    assert hasattr(poi, "cafe_count")
+    assert poi.convenience_count == 0
+    assert poi.park_nearest_m == 0

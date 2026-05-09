@@ -22,14 +22,20 @@ _CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yaml")
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS poi_cache (
-    complex_code    TEXT PRIMARY KEY,
-    lat             REAL,
-    lng             REAL,
-    subway_stations TEXT,
-    schools_count   INTEGER,
-    academies_count INTEGER,
-    marts_count     INTEGER,
-    collected_at    TEXT
+    complex_code        TEXT PRIMARY KEY,
+    lat                 REAL,
+    lng                 REAL,
+    subway_stations     TEXT,
+    schools_count       INTEGER,
+    academies_count     INTEGER,
+    marts_count         INTEGER,
+    convenience_count   INTEGER DEFAULT 0,
+    pharmacy_count      INTEGER DEFAULT 0,
+    medical_count       INTEGER DEFAULT 0,
+    park_nearest_m      INTEGER DEFAULT 0,
+    restaurant_count    INTEGER DEFAULT 0,
+    cafe_count          INTEGER DEFAULT 0,
+    collected_at        TEXT
 );
 """
 
@@ -59,6 +65,12 @@ class PoiData:
     schools_count: int = 0
     academies_count: int = 0
     marts_count: int = 0
+    convenience_count: int = 0
+    pharmacy_count: int = 0
+    medical_count: int = 0
+    park_nearest_m: int = 0    # 0 = no park within radius
+    restaurant_count: int = 0
+    cafe_count: int = 0
     collected_at: str = ""
 
     @property
@@ -77,6 +89,12 @@ class PoiCollector:
     SCHOOL_RADIUS = 1000
     ACADEMY_RADIUS = 1000
     MART_RADIUS = 1000
+    CONVENIENCE_RADIUS = 500
+    PHARMACY_RADIUS = 500
+    MEDICAL_RADIUS = 1000
+    PARK_RADIUS = 1000
+    RESTAURANT_RADIUS = 500
+    CAFE_RADIUS = 500
 
     def __init__(self, api_key: str, db_path: str, ttl_days: Optional[int] = None):
         self._api_key = api_key
@@ -84,10 +102,27 @@ class PoiCollector:
         self._ttl_days = ttl_days if ttl_days is not None else _load_ttl_days()
         self._walk_speed_mpm = _load_walk_speed_mpm()
         self._init_db()
+        self._migrate()
 
     def _init_db(self) -> None:
         with sqlite3.connect(self._db_path) as conn:
             conn.executescript(_DDL)
+
+    def _migrate(self) -> None:
+        new_cols = [
+            ("convenience_count", "INTEGER DEFAULT 0"),
+            ("pharmacy_count",    "INTEGER DEFAULT 0"),
+            ("medical_count",     "INTEGER DEFAULT 0"),
+            ("park_nearest_m",    "INTEGER DEFAULT 0"),
+            ("restaurant_count",  "INTEGER DEFAULT 0"),
+            ("cafe_count",        "INTEGER DEFAULT 0"),
+        ]
+        with sqlite3.connect(self._db_path) as conn:
+            for col, typedef in new_cols:
+                try:
+                    conn.execute(f"ALTER TABLE poi_cache ADD COLUMN {col} {typedef}")
+                except Exception:
+                    pass  # column already exists
 
     def collect(self, complex_code: str, lat: float, lng: float) -> PoiData:
         cached = self._load_cache(complex_code)
@@ -110,13 +145,22 @@ class PoiCollector:
             name = (doc.get("place_name") or "").strip()
             key = pid or name
             if not key:
-                logger.warning("[PoiCollector] school doc에 id/place_name 없음, 스킵: %s", doc)
                 continue
             if key not in seen:
                 seen.add(key)
                 schools.append(doc)
         academies = self._search_paged("학원", lat, lng, self.ACADEMY_RADIUS, max_pages=3)
         marts = self._search("대형마트 백화점", lat, lng, self.MART_RADIUS, size=15)
+        convenience = self._search("편의점", lat, lng, self.CONVENIENCE_RADIUS, size=15)
+        pharmacies = self._search("약국", lat, lng, self.PHARMACY_RADIUS, size=15)
+        medical = self._search("병원", lat, lng, self.MEDICAL_RADIUS, size=15)
+        parks = self._search("공원", lat, lng, self.PARK_RADIUS, size=15)
+        restaurants = self._search_paged("음식점", lat, lng, self.RESTAURANT_RADIUS, max_pages=3)
+        cafes = self._search_paged("카페", lat, lng, self.CAFE_RADIUS, max_pages=3)
+
+        park_nearest_m = 0
+        if parks:
+            park_nearest_m = min(int(p.get("distance", 0)) for p in parks)
 
         poi = PoiData(
             complex_code=complex_code,
@@ -124,6 +168,12 @@ class PoiCollector:
             schools_count=len(schools),
             academies_count=len(academies),
             marts_count=len(marts),
+            convenience_count=len(convenience),
+            pharmacy_count=len(pharmacies),
+            medical_count=len(medical),
+            park_nearest_m=park_nearest_m,
+            restaurant_count=len(restaurants),
+            cafe_count=len(cafes),
             collected_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         )
         self._save_cache(complex_code, lat, lng, poi)
@@ -162,14 +212,15 @@ class PoiCollector:
     def _load_cache(self, complex_code: str) -> Optional[PoiData]:
         with sqlite3.connect(self._db_path) as conn:
             row = conn.execute(
-                "SELECT subway_stations, schools_count, academies_count, marts_count, collected_at "
-                "FROM poi_cache WHERE complex_code = ?",
+                """SELECT subway_stations, schools_count, academies_count, marts_count,
+                          convenience_count, pharmacy_count, medical_count,
+                          park_nearest_m, restaurant_count, cafe_count, collected_at
+                   FROM poi_cache WHERE complex_code = ?""",
                 (complex_code,),
             ).fetchone()
         if not row:
             return None
-        collected_at = row[4]
-        if self._is_expired(collected_at):
+        if self._is_expired(row[10]):
             return None
         return PoiData(
             complex_code=complex_code,
@@ -177,17 +228,26 @@ class PoiCollector:
             schools_count=row[1] or 0,
             academies_count=row[2] or 0,
             marts_count=row[3] or 0,
-            collected_at=collected_at,
+            convenience_count=row[4] or 0,
+            pharmacy_count=row[5] or 0,
+            medical_count=row[6] or 0,
+            park_nearest_m=row[7] or 0,
+            restaurant_count=row[8] or 0,
+            cafe_count=row[9] or 0,
+            collected_at=row[10],
         )
 
     def _save_cache(self, complex_code: str, lat: float, lng: float, poi: PoiData) -> None:
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO poi_cache VALUES (?,?,?,?,?,?,?,?)",
+                """INSERT OR REPLACE INTO poi_cache VALUES
+                   (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     complex_code, lat, lng,
                     json.dumps(poi.subway_stations, ensure_ascii=False),
                     poi.schools_count, poi.academies_count, poi.marts_count,
+                    poi.convenience_count, poi.pharmacy_count, poi.medical_count,
+                    poi.park_nearest_m, poi.restaurant_count, poi.cafe_count,
                     poi.collected_at,
                 ),
             )
