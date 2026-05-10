@@ -144,9 +144,9 @@ candidate dict로 전달된다.
 - points가 비어있으면 "거래 데이터 없음" 반환
 
 **`render_commute(commute: CommuteData) -> str`**
-- transit / car / walk 3카드 레이아웃
-- 3개 모두 None이면 "출퇴근 정보 미수집" 한 줄 반환
-- 있는 수단만 표시 (일부 None 허용)
+- transit / car / walk 3카드 레이아웃 항상 3개 모두 표시
+- 각 수단의 값이 None이면 해당 카드에 "조회 불가" 표기
+- 3개 모두 None이어도 3카드 레이아웃 유지 ("조회 불가 × 3")
 
 **`render_scores(residential: List, investment: List) -> str`**
 - 기존 `format_dimension_scores()` 로직 유지
@@ -205,7 +205,7 @@ return CommuteData(
 ```
 
 > **참고:** orchestrator 수정(섹션 6-2-b)으로 transit/car/walking 모두 주입된다.
-> `render_commute()`는 각 값이 None일 경우 해당 카드를 생략하고 있는 수단만 표시한다.
+> `render_commute()`는 항상 3카드를 렌더링하며, 값이 None인 수단은 "조회 불가"로 표기한다.
 
 **`build_markdown(...) -> str`** — 기존 시그니처 유지, 내부 루프를 `build_candidate_card(c)` 호출로 단순화.
 
