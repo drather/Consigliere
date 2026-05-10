@@ -32,7 +32,8 @@ def _load_scorer() -> Optional[LocationScorer]:
         with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
             full_cfg = yaml.safe_load(f) or {}
         return LocationScorer(config=full_cfg.get("scoring", {}))
-    except Exception:
+    except Exception as e:
+        logger.warning("[DailyOrchestrator] LocationScorer 초기화 실패, 점수 생략: %s", e)
         return None
 
 
@@ -149,8 +150,8 @@ class DailyReportOrchestrator:
             for c in candidates:
                 try:
                     c["_location_score"] = scorer.score(c)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("[DailyOrchestrator] scorer.score 실패 %s: %s", c.get("apt_name"), e)
 
         # Step 5. LLM 분석
         candidates_text = "\n\n".join(_format_candidate_for_llm(c) for c in candidates)
