@@ -6,6 +6,10 @@ class CommercialDimension(BaseDimension):
     def dimension_id(self) -> str:
         return "commercial"
 
+    @property
+    def label(self) -> str:
+        return "commercial"  # TODO(task2): replace with emoji label
+
     def score(self, candidate: dict) -> int:
         restaurant = candidate.get("poi_restaurant_count", 0) or 0
         cafe = candidate.get("poi_cafe_count", 0) or 0

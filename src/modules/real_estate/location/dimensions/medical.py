@@ -6,6 +6,10 @@ class MedicalDimension(BaseDimension):
     def dimension_id(self) -> str:
         return "medical"
 
+    @property
+    def label(self) -> str:
+        return "medical"  # TODO(task2): replace with emoji label
+
     def score(self, candidate: dict) -> int:
         count = candidate.get("poi_medical_count")
         if count is None:

@@ -6,6 +6,10 @@ class NatureDimension(BaseDimension):
     def dimension_id(self) -> str:
         return "nature"
 
+    @property
+    def label(self) -> str:
+        return "nature"  # TODO(task2): replace with emoji label
+
     def score(self, candidate: dict) -> int:
         dist_m = candidate.get("poi_park_nearest_m")
         if not dist_m:

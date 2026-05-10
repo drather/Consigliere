@@ -6,6 +6,10 @@ class TransportationDimension(BaseDimension):
     def dimension_id(self) -> str:
         return "transportation"
 
+    @property
+    def label(self) -> str:
+        return "transportation"  # TODO(task2): replace with emoji label
+
     def score(self, candidate: dict) -> int:
         neutral = self._config.get("data_absent_neutral", 50)
         close_min = self._config.get("subway_close_min", 5)

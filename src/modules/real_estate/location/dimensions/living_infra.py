@@ -6,6 +6,10 @@ class LivingInfraDimension(BaseDimension):
     def dimension_id(self) -> str:
         return "living_infra"
 
+    @property
+    def label(self) -> str:
+        return "living_infra"  # TODO(task2): replace with emoji label
+
     def score(self, candidate: dict) -> int:
         total = (
             (candidate.get("poi_convenience_count") or 0)

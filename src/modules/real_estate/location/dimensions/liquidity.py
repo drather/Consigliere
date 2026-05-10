@@ -6,6 +6,10 @@ class LiquidityDimension(BaseDimension):
     def dimension_id(self) -> str:
         return "liquidity"
 
+    @property
+    def label(self) -> str:
+        return "liquidity"  # TODO(task2): replace with emoji label
+
     def score(self, candidate: dict) -> int:
         households = candidate.get("household_count")
         if households is None:

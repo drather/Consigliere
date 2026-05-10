@@ -125,3 +125,18 @@ def test_location_scorer_weights_normalize():
                  "poi_stations": [{"walk_minutes": 3}], "commute_minutes": 10}
     result = scorer.score(candidate)
     assert result.residential_total == 100
+
+
+# ── DimensionResult ────────────────────────────────────────────
+from modules.real_estate.location.dimension_result import DimensionResult
+
+def test_dimension_result_fields():
+    dr = DimensionResult(id="transportation", label="🚇 교통", score=80, evidence=["대중교통 20분"])
+    assert dr.id == "transportation"
+    assert dr.label == "🚇 교통"
+    assert dr.score == 80
+    assert dr.evidence == ["대중교통 20분"]
+
+def test_dimension_result_default_evidence():
+    dr = DimensionResult(id="foo", label="bar", score=50)
+    assert dr.evidence == []

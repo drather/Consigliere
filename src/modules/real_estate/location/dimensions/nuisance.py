@@ -6,6 +6,10 @@ class NuisanceDimension(BaseDimension):
     def dimension_id(self) -> str:
         return "nuisance"
 
+    @property
+    def label(self) -> str:
+        return "nuisance"  # TODO(task2): replace with emoji label
+
     def score(self, candidate: dict) -> int:
         if "poi_nuisance_high_count" not in candidate:
             return self._config.get("data_absent_neutral", 50)

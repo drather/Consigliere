@@ -6,6 +6,10 @@ class EducationDimension(BaseDimension):
     def dimension_id(self) -> str:
         return "education"
 
+    @property
+    def label(self) -> str:
+        return "education"  # TODO(task2): replace with emoji label
+
     def score(self, candidate: dict) -> int:
         school_score = candidate.get("school_score")
         if school_score is not None:

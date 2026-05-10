@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import List
 
 
 class BaseDimension(ABC):
@@ -13,3 +14,12 @@ class BaseDimension(ABC):
     @abstractmethod
     def dimension_id(self) -> str:
         """Unique identifier matching config.yaml dimension id."""
+
+    @property
+    @abstractmethod
+    def label(self) -> str:
+        """Human-readable display label with emoji prefix."""
+
+    def evidence(self, candidate: dict) -> List[str]:
+        """Return 0-3 bullet strings explaining the score. Override in subclasses."""
+        return []

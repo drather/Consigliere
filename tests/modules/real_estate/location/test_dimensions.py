@@ -243,3 +243,19 @@ def test_nuisance_high_dominates_mid():
 def test_nuisance_absent_data_returns_neutral():
     dim = NuisanceDimension(_NUISANCE_CFG)
     assert dim.score({}) == 50
+
+
+# ── BaseDimension 인터페이스 ──────────────────────────────────
+from modules.real_estate.location.dimensions.transportation import TransportationDimension as _TD
+
+def test_base_dimension_requires_label():
+    """모든 구상 차원은 label 프로퍼티를 가져야 한다."""
+    dim = _TD({"subway_close_min": 5, "commute_high_min": 20, "commute_medium_min": 35, "data_absent_neutral": 50})
+    assert isinstance(dim.label, str)
+    assert len(dim.label) > 0
+
+def test_base_dimension_evidence_returns_list():
+    """evidence()는 list[str]를 반환해야 한다."""
+    dim = _TD({"subway_close_min": 5, "commute_high_min": 20, "commute_medium_min": 35, "data_absent_neutral": 50})
+    result = dim.evidence({})
+    assert isinstance(result, list)

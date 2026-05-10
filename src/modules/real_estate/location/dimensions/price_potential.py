@@ -7,6 +7,10 @@ class PricePotentialDimension(BaseDimension):
     def dimension_id(self) -> str:
         return "price_potential"
 
+    @property
+    def label(self) -> str:
+        return "price_potential"  # TODO(task2): replace with emoji label
+
     def score(self, candidate: dict) -> int:
         recon_map = self._config.get("recon_score_map", {
             "HIGH": 100, "MEDIUM": 60, "LOW": 20, "COMPLETED": 50, "UNKNOWN": 50
