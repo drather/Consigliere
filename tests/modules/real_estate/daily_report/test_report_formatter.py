@@ -181,3 +181,82 @@ class TestRenderTrend:
         result = render_trend(trend)
         assert "<svg" in result
         assert "★" in result
+
+
+class TestRenderCommute:
+    def _make_commute(self, transit=None, car=None, walk=None, route=""):
+        from modules.real_estate.daily_report.report_types import CommuteData
+        return CommuteData(
+            transit_minutes=transit, car_minutes=car,
+            walk_minutes=walk, route_summary=route,
+        )
+
+    def test_all_modes_present(self):
+        from modules.real_estate.daily_report.report_formatter import render_commute
+        result = render_commute(self._make_commute(transit=35, car=20, walk=90))
+        assert "35분" in result
+        assert "20분" in result
+        assert "90분" in result
+
+    def test_none_mode_shows_unavailable(self):
+        from modules.real_estate.daily_report.report_formatter import render_commute
+        result = render_commute(self._make_commute(transit=35, car=None, walk=None))
+        assert "35분" in result
+        assert result.count("조회 불가") == 2
+
+    def test_all_none_shows_three_unavailable(self):
+        from modules.real_estate.daily_report.report_formatter import render_commute
+        result = render_commute(self._make_commute())
+        assert result.count("조회 불가") == 3
+
+    def test_route_summary_shown_when_present(self):
+        from modules.real_estate.daily_report.report_formatter import render_commute
+        result = render_commute(self._make_commute(transit=35, route="2호선 30분"))
+        assert "2호선 30분" in result
+
+
+class TestRenderScores:
+    def test_renders_residential_and_investment(self):
+        from modules.real_estate.daily_report.report_formatter import render_scores
+        from modules.real_estate.location.dimension_result import DimensionResult
+        res = [DimensionResult(id="transportation", label="🚇 교통", score=80, evidence=["22분"])]
+        inv = [DimensionResult(id="commercial", label="🛍️ 상업", score=60, evidence=["음식점 15개"])]
+        result = render_scores(res, inv)
+        assert "🚇 교통" in result
+        assert "80점" in result
+        assert "🛍️ 상업" in result
+        assert "음식점 15개" in result
+
+    def test_empty_lists_returns_empty(self):
+        from modules.real_estate.daily_report.report_formatter import render_scores
+        assert render_scores([], []) == ""
+
+    def test_unknown_dimension_id_still_renders(self):
+        from modules.real_estate.daily_report.report_formatter import render_scores
+        from modules.real_estate.location.dimension_result import DimensionResult
+        res = [DimensionResult(id="mystery", label="🔮 미지의차원", score=99, evidence=["비밀"])]
+        result = render_scores(res, [])
+        assert "🔮 미지의차원" in result
+        assert "99점" in result
+
+
+class TestRenderVerdictKeypoints:
+    def test_render_verdict_with_text(self):
+        from modules.real_estate.daily_report.report_formatter import render_verdict
+        result = render_verdict("관망 — 하락 추세 중")
+        assert "관망" in result
+        assert "🔍" in result
+
+    def test_render_verdict_empty_returns_empty(self):
+        from modules.real_estate.daily_report.report_formatter import render_verdict
+        assert render_verdict("") == ""
+
+    def test_render_keypoints_with_items(self):
+        from modules.real_estate.daily_report.report_formatter import render_keypoints
+        result = render_keypoints(["✅ 역세권", "📉 하락 추세"])
+        assert "✅ 역세권" in result
+        assert "📉 하락 추세" in result
+
+    def test_render_keypoints_empty_returns_empty(self):
+        from modules.real_estate.daily_report.report_formatter import render_keypoints
+        assert render_keypoints([]) == ""

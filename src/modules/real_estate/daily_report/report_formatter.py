@@ -127,6 +127,56 @@ def render_trend(trend: TrendData) -> str:
     )
 
 
+def render_commute(commute: CommuteData) -> str:
+    def fmt(minutes: Optional[int]) -> str:
+        return f"{minutes}분" if minutes is not None else "조회 불가"
+
+    transit_str = fmt(commute["transit_minutes"])
+    car_str = fmt(commute["car_minutes"])
+    walk_str = fmt(commute["walk_minutes"])
+    route = commute.get("route_summary", "")
+
+    lines = [
+        "**🚌 출퇴근**",
+        "| 대중교통 | 자차 | 도보 |",
+        "|:---:|:---:|:---:|",
+        f"| {transit_str} | {car_str} | {walk_str} |",
+    ]
+    if route:
+        lines.append(f"*{route}*")
+    return "\n".join(lines)
+
+
+def render_scores(residential: List, investment: List) -> str:
+    if not residential and not investment:
+        return ""
+    lines = ["**실거주 점수 분석**"]
+    for dr in residential:
+        lines.append(f"- {dr.label}: **{dr.score}점**")
+        for sub in dr.evidence:
+            lines.append(f"  - {sub}")
+    lines += ["", "**투자성 점수 분석**"]
+    for dr in investment:
+        lines.append(f"- {dr.label}: **{dr.score}점**")
+        for sub in dr.evidence:
+            lines.append(f"  - {sub}")
+    return "\n".join(lines)
+
+
+def render_verdict(verdict: str) -> str:
+    if not verdict:
+        return ""
+    return f"> 🔍 **오늘의 판단:** {verdict}"
+
+
+def render_keypoints(key_points: List[str]) -> str:
+    if not key_points:
+        return ""
+    lines = ["**주목할 점**"]
+    lines.extend(f"- {kp}" for kp in key_points)
+    return "\n".join(lines)
+
+
 def format_macro_summary(macro_summary: str) -> List[str]:
     if not macro_summary:
         return ["데이터 없음"]
