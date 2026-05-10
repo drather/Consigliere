@@ -112,9 +112,9 @@ class BaseDimension(ABC):
 class LocationScore:
     complex_code: str
     residential_total: int                    # 0-100
-    residential_breakdown: dict[str, int]     # {dimension_id: score}
+    residential_results: List[DimensionResult]
     investment_total: int                     # 0-100
-    investment_breakdown: dict[str, int]      # {dimension_id: score}
+    investment_results: List[DimensionResult]
     scored_at: str
 ```
 

@@ -211,17 +211,6 @@ def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int =
 
         # ── 실거주 / 투자 점수 카드 ──────────────────────────────────────────────
         from modules.real_estate.location.location_repository import LocationRepository as _LocRepo
-        _SCORE_LABEL_MAP = {
-            "transportation": "🚇 교통 접근성",
-            "education":      "📚 교육 환경",
-            "living_infra":   "🏪 생활 인프라",
-            "medical":        "🏥 의료 접근성",
-            "nature":         "🌳 자연 환경",
-            "price_potential":"📈 가격 상승 잠재력",
-            "commercial":     "🍽️ 상권 활성도",
-            "liquidity":      "💧 거래 유동성",
-            "school_premium": "🏆 학군 프리미엄",
-        }
         _re_db = os.environ.get("REAL_ESTATE_DB_PATH", "data/real_estate.db")
         _loc_repo = _LocRepo(_re_db)
         loc_score = _loc_repo.get_score(complex_code or "")
@@ -231,15 +220,13 @@ def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int =
             with col_res:
                 st.metric("🏠 실거주 점수", f"{loc_score.residential_total}점")
                 with st.expander("항목별 상세"):
-                    for _dim_id, _sc in loc_score.residential_breakdown.items():
-                        _lbl = _SCORE_LABEL_MAP.get(_dim_id, _dim_id)
-                        st.progress(_sc / 100, text=f"{_lbl}  {_sc}점")
+                    for dr in loc_score.residential_results:
+                        st.progress(dr.score / 100, text=f"{dr.label}  {dr.score}점")
             with col_inv:
                 st.metric("💰 투자 점수", f"{loc_score.investment_total}점")
                 with st.expander("항목별 상세"):
-                    for _dim_id, _sc in loc_score.investment_breakdown.items():
-                        _lbl = _SCORE_LABEL_MAP.get(_dim_id, _dim_id)
-                        st.progress(_sc / 100, text=f"{_lbl}  {_sc}점")
+                    for dr in loc_score.investment_results:
+                        st.progress(dr.score / 100, text=f"{dr.label}  {dr.score}점")
         else:
             with col_res:
                 st.info("🏠 실거주 점수\n\n리포트 생성 후 표시됩니다.")

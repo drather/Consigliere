@@ -63,10 +63,10 @@
 @dataclass
 class LocationScore:
     complex_code: str
-    residential_total: int       # 0-100
-    residential_breakdown: dict  # {dimension_id: score}
-    investment_total: int        # 0-100
-    investment_breakdown: dict
+    residential_total: int                    # 0-100
+    residential_results: List[DimensionResult]
+    investment_total: int                     # 0-100
+    investment_results: List[DimensionResult]
     scored_at: str
 ```
 
