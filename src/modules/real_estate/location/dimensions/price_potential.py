@@ -1,4 +1,5 @@
 import datetime as _dt
+from typing import List
 from modules.real_estate.location.dimensions.base import BaseDimension
 
 
@@ -9,7 +10,7 @@ class PricePotentialDimension(BaseDimension):
 
     @property
     def label(self) -> str:
-        return "price_potential"  # TODO(task2): replace with emoji label
+        return "📈 가격상승가능성"
 
     def score(self, candidate: dict) -> int:
         recon_map = self._config.get("recon_score_map", {
@@ -40,3 +41,13 @@ class PricePotentialDimension(BaseDimension):
             base = min(100, base + 30)
 
         return base
+
+    def evidence(self, candidate: dict) -> List[str]:
+        lines = []
+        change = candidate.get("price_change_pct", 0)
+        lines.append(f"전월比: {change:+.1f}%")
+        build_year = candidate.get("build_year")
+        if build_year:
+            age = _dt.date.today().year - int(build_year)
+            lines.append(f"건축연도: {build_year}년 (약 {age}년 경과)")
+        return lines

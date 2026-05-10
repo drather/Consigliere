@@ -1,3 +1,4 @@
+from typing import List
 from modules.real_estate.location.dimensions.base import BaseDimension
 
 
@@ -8,7 +9,7 @@ class LivingInfraDimension(BaseDimension):
 
     @property
     def label(self) -> str:
-        return "living_infra"  # TODO(task2): replace with emoji label
+        return "🛒 생활인프라"
 
     def score(self, candidate: dict) -> int:
         total = (
@@ -23,3 +24,13 @@ class LivingInfraDimension(BaseDimension):
         if total >= medium:
             return 60
         return 20
+
+    def evidence(self, candidate: dict) -> List[str]:
+        poi = candidate.get("_poi")
+        if not poi:
+            return []
+        return [
+            f"편의점: {poi.convenience_count}개",
+            f"약국: {poi.pharmacy_count}개",
+            f"마트/백화점: {poi.marts_count}개",
+        ]

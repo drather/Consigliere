@@ -259,3 +259,102 @@ def test_base_dimension_evidence_returns_list():
     dim = _TD({"subway_close_min": 5, "commute_high_min": 20, "commute_medium_min": 35, "data_absent_neutral": 50})
     result = dim.evidence({})
     assert isinstance(result, list)
+
+
+# ── label/evidence 전수 테스트 ───────────────────────────────
+from modules.real_estate.location.dimensions.education import EducationDimension
+from modules.real_estate.location.dimensions.living_infra import LivingInfraDimension
+from modules.real_estate.location.dimensions.medical import MedicalDimension
+from modules.real_estate.location.dimensions.nature import NatureDimension
+from modules.real_estate.location.dimensions.commercial import CommercialDimension
+from modules.real_estate.location.dimensions.price_potential import PricePotentialDimension
+from modules.real_estate.location.dimensions.liquidity import LiquidityDimension
+from modules.real_estate.location.dimensions.school_premium import SchoolPremiumDimension
+from modules.real_estate.location.dimensions.nuisance import NuisanceDimension
+
+def test_transportation_label_and_evidence():
+    dim = TransportationDimension(_TRANS_CFG)
+    assert "교통" in dim.label
+    ev = dim.evidence({"commute_transit_minutes": 25, "_commute_route_summary": "9호선 20분 → 도보 5분"})
+    assert any("25분" in e for e in ev)
+    assert any("9호선" in e for e in ev)
+
+def test_transportation_evidence_with_poi():
+    dim = TransportationDimension(_TRANS_CFG)
+    mock_poi = type("P", (), {"subway_stations": [{"name": "강남역", "walk_minutes": 5}]})()
+    ev = dim.evidence({"_poi": mock_poi})
+    assert any("강남역" in e for e in ev)
+
+def test_education_label_and_evidence():
+    dim = EducationDimension({"data_absent_neutral": 50})
+    assert "교육" in dim.label
+    mock_poi = type("P", (), {"schools_count": 3, "academies_count": 20})()
+    ev = dim.evidence({"_poi": mock_poi})
+    assert any("3개" in e for e in ev)
+
+def test_living_infra_label_and_evidence():
+    dim = LivingInfraDimension({"high_count": 5, "medium_count": 2, "data_absent_neutral": 50})
+    assert "생활" in dim.label or "인프라" in dim.label
+    mock_poi = type("P", (), {"convenience_count": 5, "pharmacy_count": 3, "marts_count": 2})()
+    ev = dim.evidence({"_poi": mock_poi})
+    assert len(ev) >= 2
+
+def test_medical_label_and_evidence():
+    dim = MedicalDimension({"high_count": 3, "medium_count": 1, "data_absent_neutral": 50})
+    assert "의료" in dim.label or "병원" in dim.label
+    mock_poi = type("P", (), {"medical_count": 5})()
+    ev = dim.evidence({"_poi": mock_poi})
+    assert any("5" in e for e in ev)
+
+def test_nature_label_and_evidence():
+    dim = NatureDimension({"close_m": 300, "medium_m": 800, "data_absent_neutral": 50})
+    assert "자연" in dim.label or "공원" in dim.label
+    mock_poi = type("P", (), {"park_nearest_m": 250})()
+    ev = dim.evidence({"_poi": mock_poi})
+    assert any("250" in e for e in ev)
+
+def test_commercial_label_and_evidence():
+    cfg = {
+        "high_count": 30, "medium_count": 10, "data_absent_neutral": 50,
+        "diversity_min_count": {"restaurant": 3, "cafe": 2, "convenience": 1,
+                                "pharmacy": 1, "medical": 1, "mart": 1},
+    }
+    dim = CommercialDimension(cfg)
+    assert "상업" in dim.label or "상권" in dim.label
+    ev = dim.evidence({
+        "poi_restaurant_count": 20, "poi_cafe_count": 10,
+        "poi_convenience_count": 5, "poi_pharmacy_count": 3,
+        "poi_medical_count": 3, "poi_marts_count": 2,
+    })
+    assert any("6/6" in e for e in ev)
+
+def test_price_potential_label_and_evidence():
+    dim = PricePotentialDimension(_PP_CFG)
+    assert "가격" in dim.label or "상승" in dim.label
+    ev = dim.evidence({"price_change_pct": 3.5, "build_year": 1990})
+    assert any("3.5" in e for e in ev)
+    assert any("1990" in e for e in ev)
+
+def test_liquidity_label_and_evidence():
+    dim = LiquidityDimension({"high_households": 500, "medium_households": 300, "data_absent_neutral": 50})
+    assert "환금" in dim.label or "유동" in dim.label
+    ev = dim.evidence({"household_count": 1200, "recent_tx_count": 5})
+    assert any("1,200" in e for e in ev)
+
+def test_school_premium_label_and_evidence():
+    dim = SchoolPremiumDimension({"data_absent_neutral": 50})
+    assert "학군" in dim.label or "학교" in dim.label
+    mock_poi = type("P", (), {"schools_count": 4, "academies_count": 30})()
+    ev = dim.evidence({"_poi": mock_poi})
+    assert any("4" in e for e in ev)
+
+def test_nuisance_label_and_evidence_clean():
+    dim = NuisanceDimension(_NUISANCE_CFG)
+    assert "혐오" in dim.label
+    ev = dim.evidence({"poi_nuisance_high_count": 0, "poi_nuisance_mid_count": 0})
+    assert any("없음" in e for e in ev)
+
+def test_nuisance_label_and_evidence_high():
+    dim = NuisanceDimension(_NUISANCE_CFG)
+    ev = dim.evidence({"poi_nuisance_high_count": 1, "poi_nuisance_mid_count": 0})
+    assert any("고강도" in e for e in ev)

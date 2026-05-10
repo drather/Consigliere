@@ -1,3 +1,4 @@
+from typing import List
 from modules.real_estate.location.dimensions.base import BaseDimension
 
 
@@ -8,7 +9,7 @@ class MedicalDimension(BaseDimension):
 
     @property
     def label(self) -> str:
-        return "medical"  # TODO(task2): replace with emoji label
+        return "🏥 의료"
 
     def score(self, candidate: dict) -> int:
         count = candidate.get("poi_medical_count")
@@ -19,3 +20,9 @@ class MedicalDimension(BaseDimension):
         if count >= self._config.get("medium_count", 1):
             return 60
         return 20
+
+    def evidence(self, candidate: dict) -> List[str]:
+        poi = candidate.get("_poi")
+        if not poi:
+            return []
+        return [f"병원: {poi.medical_count}개 (1km 이내)"]
