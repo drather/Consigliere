@@ -9,6 +9,7 @@ from modules.real_estate.daily_report.report_formatter import (
 )
 from modules.real_estate.location.dimension_result import DimensionResult
 from modules.real_estate.location.location_scorer import LocationScore
+from modules.real_estate.daily_report.report_types import TrendData, CommuteData
 
 
 def _make_location_score(r_results=None, i_results=None):
@@ -129,3 +130,54 @@ def test_build_markdown_contains_sections():
     assert "🚇 교통" in md
     assert "거래 동향" in md
     assert "전략 제안" in md
+
+
+class TestRenderTrend:
+    def _make_trend(self, prices_eok, dates=None) -> TrendData:
+        n = len(prices_eok)
+        if dates is None:
+            dates = [f"2026-05-{i+1:02d}" for i in range(n)]
+        return TrendData(
+            points=[{"price_eok": p, "deal_date": d} for p, d in zip(prices_eok, dates)],
+            avg_eok=sum(prices_eok) / n,
+            change_pct=-5.0,
+            area_sqm=84.0,
+        )
+
+    def test_render_trend_returns_svg(self):
+        from modules.real_estate.daily_report.report_formatter import render_trend
+        trend = self._make_trend([8.5, 8.8, 8.3])
+        result = render_trend(trend)
+        assert "<svg" in result
+
+    def test_render_trend_falling_uses_red(self):
+        from modules.real_estate.daily_report.report_formatter import render_trend
+        trend = self._make_trend([9.5, 9.0, 8.8])  # 하락
+        result = render_trend(trend)
+        assert "#f38ba8" in result
+
+    def test_render_trend_rising_uses_green(self):
+        from modules.real_estate.daily_report.report_formatter import render_trend
+        trend = self._make_trend([8.0, 8.5, 9.0])  # 상승
+        result = render_trend(trend)
+        assert "#a6e3a1" in result
+
+    def test_render_trend_last_point_has_star(self):
+        from modules.real_estate.daily_report.report_formatter import render_trend
+        trend = self._make_trend([8.5, 8.8])
+        result = render_trend(trend)
+        assert "★" in result
+
+    def test_render_trend_empty_points_fallback(self):
+        from modules.real_estate.daily_report.report_formatter import render_trend
+        trend = TrendData(points=[], avg_eok=0.0, change_pct=0.0, area_sqm=84.0)
+        result = render_trend(trend)
+        assert "<svg" not in result
+        assert "데이터 없음" in result
+
+    def test_render_trend_single_point(self):
+        from modules.real_estate.daily_report.report_formatter import render_trend
+        trend = self._make_trend([8.8])
+        result = render_trend(trend)
+        assert "<svg" in result
+        assert "★" in result

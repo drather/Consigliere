@@ -2,7 +2,129 @@
 report_formatter — DimensionResult 기반 제네릭 출력 계층.
 차원 ID를 하드코딩하지 않는다. 모든 레이블·근거는 DimensionResult에서 온다.
 """
-from typing import Dict, List
+import itertools
+from typing import Dict, List, Optional
+from .report_types import TrendData, CommuteData
+
+
+_TREND_COUNTER = itertools.count()
+
+
+def render_trend(trend: TrendData) -> str:
+    points = trend["points"]
+    if not points:
+        return "**📈 거래 추세** — 데이터 없음"
+
+    uid = next(_TREND_COUNTER)
+    avg_eok = trend["avg_eok"]
+    change_pct = trend["change_pct"]
+    area_sqm = trend["area_sqm"]
+    prices = [p["price_eok"] for p in points]
+    dates = [p["deal_date"] for p in points]
+    n = len(points)
+
+    is_rising = n < 2 or prices[-1] >= prices[0]
+    color = "#a6e3a1" if is_rising else "#f38ba8"
+    arrow = "▲" if change_pct > 0 else ("▼" if change_pct < 0 else "―")
+    change_color = "#a6e3a1" if change_pct >= 0 else "#f38ba8"
+
+    x_start, x_end = 60, 500
+    y_top, y_bottom = 15, 70
+    xs = (
+        [x_start]
+        if n == 1
+        else [int(x_start + i * (x_end - x_start) / (n - 1)) for i in range(n)]
+    )
+
+    p_min, p_max = min(prices), max(prices)
+
+    def price_to_y(p: float) -> int:
+        if p_max == p_min:
+            return (y_top + y_bottom) // 2
+        return int(y_bottom - (p - p_min) / (p_max - p_min) * (y_bottom - y_top))
+
+    ys = [price_to_y(p) for p in prices]
+    high_idx = prices.index(max(prices))
+
+    polyline_pts = " ".join(f"{x},{y}" for x, y in zip(xs, ys))
+    polygon_pts = f"{polyline_pts} {xs[-1]},{y_bottom + 5} {xs[0]},{y_bottom + 5}"
+
+    circles = ""
+    labels = ""
+    for i, (x, y, p) in enumerate(zip(xs, ys, prices)):
+        is_last = i == n - 1
+        is_high = i == high_idx and n > 1
+
+        if is_last:
+            fill, stroke, r = "#89b4fa", "#89b4fa", 6
+            label_color, label_text = "#89b4fa", f"{p:.1f}억 ★"
+        elif is_high:
+            fill, stroke, r = color, color, 5
+            label_color, label_text = color, f"{p:.1f}억 ↑"
+        else:
+            fill, stroke, r = "#1e1e2e", color, 4
+            label_color, label_text = "#a6adc8", f"{p:.1f}억"
+
+        circles += (
+            f'<circle cx="{x}" cy="{y}" r="{r}" '
+            f'fill="{fill}" stroke="{stroke}" stroke-width="2"/>\n'
+        )
+        labels += (
+            f'<text x="{x}" y="{y - 8}" text-anchor="middle" '
+            f'fill="{label_color}" font-size="10" font-family="system-ui" '
+            f'font-weight="600">{label_text}</text>\n'
+        )
+
+    mid_price = (p_max + p_min) / 2
+    y_mid = (y_top + y_bottom) // 2
+    y_labels = (
+        f'<text x="555" y="18" text-anchor="end" fill="#6c7086" font-size="9" font-family="system-ui">{p_max:.1f}억</text>\n'
+        f'<text x="555" y="{y_mid + 3}" text-anchor="end" fill="#6c7086" font-size="9" font-family="system-ui">{mid_price:.1f}억</text>\n'
+        f'<text x="555" y="{y_bottom}" text-anchor="end" fill="#6c7086" font-size="9" font-family="system-ui">{p_min:.1f}억</text>\n'
+    ) if p_max != p_min else ""
+
+    date_items = "".join(
+        f'<span style="flex:1;text-align:center">{d[5:]}</span>' for d in dates
+    )
+    date_labels = (
+        f'<div style="display:flex;font-size:10px;color:#6c7086;'
+        f'margin-top:4px;padding:0 50px">{date_items}</div>'
+    )
+
+    date_range_str = f"{dates[0][5:]} ~ {dates[-1][5:]}" if n > 1 else dates[0][5:]
+
+    return (
+        f'<div style="background:#181825;border-radius:10px;padding:12px 14px;margin-bottom:12px">\n'
+        f'  <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px">\n'
+        f'    <div>\n'
+        f'      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#6c7086">📈 최근 실거래 추세 ({n}건)</div>\n'
+        f'      <div style="font-size:11px;color:#585b70;margin-top:2px">{date_range_str} · {area_sqm:.0f}㎡</div>\n'
+        f'    </div>\n'
+        f'    <div style="text-align:right">\n'
+        f'      <div style="font-size:18px;font-weight:800;color:#cdd6f4">{avg_eok:.1f}억</div>\n'
+        f'      <div style="font-size:12px;font-weight:700;color:{change_color}">{arrow} {abs(change_pct):.1f}% 전월比</div>\n'
+        f'    </div>\n'
+        f'  </div>\n'
+        f'  <svg viewBox="0 0 560 90" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%">\n'
+        f'    <defs>\n'
+        f'      <linearGradient id="grad{uid}" x1="0" y1="0" x2="0" y2="1">\n'
+        f'        <stop offset="0%" stop-color="{color}" stop-opacity="0.25"/>\n'
+        f'        <stop offset="100%" stop-color="{color}" stop-opacity="0"/>\n'
+        f'      </linearGradient>\n'
+        f'    </defs>\n'
+        f'    <line x1="0" y1="22" x2="560" y2="22" stroke="#313244" stroke-width="1" stroke-dasharray="4,4"/>\n'
+        f'    <line x1="0" y1="45" x2="560" y2="45" stroke="#313244" stroke-width="1" stroke-dasharray="4,4"/>\n'
+        f'    <line x1="0" y1="68" x2="560" y2="68" stroke="#313244" stroke-width="1" stroke-dasharray="4,4"/>\n'
+        f'    {y_labels}'
+        f'    <polygon points="{polygon_pts}" fill="url(#grad{uid})"/>\n'
+        f'    <polyline points="{polyline_pts}" fill="none" stroke="{color}" '
+        f'stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>\n'
+        f'    {circles}'
+        f'    {labels}'
+        f'  </svg>\n'
+        f'  {date_labels}\n'
+        f'</div>'
+    )
 
 
 def format_macro_summary(macro_summary: str) -> List[str]:
