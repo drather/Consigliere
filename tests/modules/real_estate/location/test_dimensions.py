@@ -358,3 +358,8 @@ def test_nuisance_label_and_evidence_high():
     dim = NuisanceDimension(_NUISANCE_CFG)
     ev = dim.evidence({"poi_nuisance_high_count": 1, "poi_nuisance_mid_count": 0})
     assert any("고강도" in e for e in ev)
+
+def test_nuisance_evidence_absent_data():
+    dim = NuisanceDimension(_NUISANCE_CFG)
+    ev = dim.evidence({})  # no poi_nuisance_high_count key
+    assert any("미수집" in e for e in ev)

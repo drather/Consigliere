@@ -26,6 +26,8 @@ class NuisanceDimension(BaseDimension):
         return cfg.get("clean_score", 100)
 
     def evidence(self, candidate: dict) -> List[str]:
+        if "poi_nuisance_high_count" not in candidate:
+            return ["혐오시설 정보 미수집"]
         high = candidate.get("poi_nuisance_high_count") or 0
         mid = candidate.get("poi_nuisance_mid_count") or 0
         if high == 0 and mid == 0:
