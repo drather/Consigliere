@@ -91,6 +91,7 @@ class TransactionAggregator:
         date_from = (today - timedelta(days=days)).isoformat()
         date_prior = (today - timedelta(days=days + 30)).isoformat()
 
+        conn = None
         try:
             conn = sqlite3.connect(self._db_path)
             conn.row_factory = sqlite3.Row
@@ -98,29 +99,27 @@ class TransactionAggregator:
                 _AGGREGATE_SQL,
                 {"date_from": date_from, "date_prior": date_prior, "limit": top_k * 3},
             ).fetchall()
+            if not rows:
+                return []
+            raw = [dict(r) for r in rows]
+            for item in raw:
+                tx_rows = conn.execute(
+                    _RECENT_TX_SQL,
+                    {"apt_master_id": item["apt_master_id"], "date_from": date_from},
+                ).fetchall()
+                item["_recent_tx_points"] = [
+                    {
+                        "price_eok": round(r["price"] / 100_000_000, 2),
+                        "deal_date": r["deal_date"],
+                    }
+                    for r in tx_rows
+                ]
         except sqlite3.Error as e:
             logger.error("[Aggregator] DB 조회 실패: %s", e)
             return []
-
-        if not rows:
-            conn.close()
-            return []
-
-        raw = [dict(r) for r in rows]
-
-        for item in raw:
-            tx_rows = conn.execute(
-                _RECENT_TX_SQL,
-                {"apt_master_id": item["apt_master_id"], "date_from": date_from},
-            ).fetchall()
-            item["_recent_tx_points"] = [
-                {
-                    "price_eok": round(r["price"] / 100_000_000, 2),
-                    "deal_date": r["deal_date"],
-                }
-                for r in tx_rows
-            ]
-        conn.close()
+        finally:
+            if conn is not None:
+                conn.close()
 
         max_tx = max(r["recent_tx_count"] for r in raw) or 1
         persona = persona or {}
