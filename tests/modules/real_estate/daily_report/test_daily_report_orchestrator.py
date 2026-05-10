@@ -3,23 +3,26 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from modules.real_estate.daily_report.daily_report_orchestrator import DailyReportOrchestrator
-from modules.real_estate.daily_report.models import AggregatedTransaction, DailyReport
+from modules.real_estate.daily_report.models import DailyReport
 
 
-def _make_aggregated(name: str = "래미안", score: float = 0.8) -> AggregatedTransaction:
-    return AggregatedTransaction(
-        apt_master_id=1,
-        apt_name=name,
-        district_code="11680",
-        sigungu="강남구",
-        complex_code="CC001",
-        recent_tx_count=3,
-        avg_recent_price=280_000_000,
-        price_change_pct=2.5,
-        exclusive_area=84.0,
-        household_count=1200,
-        composite_score=score,
-    )
+def _make_aggregated(name: str = "래미안", score: float = 0.8) -> dict:
+    return {
+        "apt_master_id": 1,
+        "apt_name": name,
+        "district_code": "11680",
+        "sigungu": "강남구",
+        "complex_code": "CC001",
+        "recent_tx_count": 3,
+        "avg_recent_price": 280_000_000,
+        "price_change_pct": 2.5,
+        "exclusive_area": 84.0,
+        "household_count": 1200,
+        "composite_score": score,
+        "road_address": None,
+        "pnu": None,
+        "_recent_tx_points": [],
+    }
 
 
 def _make_orchestrator(tmp_path) -> DailyReportOrchestrator:

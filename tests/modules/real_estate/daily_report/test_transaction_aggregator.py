@@ -3,7 +3,6 @@ from datetime import date, timedelta
 import pytest
 
 from modules.real_estate.daily_report.transaction_aggregator import TransactionAggregator
-from modules.real_estate.daily_report.models import AggregatedTransaction
 
 
 def _setup_db(db_path: str) -> None:
@@ -73,9 +72,8 @@ class TestAggregateBasic:
         result = agg.aggregate(days=3, top_k=10, persona={}, budget_available=500_000_000)
 
         assert len(result) == 1
-        assert isinstance(result[0], AggregatedTransaction)
-        assert result[0].apt_name == "래미안"
-        assert result[0].recent_tx_count == 2
+        assert result[0]["apt_name"] == "래미안"
+        assert result[0]["recent_tx_count"] == 2
 
     def test_excludes_transactions_outside_date_range(self, tmp_path):
         db_path = str(tmp_path / "re.db")
@@ -120,7 +118,7 @@ class TestCompositeScore:
         agg = TransactionAggregator(db_path=db_path)
         result = agg.aggregate(days=3, top_k=10, persona={}, budget_available=500_000_000)
 
-        scores = {r.apt_name: r.composite_score for r in result}
+        scores = {r["apt_name"]: r["composite_score"] for r in result}
         assert scores["활발단지"] > scores["조용단지"]
 
     def test_interest_area_boosts_persona_affinity(self, tmp_path):
@@ -137,7 +135,7 @@ class TestCompositeScore:
         agg = TransactionAggregator(db_path=db_path)
         result = agg.aggregate(days=3, top_k=10, persona=persona, budget_available=500_000_000)
 
-        scores = {r.apt_name: r.composite_score for r in result}
+        scores = {r["apt_name"]: r["composite_score"] for r in result}
         assert scores["관심지역단지"] > scores["비관심지역단지"]
 
     def test_price_change_signal_uses_absolute_value(self, tmp_path):
@@ -156,7 +154,7 @@ class TestCompositeScore:
         agg = TransactionAggregator(db_path=db_path)
         result = agg.aggregate(days=3, top_k=10, persona={}, budget_available=500_000_000)
 
-        scores = {r.apt_name: r.composite_score for r in result}
+        scores = {r["apt_name"]: r["composite_score"] for r in result}
         assert abs(scores["급등단지"] - scores["급락단지"]) < 0.05
 
 
@@ -175,7 +173,7 @@ class TestPriceChangePct:
         result = agg.aggregate(days=3, top_k=10, persona={}, budget_available=500_000_000)
 
         assert len(result) == 1
-        assert abs(result[0].price_change_pct - 10.0) < 1.0
+        assert abs(result[0]["price_change_pct"] - 10.0) < 1.0
 
     def test_no_prior_data_gives_zero_change(self, tmp_path):
         db_path = str(tmp_path / "re.db")
@@ -188,4 +186,57 @@ class TestPriceChangePct:
         agg = TransactionAggregator(db_path=db_path)
         result = agg.aggregate(days=3, top_k=10, persona={}, budget_available=500_000_000)
 
-        assert result[0].price_change_pct == 0.0
+        assert result[0]["price_change_pct"] == 0.0
+
+
+class TestRecentTxPoints:
+    def test_recent_tx_points_present_in_raw_dict(self, tmp_path):
+        db_path = str(tmp_path / "re.db")
+        _setup_db(db_path)
+        today = date.today().isoformat()
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        with sqlite3.connect(db_path) as conn:
+            _insert_apt_master(conn, 1, "스파크단지", "강남구", "CC001")
+            _insert_tx(conn, 1, yesterday, 850_000_000)
+            _insert_tx(conn, 1, today, 880_000_000)
+
+        agg = TransactionAggregator(db_path=db_path)
+        results = agg.aggregate(days=3, top_k=10, persona={}, budget_available=0)
+
+        assert len(results) == 1
+        r = results[0]
+        assert "_recent_tx_points" in r
+        points = r["_recent_tx_points"]
+        assert len(points) == 2
+
+    def test_recent_tx_points_sorted_by_date(self, tmp_path):
+        db_path = str(tmp_path / "re.db")
+        _setup_db(db_path)
+        today = date.today().isoformat()
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        with sqlite3.connect(db_path) as conn:
+            _insert_apt_master(conn, 1, "정렬단지", "강남구", "CC001")
+            _insert_tx(conn, 1, today, 900_000_000)
+            _insert_tx(conn, 1, yesterday, 850_000_000)
+
+        agg = TransactionAggregator(db_path=db_path)
+        results = agg.aggregate(days=3, top_k=10, persona={}, budget_available=0)
+
+        points = results[0]["_recent_tx_points"]
+        dates = [p["deal_date"] for p in points]
+        assert dates == sorted(dates)
+
+    def test_recent_tx_points_price_in_eok(self, tmp_path):
+        db_path = str(tmp_path / "re.db")
+        _setup_db(db_path)
+        today = date.today().isoformat()
+        with sqlite3.connect(db_path) as conn:
+            _insert_apt_master(conn, 1, "가격단지", "강남구", "CC001")
+            _insert_tx(conn, 1, today, 880_000_000)
+
+        agg = TransactionAggregator(db_path=db_path)
+        results = agg.aggregate(days=3, top_k=10, persona={}, budget_available=0)
+
+        point = results[0]["_recent_tx_points"][0]
+        assert abs(point["price_eok"] - 8.8) < 0.01
+        assert point["deal_date"] == today

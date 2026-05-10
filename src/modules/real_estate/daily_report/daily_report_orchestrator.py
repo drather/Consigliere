@@ -18,7 +18,7 @@ from modules.real_estate.location.location_scorer import LocationScorer
 from modules.real_estate.trend_analyzer import TrendAnalyzer
 from modules.real_estate.poi_collector import PoiCollector
 from modules.real_estate.daily_report.report_formatter import build_markdown
-from .models import AggregatedTransaction, DailyReport
+from .models import DailyReport
 from .transaction_aggregator import TransactionAggregator
 from .daily_report_repository import DailyReportRepository
 
@@ -115,18 +115,15 @@ class DailyReportOrchestrator:
         date_str = target_date.isoformat()
 
         # Step 1. 거래 집계
-        aggregated = self._aggregator.aggregate(
-            days=days, top_k=top_k, persona=persona, budget_available=budget_available
+        candidates = self._aggregator.aggregate(
+            days=days, top_k=top_k * 3, persona=persona, budget_available=budget_available
         )
 
-        if not aggregated:
+        if not candidates:
             logger.warning("[DailyOrchestrator] 최근 %d일 거래 없음", days)
             return self._empty_report(date_str, days, macro_summary)
 
-        logger.info("[DailyOrchestrator] 집계 완료 — %d개 단지", len(aggregated))
-
-        # Step 2. AggregatedTransaction → enrich 입력 dict
-        candidates = [self._to_dict(a) for a in aggregated]
+        logger.info("[DailyOrchestrator] 집계 완료 — %d개 단지", len(candidates))
 
         # Step 3. Enrich pipeline
         candidates = _enrich_with_geocode(candidates, self._geocoder)
@@ -203,7 +200,7 @@ class DailyReportOrchestrator:
         report = DailyReport(
             date=date_str,
             analysis_period=date_range,
-            total_transactions=sum(a.recent_tx_count for a in aggregated),
+            total_transactions=sum(c.get("recent_tx_count", 0) for c in candidates),
             top_k=len(candidates),
             macro_summary=macro_summary,
             market_summary=market_summary,
@@ -214,24 +211,6 @@ class DailyReportOrchestrator:
 
         self._repo.save(report)
         return report
-
-    @staticmethod
-    def _to_dict(a: AggregatedTransaction) -> Dict:
-        return {
-            "apt_master_id": a.apt_master_id,
-            "apt_name": a.apt_name,
-            "district_code": a.district_code,
-            "sigungu": a.sigungu,
-            "complex_code": a.complex_code,
-            "recent_tx_count": a.recent_tx_count,
-            "avg_recent_price": a.avg_recent_price,
-            "price_change_pct": a.price_change_pct,
-            "exclusive_area": a.exclusive_area,
-            "household_count": a.household_count,
-            "composite_score": a.composite_score,
-            "road_address": a.road_address,
-            "pnu": a.pnu,
-        }
 
     def _enrich_with_commute_quota(
         self,
