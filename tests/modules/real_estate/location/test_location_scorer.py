@@ -12,12 +12,14 @@ def test_base_dimension_is_abstract():
 
 
 def test_location_score_fields():
+    from modules.real_estate.location.dimension_result import DimensionResult
+    dr = DimensionResult(id="transportation", label="🚇 교통", score=80, evidence=[])
     score = LocationScore(
         complex_code="A001",
         residential_total=75,
-        residential_breakdown={"transportation": 80},
+        residential_results=[dr],
         investment_total=65,
-        investment_breakdown={"commercial": 60},
+        investment_results=[],
         scored_at="2026-05-09T00:00:00+00:00",
     )
     assert score.residential_total == 75
@@ -28,19 +30,28 @@ from modules.real_estate.location.location_repository import LocationRepository
 
 
 def test_location_repository_upsert_and_get():
+    from modules.real_estate.location.dimension_result import DimensionResult
     repo = LocationRepository(":memory:")
     score = LocationScore(
         complex_code="A001",
         residential_total=75,
-        residential_breakdown={"transportation": 80, "education": 70},
+        residential_results=[
+            DimensionResult(id="transportation", label="🚇 교통", score=80, evidence=["20분"]),
+            DimensionResult(id="education", label="🏫 교육환경", score=70, evidence=[]),
+        ],
         investment_total=65,
-        investment_breakdown={"commercial": 60, "liquidity": 70},
+        investment_results=[
+            DimensionResult(id="commercial", label="🛍️ 상업활성도", score=60, evidence=[]),
+            DimensionResult(id="liquidity", label="💧 환금성", score=70, evidence=[]),
+        ],
         scored_at="2026-05-09T00:00:00+00:00",
     )
     repo.upsert_score(score)
     result = repo.get_score("A001")
     assert result.residential_total == 75
-    assert result.investment_breakdown["commercial"] == 60
+    assert result.residential_results[0].id == "transportation"
+    assert result.residential_results[0].evidence == ["20분"]
+    assert result.investment_results[0].id == "commercial"
 
 
 def test_location_repository_get_missing_returns_none():
@@ -50,9 +61,9 @@ def test_location_repository_get_missing_returns_none():
 
 def test_location_repository_upsert_is_idempotent():
     repo = LocationRepository(":memory:")
-    score = LocationScore("A001", 75, {}, 65, {}, "2026-05-09T00:00:00+00:00")
+    score = LocationScore("A001", 75, [], 65, [], "2026-05-09T00:00:00+00:00")
     repo.upsert_score(score)
-    score2 = LocationScore("A001", 80, {}, 70, {}, "2026-05-09T01:00:00+00:00")
+    score2 = LocationScore("A001", 80, [], 70, [], "2026-05-09T01:00:00+00:00")
     repo.upsert_score(score2)
     result = repo.get_score("A001")
     assert result.residential_total == 80
@@ -85,7 +96,7 @@ def test_location_scorer_returns_location_score():
     candidate = {
         "complex_code": "A001",
         "poi_stations": [{"walk_minutes": 3}],
-        "commute_minutes": 15,
+        "commute_transit_minutes": 15,
         "school_score": 80,
         "household_count": 600,
         "reconstruction_potential": "HIGH",
@@ -94,25 +105,24 @@ def test_location_scorer_returns_location_score():
     assert result.complex_code == "A001"
     assert 0 <= result.residential_total <= 100
     assert 0 <= result.investment_total <= 100
-    assert "transportation" in result.residential_breakdown
-    assert "education" in result.residential_breakdown
+    ids = [dr.id for dr in result.residential_results]
+    assert "transportation" in ids
+    assert "education" in ids
 
 def test_location_scorer_breakdown_matches_total():
     scorer = LocationScorer(_CONFIG)
     candidate = {
         "complex_code": "B002",
         "poi_stations": [{"walk_minutes": 3}],
-        "commute_minutes": 15,
+        "commute_transit_minutes": 15,
         "school_score": 80,
         "household_count": 600,
         "reconstruction_potential": "HIGH",
     }
     result = scorer.score(candidate)
-    expected_residential = round(
-        result.residential_breakdown["transportation"] * 0.5
-        + result.residential_breakdown["education"] * 0.5
-    )
-    assert result.residential_total == expected_residential
+    r_map = {dr.id: dr.score for dr in result.residential_results}
+    expected = round(r_map["transportation"] * 0.5 + r_map["education"] * 0.5)
+    assert result.residential_total == expected
 
 def test_location_scorer_weights_normalize():
     config = dict(_CONFIG)
@@ -122,7 +132,7 @@ def test_location_scorer_weights_normalize():
     ]
     scorer = LocationScorer(config)
     candidate = {"complex_code": "C003", "school_score": 100,
-                 "poi_stations": [{"walk_minutes": 3}], "commute_minutes": 10}
+                 "poi_stations": [{"walk_minutes": 3}], "commute_transit_minutes": 10}
     result = scorer.score(candidate)
     assert result.residential_total == 100
 
@@ -140,3 +150,49 @@ def test_dimension_result_fields():
 def test_dimension_result_default_evidence():
     dr = DimensionResult(id="foo", label="bar", score=50)
     assert dr.evidence == []
+
+
+# ── LocationScore 새 구조 ──────────────────────────────────────
+
+def test_location_score_has_results_not_breakdown():
+    """LocationScore는 residential_results, investment_results를 List[DimensionResult]로 가진다."""
+    dr = DimensionResult(id="transportation", label="🚇 교통", score=80, evidence=["20분"])
+    score = LocationScore(
+        complex_code="A001",
+        residential_total=80,
+        residential_results=[dr],
+        investment_total=65,
+        investment_results=[],
+        scored_at="2026-05-10T00:00:00+00:00",
+    )
+    assert score.residential_results[0].id == "transportation"
+    assert score.residential_results[0].label == "🚇 교통"
+    assert score.residential_results[0].evidence == ["20분"]
+
+def test_scorer_returns_dimension_results():
+    """LocationScorer.score()가 residential_results에 DimensionResult 리스트를 반환한다."""
+    scorer = LocationScorer(_CONFIG)
+    candidate = {
+        "complex_code": "A001",
+        "poi_stations": [{"walk_minutes": 3}],
+        "commute_transit_minutes": 15,
+        "school_score": 80,
+        "household_count": 600,
+        "reconstruction_potential": "HIGH",
+    }
+    result = scorer.score(candidate)
+    assert isinstance(result.residential_results, list)
+    assert len(result.residential_results) == 2  # _CONFIG has transportation + education
+    assert result.residential_results[0].id in ("transportation", "education")
+    assert isinstance(result.residential_results[0].score, int)
+    assert isinstance(result.residential_results[0].evidence, list)
+
+def test_scorer_total_matches_weighted_results():
+    """residential_total은 residential_results 점수의 가중 평균과 일치해야 한다."""
+    scorer = LocationScorer(_CONFIG)
+    candidate = {"complex_code": "B002", "poi_stations": [{"walk_minutes": 3}],
+                 "commute_transit_minutes": 15, "school_score": 80}
+    result = scorer.score(candidate)
+    r_map = {dr.id: dr.score for dr in result.residential_results}
+    expected = round(r_map["transportation"] * 0.5 + r_map["education"] * 0.5)
+    assert result.residential_total == expected
