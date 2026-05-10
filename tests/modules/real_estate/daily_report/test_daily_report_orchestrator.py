@@ -25,13 +25,13 @@ def _make_aggregated(name: str = "래미안", score: float = 0.8) -> AggregatedT
 def _make_orchestrator(tmp_path) -> DailyReportOrchestrator:
     mock_llm = MagicMock()
     mock_llm.generate_json.return_value = {
-        "market_summary": "오늘 강남권 거래가 활발했습니다.",
+        "market_bullets": ["오늘 강남권 거래가 활발했습니다."],
         "candidate_insights": [
             {
                 "apt_name": "래미안",
-                "trading_comment": "3건 거래, 전월비 +2.5%",
-                "characteristics_comment": "1200세대, 2002년 준공",
-                "strategy_comment": "삼성역 22분, 예산 범위 내"
+                "trading_bullets": ["3건 거래, 전월비 +2.5%"],
+                "characteristics_bullets": ["1200세대, 2002년 준공"],
+                "strategy_bullets": ["삼성역 22분, 예산 범위 내"],
             }
         ],
     }
@@ -63,7 +63,7 @@ class TestGenerate:
         )
         assert isinstance(result, DailyReport)
         assert result.date == "2026-05-03"
-        assert result.market_summary == "오늘 강남권 거래가 활발했습니다."
+        assert "강남권" in result.market_summary
 
     def test_aggregator_called_with_correct_params(self, tmp_path):
         orch = _make_orchestrator(tmp_path)
@@ -140,7 +140,7 @@ class TestBuildMarkdown:
             persona={},
             macro_summary="",
         )
-        assert "오늘 강남권 거래가 활발했습니다." in result.markdown
+        assert "강남권" in result.markdown
 
 
 class TestCommuteQuota:

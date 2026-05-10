@@ -1,6 +1,9 @@
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional
 
+import yaml
+import os
+
 from core.llm import BaseLLMClient
 from core.prompt_loader import PromptLoader
 from core.logger import get_logger
@@ -11,13 +14,26 @@ from modules.real_estate.report_orchestrator import (
     _enrich_with_trend,
     _resolve_workplace_coords,
 )
+from modules.real_estate.location.location_scorer import LocationScorer
 from modules.real_estate.trend_analyzer import TrendAnalyzer
 from modules.real_estate.poi_collector import PoiCollector
+from modules.real_estate.daily_report.report_formatter import build_markdown
 from .models import AggregatedTransaction, DailyReport
 from .transaction_aggregator import TransactionAggregator
 from .daily_report_repository import DailyReportRepository
 
 logger = get_logger(__name__)
+
+_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config.yaml")
+
+
+def _load_scorer() -> Optional[LocationScorer]:
+    try:
+        with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
+            full_cfg = yaml.safe_load(f) or {}
+        return LocationScorer(config=full_cfg.get("scoring", {}))
+    except Exception:
+        return None
 
 
 def _format_candidate_for_llm(c: Dict) -> str:
@@ -127,7 +143,16 @@ class DailyReportOrchestrator:
             )
             candidates = _enrich_with_trend(candidates, self._trend_analyzer, preferred_areas=preferred_areas)
 
-        # Step 4. LLM 분석
+        # Step 4. LocationScorer 실행 — evidence 포함 DimensionResult 생성
+        scorer = _load_scorer()
+        if scorer:
+            for c in candidates:
+                try:
+                    c["_location_score"] = scorer.score(c)
+                except Exception:
+                    pass
+
+        # Step 5. LLM 분석
         candidates_text = "\n\n".join(_format_candidate_for_llm(c) for c in candidates)
         budget_str = f"{budget_available / 10000:.0f}만원" if budget_available > 0 else "미설정"
         preferred_area = persona.get("apartment_preferences", {}).get("preferred_area_sqm", [84])[0]
@@ -157,9 +182,9 @@ class DailyReportOrchestrator:
             market_summary = ""
             candidate_insights = []
 
-        # Step 5. Markdown 조립
+        # Step 6. Markdown 조립 — report_formatter에 완전 위임
         insights_map = {i.get("apt_name", ""): i for i in candidate_insights}
-        markdown = self._build_markdown(
+        markdown = build_markdown(
             date_str=date_str,
             date_range=date_range,
             macro_summary=macro_summary,
@@ -168,7 +193,7 @@ class DailyReportOrchestrator:
             insights_map=insights_map,
         )
 
-        # Step 6. 직렬화 가능한 candidates
+        # Step 7. 직렬화 가능한 candidates
         serializable_candidates = [
             {k: v for k, v in c.items() if not k.startswith("_")}
             for c in candidates
@@ -188,8 +213,6 @@ class DailyReportOrchestrator:
 
         self._repo.save(report)
         return report
-
-    # ── Private ─────────────────────────────────────────────────────────
 
     @staticmethod
     def _to_dict(a: AggregatedTransaction) -> Dict:
@@ -217,11 +240,7 @@ class DailyReportOrchestrator:
         dest_lng: Optional[float],
         max_new_calls: int,
     ) -> List[Dict]:
-        """TMAP API 신규 호출을 max_new_calls 이내로 제한한다.
-
-        캐시 히트(commute_cache DB에 이미 저장된 경로)는 quota 소모 없이 진행.
-        캐시 미스는 max_new_calls 이내에서만 실제 API 호출.
-        """
+        """TMAP API 신규 호출을 max_new_calls 이내로 제한한다."""
         if not self._commute_svc or dest is None:
             return candidates
 
@@ -241,6 +260,7 @@ class DailyReportOrchestrator:
             cached = self._commute_svc.get_cached(origin_key, dest, "transit")
             if cached is not None:
                 result["commute_transit_minutes"] = cached.duration_minutes
+                result["_commute_route_summary"] = cached.route_summary
                 logger.debug("[DailyOrchestrator] 출퇴근 캐시 히트: %s", apt_name)
             elif new_calls_used < max_new_calls:
                 try:
@@ -257,6 +277,7 @@ class DailyReportOrchestrator:
                     new_calls_used += 1
                     if cr:
                         result["commute_transit_minutes"] = cr.duration_minutes
+                        result["_commute_route_summary"] = cr.route_summary
                     else:
                         logger.warning(
                             "[DailyOrchestrator] 출퇴근 결과 없음 (quota 소모됨): %s", apt_name
@@ -275,128 +296,6 @@ class DailyReportOrchestrator:
 
             enriched.append(result)
         return enriched
-
-    @staticmethod
-    def _build_markdown(
-        date_str: str,
-        date_range: str,
-        macro_summary: str,
-        market_summary: str,
-        candidates: List[Dict],
-        insights_map: Dict[str, Dict],
-    ) -> str:
-        _SCORE_META = [
-            ("commute",            "⚡ 출퇴근편의성", 20),
-            ("liquidity",          "💰 환금성",       20),
-            ("price_potential",    "📈 가격상승가능성", 10),
-            ("living_convenience", "🛍️ 생활편의",      20),
-            ("school",             "🎒 학군",          20),
-        ]
-
-        lines = [
-            f"# 데일리 부동산 브리핑 — {date_str}",
-            "",
-            f"**분석 기간:** {date_range} | **주목 단지:** {len(candidates)}개",
-            "",
-            "---",
-            "",
-            "## 거시경제 현황",
-            macro_summary or "데이터 없음",
-            "",
-            "---",
-            "",
-            "## 오늘의 시장 신호",
-            market_summary or "분석 데이터 부족",
-            "",
-            "---",
-            "",
-            "## 주목 단지 분석",
-            "",
-        ]
-
-        for i, c in enumerate(candidates, 1):
-            name = c.get("apt_name", "?")
-            score_pct = int(c.get("composite_score", 0) * 100)
-            price_eok = c.get("avg_recent_price", 0) / 100_000_000
-            change = c.get("price_change_pct", 0)
-            trend = c.get("_trend")
-            trend_area = c.get("_trend_area_sqm", 84)
-
-            # Stat block — wrapped in HTML comment markers so md_to_slack()
-            # can render it as a Slack blockquote box (invisible in web markdown)
-            stat_block = [
-                f"**거래:** {c.get('recent_tx_count', 0)}건  |  평균 {price_eok:.1f}억  |  전월比 {change:+.1f}%",
-                f"**위치:** {c.get('sigungu', '')}  |  **면적:** {c.get('exclusive_area', 84):.0f}㎡  |  **세대수:** {c.get('household_count', 0)}세대",
-            ]
-            if c.get("build_year"):
-                stat_block.append(
-                    f"**건물:** {c['build_year']}년 준공  |  "
-                    f"용적률 {c.get('floor_area_ratio', '?')}%  |  "
-                    f"건폐율 {c.get('building_coverage_ratio', '?')}%"
-                )
-            commute = c.get("commute_transit_minutes")
-            stat_block.append(
-                f"**출퇴근:** {'미수집' if commute is None else f'{commute}분 (대중교통)'}"
-            )
-            poi = c.get("_poi")
-            if poi:
-                stations = poi.subway_stations[:2] if hasattr(poi, "subway_stations") else []
-                s_str = ", ".join(
-                    f"{s.get('name', '?')}({s.get('line', '?')})" for s in stations
-                ) or "없음"
-                stat_block.append(f"**역세권:** {s_str}")
-                stat_block.append(
-                    f"**편의시설:** 학교 {poi.schools_count}개  |  "
-                    f"학원 {poi.academies_count}개  |  마트 {poi.marts_count}개"
-                )
-            if trend:
-                stat_block.append(
-                    f"**시세추세 ({trend_area:.0f}㎡):** 평균 {trend.avg_price / 10000:.0f}만원  |  "
-                    f"변동 {trend.price_change_pct:+.1f}%  |  월거래 {trend.monthly_volume:.1f}건"
-                )
-
-            lines += [
-                f"### {i}. {name} — composite {score_pct}점",
-                "",
-                "<!-- stats -->",
-                *stat_block,
-                "<!-- /stats -->",
-            ]
-
-            ins = insights_map.get(name, {})
-            if ins:
-                lines.append("")
-
-                trading = ins.get("trading_bullets", [])
-                if trading:
-                    lines.append("**거래 동향**")
-                    lines.extend(f"- {b}" for b in trading)
-
-                chars = ins.get("characteristics_bullets", [])
-                if chars:
-                    lines.append("")
-                    lines.append("**단지 특징**")
-                    lines.extend(f"- {b}" for b in chars)
-
-                scores = ins.get("scores", {})
-                if scores:
-                    lines.append("")
-                    lines.append("**평가 점수**")
-                    for key, label, max_score in _SCORE_META:
-                        entry = scores.get(key, {})
-                        score_val = entry.get("score", "—")
-                        comment = entry.get("comment", "")
-                        lines.append(f"- {label} ({max_score}점): **{score_val}점** — {comment}")
-
-                strategy = ins.get("strategy_bullets", [])
-                if strategy:
-                    lines.append("")
-                    lines.append("**전략 제안**")
-                    lines.extend(f"- {b}" for b in strategy)
-
-            lines += ["", "---", ""]
-
-        return "\n".join(lines)
 
     def _empty_report(self, date_str: str, days: int, macro_summary: str) -> DailyReport:
         markdown = (
