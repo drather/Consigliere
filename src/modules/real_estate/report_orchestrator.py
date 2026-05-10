@@ -507,8 +507,8 @@ class ReportOrchestrator:
             result = dict(candidate)
             result["residential_score"] = loc_score.residential_total
             result["investment_score"] = loc_score.investment_total
-            result["residential_breakdown"] = loc_score.residential_breakdown
-            result["investment_breakdown"] = loc_score.investment_breakdown
+            result["residential_results"] = loc_score.residential_results
+            result["investment_results"] = loc_score.investment_results
             result["total_score"] = round(
                 (loc_score.residential_total + loc_score.investment_total) / 2, 1
             )
