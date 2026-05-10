@@ -2,7 +2,7 @@
 report_formatter — DimensionResult 기반 제네릭 출력 계층.
 차원 ID를 하드코딩하지 않는다. 모든 레이블·근거는 DimensionResult에서 온다.
 """
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 def format_macro_summary(macro_summary: str) -> List[str]:
