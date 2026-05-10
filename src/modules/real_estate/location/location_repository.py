@@ -49,7 +49,8 @@ class LocationRepository:
         for sql in _MIGRATE_SQL:
             try:
                 self._conn.execute(sql)
-            except Exception:
+                self._conn.commit()
+            except sqlite3.OperationalError:
                 pass  # column already exists
 
     def _connect(self) -> sqlite3.Connection:

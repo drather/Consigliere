@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 from typing import List
 
 from modules.real_estate.location.dimension_result import DimensionResult
-from modules.real_estate.location.dimensions.base import BaseDimension
 from modules.real_estate.location.dimensions.transportation import TransportationDimension
 from modules.real_estate.location.dimensions.education import EducationDimension
 from modules.real_estate.location.dimensions.living_infra import LivingInfraDimension
