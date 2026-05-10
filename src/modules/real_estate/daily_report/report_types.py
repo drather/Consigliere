@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 from typing_extensions import TypedDict
 
 
@@ -31,5 +31,5 @@ class CandidateSummary(TypedDict):
     key_points: List[str]
     trend: TrendData
     commute: CommuteData
-    residential_results: List    # List[DimensionResult]
-    investment_results: List     # List[DimensionResult]
+    residential_results: List[Any]   # List[DimensionResult]
+    investment_results: List[Any]    # List[DimensionResult]
