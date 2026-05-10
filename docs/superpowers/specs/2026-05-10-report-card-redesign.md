@@ -204,10 +204,8 @@ return CommuteData(
 )
 ```
 
-> **참고:** `daily_report_orchestrator.py`는 현재 `mode="transit"`만 조회한다.
-> `commute_car_minutes`, `commute_walk_minutes`는 항상 `None`으로 들어온다.
-> `render_commute()`는 transit만 있는 케이스를 정상으로 처리해야 한다.
-> car/walk 추가는 향후 orchestrator 확장 시 자동으로 반영된다.
+> **참고:** orchestrator 수정(섹션 6-2-b)으로 transit/car/walking 모두 주입된다.
+> `render_commute()`는 각 값이 None일 경우 해당 카드를 생략하고 있는 수단만 표시한다.
 
 **`build_markdown(...) -> str`** — 기존 시그니처 유지, 내부 루프를 `build_candidate_card(c)` 호출로 단순화.
 
@@ -246,6 +244,44 @@ for c in candidates:
     c["_verdict"] = ins.get("verdict", "")
     c["_key_points"] = ins.get("key_points", [])
 ```
+
+### 6-2-b. orchestrator — car/walking 모드 추가 (누락 수정)
+
+현재 `_enrich_with_commute_quota()`는 `mode="transit"`만 호출한다.
+`CommuteService.get()`은 mode별로 독립 호출 가능하고 캐시도 mode별로 독립 저장된다.
+
+**수정 내용:**
+- 캐시 히트 시: transit/car/walking 3모드 모두 `get_cached()` 시도
+- 캐시 미스 + quota 여유 시: 3모드 각각 `get()` 호출 (quota 1단위 = 1단지 = 3 API 호출)
+- candidate dict에 `commute_car_minutes`, `commute_walk_minutes` 추가 주입
+
+```python
+for mode in ("transit", "car", "walking"):
+    cached = self._commute_svc.get_cached(origin_key, dest, mode)
+    if cached is not None:
+        result[f"commute_{mode}_minutes"] = cached.duration_minutes
+        if mode == "transit":
+            result["_commute_route_summary"] = cached.route_summary
+    elif new_calls_used < max_new_calls:
+        cr = self._commute_svc.get(
+            origin_key=origin_key,
+            road_address=road_address,
+            apt_name=apt_name,
+            district_code=district_code,
+            mode=mode,
+            dest_override=dest,
+            dest_lat_override=dest_lat,
+            dest_lng_override=dest_lng,
+        )
+        if cr:
+            result[f"commute_{mode}_minutes"] = cr.duration_minutes
+            if mode == "transit":
+                result["_commute_route_summary"] = cr.route_summary
+new_calls_used += 1  # 단지 단위 카운트
+```
+
+> **참고:** `commute_walk_minutes`는 walking 모드 키. `commute_car_minutes`는 car 모드 키.
+> `service.py`의 기존 main pipeline과 동일한 키 이름으로 일관성 유지.
 
 ### 6-3. `<!-- stats -->` 태그 제거
 
