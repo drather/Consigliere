@@ -197,4 +197,59 @@ class TestCommuteQuota:
         ]
         orch._enrich_with_commute_quota(candidates, "삼성역", 37.5088, 127.0633, max_new_calls=2)
 
-        assert mock_svc.get.call_count == 2
+        assert mock_svc.get.call_count == 6
+
+
+class TestEnrichCommuteAllModes:
+    def _make_svc_with_cache(self, transit_min, car_min, walk_min):
+        """transit/car/walking 캐시 결과를 반환하는 mock CommuteService."""
+        from modules.real_estate.commute.models import CommuteResult
+
+        def make_result(mode, minutes):
+            return CommuteResult(
+                origin_key="test__단지A", destination="삼성역",
+                mode=mode, duration_minutes=minutes, distance_meters=10000,
+                cached=True, route_summary=f"{mode} 경로",
+            )
+
+        svc = MagicMock()
+        cache_map = {
+            "transit": make_result("transit", transit_min) if transit_min else None,
+            "car": make_result("car", car_min) if car_min else None,
+            "walking": make_result("walking", walk_min) if walk_min else None,
+        }
+        svc.get_cached.side_effect = lambda origin_key, dest, mode: cache_map.get(mode)
+        return svc
+
+    def test_transit_car_walk_all_enriched_from_cache(self, tmp_path):
+        """캐시에 3모드 모두 있으면 candidate dict에 3개 키가 채워진다."""
+        svc = self._make_svc_with_cache(35, 20, 90)
+        orch = DailyReportOrchestrator.__new__(DailyReportOrchestrator)
+        orch._commute_svc = svc
+        orch._max_new_commute_api_calls = 0
+
+        candidates = [{
+            "apt_name": "단지A", "district_code": "test",
+            "road_address": "서울 강남구",
+        }]
+        result = orch._enrich_with_commute_quota(
+            candidates, dest="삼성역", dest_lat=37.5, dest_lng=127.0, max_new_calls=0
+        )
+
+        assert result[0].get("commute_transit_minutes") == 35
+        assert result[0].get("commute_car_minutes") == 20
+        assert result[0].get("commute_walk_minutes") == 90
+
+    def test_missing_road_address_skips_candidate(self, tmp_path):
+        svc = self._make_svc_with_cache(35, 20, 90)
+        orch = DailyReportOrchestrator.__new__(DailyReportOrchestrator)
+        orch._commute_svc = svc
+        orch._max_new_commute_api_calls = 0
+
+        candidates = [{"apt_name": "단지B", "district_code": "test", "road_address": ""}]
+        result = orch._enrich_with_commute_quota(
+            candidates, dest="삼성역", dest_lat=37.5, dest_lng=127.0, max_new_calls=0
+        )
+
+        assert result[0].get("commute_transit_minutes") is None
+        assert result[0].get("commute_car_minutes") is None

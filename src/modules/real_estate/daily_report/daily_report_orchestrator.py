@@ -26,6 +26,8 @@ logger = get_logger(__name__)
 
 _CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config.yaml")
 
+_MODE_TO_KEY = {"transit": "transit", "car": "car", "walking": "walk"}
+
 
 def _load_scorer() -> Optional[LocationScorer]:
     try:
@@ -182,6 +184,11 @@ class DailyReportOrchestrator:
 
         # Step 6. Markdown 조립 — report_formatter에 완전 위임
         insights_map = {i.get("apt_name", ""): i for i in candidate_insights}
+        for c in candidates:
+            name = c.get("apt_name", "")
+            ins = insights_map.get(name, {})
+            c["_verdict"] = ins.get("verdict", "")
+            c["_key_points"] = ins.get("key_points", [])
         markdown = build_markdown(
             date_str=date_str,
             date_range=date_range,
@@ -220,7 +227,7 @@ class DailyReportOrchestrator:
         dest_lng: Optional[float],
         max_new_calls: int,
     ) -> List[Dict]:
-        """TMAP API 신규 호출을 max_new_calls 이내로 제한한다."""
+        """transit/car/walking 3모드 출퇴근 시간을 candidate dict에 주입. 신규 API 호출은 단지 단위 quota."""
         if not self._commute_svc or dest is None:
             return candidates
 
@@ -237,38 +244,46 @@ class DailyReportOrchestrator:
             district_code = c.get("district_code", "")
             origin_key = f"{district_code}__{apt_name}"
 
-            cached = self._commute_svc.get_cached(origin_key, dest, "transit")
-            if cached is not None:
-                result["commute_transit_minutes"] = cached.duration_minutes
-                result["_commute_route_summary"] = cached.route_summary
-                logger.debug("[DailyOrchestrator] 출퇴근 캐시 히트: %s", apt_name)
-            elif new_calls_used < max_new_calls:
-                try:
-                    cr = self._commute_svc.get(
-                        origin_key=origin_key,
-                        road_address=road_address,
-                        apt_name=apt_name,
-                        district_code=district_code,
-                        mode="transit",
-                        dest_override=dest,
-                        dest_lat_override=dest_lat,
-                        dest_lng_override=dest_lng,
-                    )
-                    new_calls_used += 1
-                    if cr:
-                        result["commute_transit_minutes"] = cr.duration_minutes
-                        result["_commute_route_summary"] = cr.route_summary
-                    else:
-                        logger.warning(
-                            "[DailyOrchestrator] 출퇴근 결과 없음 (quota 소모됨): %s", apt_name
+            need_api_call = False
+            for mode in ("transit", "car", "walking"):
+                key = f"commute_{_MODE_TO_KEY[mode]}_minutes"
+                cached = self._commute_svc.get_cached(origin_key, dest, mode)
+                if cached is not None:
+                    result[key] = cached.duration_minutes
+                    if mode == "transit":
+                        result["_commute_route_summary"] = cached.route_summary
+                    logger.debug("[DailyOrchestrator] 캐시 히트 (%s): %s", mode, apt_name)
+                else:
+                    need_api_call = True
+
+            if need_api_call and new_calls_used < max_new_calls:
+                for mode in ("transit", "car", "walking"):
+                    key = f"commute_{_MODE_TO_KEY[mode]}_minutes"
+                    if result.get(key) is not None:
+                        continue
+                    try:
+                        cr = self._commute_svc.get(
+                            origin_key=origin_key,
+                            road_address=road_address,
+                            apt_name=apt_name,
+                            district_code=district_code,
+                            mode=mode,
+                            dest_override=dest,
+                            dest_lat_override=dest_lat,
+                            dest_lng_override=dest_lng,
                         )
-                    logger.info(
-                        "[DailyOrchestrator] 출퇴근 API 호출 %d/%d: %s",
-                        new_calls_used, max_new_calls, apt_name,
-                    )
-                except Exception as e:
-                    logger.warning("[DailyOrchestrator] Commute 실패 %s: %s", apt_name, e)
-            else:
+                        if cr:
+                            result[key] = cr.duration_minutes
+                            if mode == "transit":
+                                result["_commute_route_summary"] = cr.route_summary
+                    except Exception as e:
+                        logger.warning("[DailyOrchestrator] %s 실패 %s: %s", mode, apt_name, e)
+                new_calls_used += 1
+                logger.info(
+                    "[DailyOrchestrator] 출퇴근 API 호출 %d/%d: %s",
+                    new_calls_used, max_new_calls, apt_name,
+                )
+            elif need_api_call:
                 logger.info(
                     "[DailyOrchestrator] 출퇴근 quota 소진 (%d/%d), 스킵: %s",
                     new_calls_used, max_new_calls, apt_name,
