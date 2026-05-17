@@ -4,7 +4,7 @@ report_formatter — DimensionResult 기반 제네릭 출력 계층.
 """
 import itertools
 from typing import Dict, List, Optional
-from .report_types import TrendData, CommuteData
+from .report_types import TrendData, CommuteData, TxPoint
 
 
 _TREND_COUNTER = itertools.count()
@@ -184,76 +184,50 @@ def format_macro_summary(macro_summary: str) -> List[str]:
     return [f"- {item}" for item in items]
 
 
-def format_stat_block(
-    c: Dict,
-    price_eok: float,
-    change: float,
-    trend,
-    trend_area: float,
-) -> List[str]:
-    change_sign = "▲" if change > 0 else ("▼" if change < 0 else "―")
-    change_str = f"{change_sign} {abs(change):.1f}%"
-
-    lines = [
-        f"💰 **거래** {c.get('recent_tx_count', 0)}건 · 평균 {price_eok:.1f}억 · 전월比 {change_str}",
-        f"📍 **위치** {c.get('sigungu', '')} · {c.get('exclusive_area', 84):.0f}㎡ · {c.get('household_count', 0)}세대",
-    ]
-
-    if c.get("build_year"):
-        lines.append(
-            f"🏢 **건물** {c['build_year']}년 준공 · 용적률 {c.get('floor_area_ratio', '?')}% · 건폐율 {c.get('building_coverage_ratio', '?')}%"
-        )
-
-    commute = c.get("commute_transit_minutes")
-    if commute is not None:
-        lines.append(f"🚇 **출퇴근** {commute}분 (대중교통)")
-    else:
-        lines.append("🚇 **출퇴근** 미수집")
-
-    poi = c.get("_poi")
-    if poi:
-        stations = poi.subway_stations[:2] if hasattr(poi, "subway_stations") else []
-        if stations:
-            s_str = " · ".join(f"{s.get('name', '?')} {s.get('walk_minutes', '?')}분" for s in stations)
-            lines.append(f"🚉 **역세권** {s_str}")
-        nuisance_h = getattr(poi, "nuisance_high_count", 0) or 0
-        nuisance_m = getattr(poi, "nuisance_mid_count", 0) or 0
-        if nuisance_h > 0:
-            lines.append(f"⚠️ **혐오시설** 고강도 {nuisance_h}종 탐지")
-        elif nuisance_m > 0:
-            lines.append(f"⚠️ **혐오시설** 중강도 {nuisance_m}종 탐지")
-        lines.append(
-            f"🏫 **편의시설** 학교 {poi.schools_count}개 · 학원 {poi.academies_count}개 · 마트 {poi.marts_count}개"
-        )
-
-    if trend:
-        lines.append(
-            f"📊 **시세추세** ({trend_area:.0f}㎡) 평균 {trend.avg_price / 10000:.0f}만원 · "
-            f"{trend.price_change_pct:+.1f}% · 월 {trend.monthly_volume:.1f}건"
-        )
-
-    return lines
+def _extract_trend(c: dict) -> TrendData:
+    return TrendData(
+        points=c.get("_recent_tx_points", []),
+        avg_eok=round(c.get("avg_recent_price", 0) / 100_000_000, 2),
+        change_pct=c.get("price_change_pct", 0.0),
+        area_sqm=c.get("exclusive_area", 84.0),
+    )
 
 
-def format_dimension_scores(c: Dict) -> List[str]:
-    """LocationScore.residential_results / investment_results를 제네릭하게 렌더링."""
+def _extract_commute(c: dict) -> CommuteData:
+    return CommuteData(
+        transit_minutes=c.get("commute_transit_minutes"),
+        car_minutes=c.get("commute_car_minutes"),
+        walk_minutes=c.get("commute_walk_minutes"),
+        route_summary=c.get("_commute_route_summary", ""),
+    )
+
+
+def _render_header(c: dict, index: int) -> str:
+    name = c.get("apt_name", "?")
+    score_pct = int(c.get("composite_score", 0) * 100)
+    sigungu = c.get("sigungu", "")
+    area = c.get("exclusive_area", 84)
+    households = c.get("household_count", 0)
+    return (
+        f"### {index}. {name} — 종합 {score_pct}점\n\n"
+        f"📍 {sigungu} · {area:.0f}㎡ · {households}세대"
+    )
+
+
+def build_candidate_card(c: dict, index: int = 0) -> str:
+    trend = _extract_trend(c)
+    commute = _extract_commute(c)
     ls = c.get("_location_score")
-    if not ls:
-        return []
 
-    lines = ["**실거주 점수 분석**"]
-    for dr in ls.residential_results:
-        lines.append(f"- {dr.label}: **{dr.score}점**")
-        for sub in dr.evidence:
-            lines.append(f"  - {sub}")
-
-    lines += ["", "**투자성 점수 분석**"]
-    for dr in ls.investment_results:
-        lines.append(f"- {dr.label}: **{dr.score}점**")
-        for sub in dr.evidence:
-            lines.append(f"  - {sub}")
-
-    return lines
+    parts = [
+        _render_header(c, index),
+        render_trend(trend),
+        render_commute(commute),
+        render_scores(ls.residential_results, ls.investment_results) if ls else "",
+        render_verdict(c.get("_verdict", "")),
+        render_keypoints(c.get("_key_points", [])),
+    ]
+    return "\n\n".join(p for p in parts if p)
 
 
 def build_markdown(
@@ -286,49 +260,9 @@ def build_markdown(
     ]
 
     for i, c in enumerate(candidates, 1):
-        name = c.get("apt_name", "?")
-        score_pct = int(c.get("composite_score", 0) * 100)
-        price_eok = c.get("avg_recent_price", 0) / 100_000_000
-        change = c.get("price_change_pct", 0)
-        trend = c.get("_trend")
-        trend_area = c.get("_trend_area_sqm", 84)
-
-        stat_block = format_stat_block(c, price_eok, change, trend, trend_area)
-
-        lines += [
-            f"### {i}. {name} — composite {score_pct}점",
-            "",
-            "<!-- stats -->",
-            *stat_block,
-            "<!-- /stats -->",
-        ]
-
-        ins = insights_map.get(name, {})
-        if ins:
-            lines.append("")
-
-            trading = ins.get("trading_bullets", [])
-            if trading:
-                lines.append("**거래 동향**")
-                lines.extend(f"- {b}" for b in trading)
-
-            chars = ins.get("characteristics_bullets", [])
-            if chars:
-                lines.append("")
-                lines.append("**단지 특징**")
-                lines.extend(f"- {b}" for b in chars)
-
-            dim_lines = format_dimension_scores(c)
-            if dim_lines:
-                lines.append("")
-                lines.extend(dim_lines)
-
-            strategy = ins.get("strategy_bullets", [])
-            if strategy:
-                lines.append("")
-                lines.append("**전략 제안**")
-                lines.extend(f"- {b}" for b in strategy)
-
-        lines += ["", "---", ""]
+        lines.append(build_candidate_card(c, index=i))
+        lines.append("")
+        lines.append("---")
+        lines.append("")
 
     return "\n".join(lines)

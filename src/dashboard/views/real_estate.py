@@ -1077,6 +1077,6 @@ def _render_daily_report_tab():
 
         markdown = st.session_state.get(_cache_key, "")
         if markdown:
-            st.markdown(markdown)
+            st.markdown(markdown, unsafe_allow_html=True)
         else:
             st.warning("리포트 내용이 비어있습니다.")
