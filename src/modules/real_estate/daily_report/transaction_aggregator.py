@@ -3,7 +3,6 @@ from datetime import date, timedelta
 from typing import Dict, List, Optional
 
 from core.logger import get_logger
-from .models import AggregatedTransaction
 
 logger = get_logger(__name__)
 
@@ -64,6 +63,15 @@ ORDER BY r.recent_tx_count DESC
 LIMIT :limit
 """
 
+_RECENT_TX_SQL = """
+SELECT price, deal_date
+FROM transactions
+WHERE apt_master_id = :apt_master_id
+  AND deal_date >= :date_from
+ORDER BY deal_date ASC
+LIMIT 10
+"""
+
 
 class TransactionAggregator:
     """최근 N일 실거래를 집계해 composite_score 상위 K개 단지를 반환한다."""
@@ -77,11 +85,13 @@ class TransactionAggregator:
         top_k: int = 10,
         persona: Optional[Dict] = None,
         budget_available: int = 0,
-    ) -> List[AggregatedTransaction]:
+    ) -> List[Dict]:
+        """반환: List[dict] — 집계 필드 + _recent_tx_points."""
         today = date.today()
         date_from = (today - timedelta(days=days)).isoformat()
         date_prior = (today - timedelta(days=days + 30)).isoformat()
 
+        conn = None
         try:
             conn = sqlite3.connect(self._db_path)
             conn.row_factory = sqlite3.Row
@@ -89,54 +99,49 @@ class TransactionAggregator:
                 _AGGREGATE_SQL,
                 {"date_from": date_from, "date_prior": date_prior, "limit": top_k * 3},
             ).fetchall()
-            conn.close()
+            if not rows:
+                return []
+            raw = [dict(r) for r in rows]
+            for item in raw:
+                tx_rows = conn.execute(
+                    _RECENT_TX_SQL,
+                    {"apt_master_id": item["apt_master_id"], "date_from": date_from},
+                ).fetchall()
+                item["_recent_tx_points"] = [
+                    {
+                        "price_eok": round(r["price"] / 100_000_000, 2),
+                        "deal_date": r["deal_date"],
+                    }
+                    for r in tx_rows
+                ]
         except sqlite3.Error as e:
             logger.error("[Aggregator] DB 조회 실패: %s", e)
             return []
+        finally:
+            if conn is not None:
+                conn.close()
 
-        if not rows:
-            return []
-
-        raw = [dict(r) for r in rows]
         max_tx = max(r["recent_tx_count"] for r in raw) or 1
         persona = persona or {}
 
-        scored = [
-            AggregatedTransaction(
-                apt_master_id=r["apt_master_id"],
-                apt_name=r["apt_name"],
-                district_code=r["district_code"],
-                sigungu=r["sigungu"],
-                complex_code=r["complex_code"],
-                recent_tx_count=r["recent_tx_count"],
-                avg_recent_price=r["avg_recent_price"],
-                price_change_pct=r["price_change_pct"],
-                exclusive_area=r["exclusive_area"],
-                household_count=r["household_count"],
-                road_address=r["road_address"],
-                pnu=r["pnu"],
-                composite_score=self._composite_score(
-                    recent_tx_count=r["recent_tx_count"],
-                    max_tx_count=max_tx,
-                    price_change_pct=r["price_change_pct"],
-                    sigungu=r["sigungu"],
-                    avg_recent_price=r["avg_recent_price"],
-                    household_count=r["household_count"],
-                    persona=persona,
-                    budget_available=budget_available,
-                ),
+        for item in raw:
+            item["composite_score"] = self._composite_score(
+                recent_tx_count=item["recent_tx_count"],
+                max_tx_count=max_tx,
+                price_change_pct=item["price_change_pct"],
+                sigungu=item["sigungu"],
+                avg_recent_price=item["avg_recent_price"],
+                household_count=item["household_count"],
+                persona=persona,
+                budget_available=budget_available,
             )
-            for r in raw
-        ]
 
-        scored.sort(key=lambda x: x.composite_score, reverse=True)
+        raw.sort(key=lambda x: x["composite_score"], reverse=True)
         logger.info(
             "[Aggregator] 최근 %d일 거래 집계 완료 — 단지 %d개 → 상위 %d개 선택",
-            days,
-            len(scored),
-            top_k,
+            days, len(raw), top_k,
         )
-        return scored[:top_k]
+        return raw[:top_k]
 
     @staticmethod
     def _composite_score(
@@ -151,24 +156,19 @@ class TransactionAggregator:
         weights: Optional[Dict] = None,
     ) -> float:
         w = weights or {"tx": 0.4, "price": 0.3, "persona": 0.3}
-
         tx_score = recent_tx_count / max_tx_count if max_tx_count > 0 else 0.0
         price_signal = min(abs(price_change_pct) / 10.0, 1.0)
-
         interest_areas = persona.get("user", {}).get("interest_areas", [])
         min_hh = persona.get("apartment_preferences", {}).get("min_household_count", 0)
-
         budget_fit = 1.0
         if budget_available > 0:
             if avg_recent_price <= budget_available:
                 budget_fit = 1.0
             else:
                 budget_fit = max(0.0, 1.0 - (avg_recent_price - budget_available) / budget_available)
-
         area_fit = 1.0 if sigungu in interest_areas else 0.5
         household_fit = 1.0 if (min_hh == 0 or household_count >= min_hh) else 0.0
         persona_affinity = (budget_fit + area_fit + household_fit) / 3
-
         return (
             tx_score * w["tx"]
             + price_signal * w["price"]

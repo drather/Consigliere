@@ -17,14 +17,16 @@ from modules.real_estate.report_orchestrator import (
 from modules.real_estate.location.location_scorer import LocationScorer
 from modules.real_estate.trend_analyzer import TrendAnalyzer
 from modules.real_estate.poi_collector import PoiCollector
-from modules.real_estate.daily_report.report_formatter import build_markdown
-from .models import AggregatedTransaction, DailyReport
+from modules.real_estate.daily_report.report_formatter import build_markdown, build_slack
+from .models import DailyReport
 from .transaction_aggregator import TransactionAggregator
 from .daily_report_repository import DailyReportRepository
 
 logger = get_logger(__name__)
 
 _CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config.yaml")
+
+_MODE_TO_KEY = {"transit": "transit", "car": "car", "walking": "walk"}
 
 
 def _load_scorer() -> Optional[LocationScorer]:
@@ -115,18 +117,15 @@ class DailyReportOrchestrator:
         date_str = target_date.isoformat()
 
         # Step 1. 거래 집계
-        aggregated = self._aggregator.aggregate(
-            days=days, top_k=top_k, persona=persona, budget_available=budget_available
+        candidates = self._aggregator.aggregate(
+            days=days, top_k=top_k * 3, persona=persona, budget_available=budget_available
         )
 
-        if not aggregated:
+        if not candidates:
             logger.warning("[DailyOrchestrator] 최근 %d일 거래 없음", days)
             return self._empty_report(date_str, days, macro_summary)
 
-        logger.info("[DailyOrchestrator] 집계 완료 — %d개 단지", len(aggregated))
-
-        # Step 2. AggregatedTransaction → enrich 입력 dict
-        candidates = [self._to_dict(a) for a in aggregated]
+        logger.info("[DailyOrchestrator] 집계 완료 — %d개 단지", len(candidates))
 
         # Step 3. Enrich pipeline
         candidates = _enrich_with_geocode(candidates, self._geocoder)
@@ -185,6 +184,11 @@ class DailyReportOrchestrator:
 
         # Step 6. Markdown 조립 — report_formatter에 완전 위임
         insights_map = {i.get("apt_name", ""): i for i in candidate_insights}
+        for c in candidates:
+            name = c.get("apt_name", "")
+            ins = insights_map.get(name, {})
+            c["_verdict"] = ins.get("verdict", "")
+            c["_key_points"] = ins.get("key_points", [])
         markdown = build_markdown(
             date_str=date_str,
             date_range=date_range,
@@ -193,6 +197,8 @@ class DailyReportOrchestrator:
             candidates=candidates,
             insights_map=insights_map,
         )
+
+        slack_text = build_slack(candidates)
 
         # Step 7. 직렬화 가능한 candidates
         serializable_candidates = [
@@ -203,35 +209,18 @@ class DailyReportOrchestrator:
         report = DailyReport(
             date=date_str,
             analysis_period=date_range,
-            total_transactions=sum(a.recent_tx_count for a in aggregated),
+            total_transactions=sum(c.get("recent_tx_count", 0) for c in candidates),
             top_k=len(candidates),
             macro_summary=macro_summary,
             market_summary=market_summary,
             candidates=serializable_candidates,
             markdown=markdown,
+            slack_text=slack_text,
             generated_at=datetime.now().isoformat(),
         )
 
         self._repo.save(report)
         return report
-
-    @staticmethod
-    def _to_dict(a: AggregatedTransaction) -> Dict:
-        return {
-            "apt_master_id": a.apt_master_id,
-            "apt_name": a.apt_name,
-            "district_code": a.district_code,
-            "sigungu": a.sigungu,
-            "complex_code": a.complex_code,
-            "recent_tx_count": a.recent_tx_count,
-            "avg_recent_price": a.avg_recent_price,
-            "price_change_pct": a.price_change_pct,
-            "exclusive_area": a.exclusive_area,
-            "household_count": a.household_count,
-            "composite_score": a.composite_score,
-            "road_address": a.road_address,
-            "pnu": a.pnu,
-        }
 
     def _enrich_with_commute_quota(
         self,
@@ -241,7 +230,7 @@ class DailyReportOrchestrator:
         dest_lng: Optional[float],
         max_new_calls: int,
     ) -> List[Dict]:
-        """TMAP API 신규 호출을 max_new_calls 이내로 제한한다."""
+        """transit/car/walking 3모드 출퇴근 시간을 candidate dict에 주입. 신규 API 호출은 단지 단위 quota."""
         if not self._commute_svc or dest is None:
             return candidates
 
@@ -258,38 +247,46 @@ class DailyReportOrchestrator:
             district_code = c.get("district_code", "")
             origin_key = f"{district_code}__{apt_name}"
 
-            cached = self._commute_svc.get_cached(origin_key, dest, "transit")
-            if cached is not None:
-                result["commute_transit_minutes"] = cached.duration_minutes
-                result["_commute_route_summary"] = cached.route_summary
-                logger.debug("[DailyOrchestrator] 출퇴근 캐시 히트: %s", apt_name)
-            elif new_calls_used < max_new_calls:
-                try:
-                    cr = self._commute_svc.get(
-                        origin_key=origin_key,
-                        road_address=road_address,
-                        apt_name=apt_name,
-                        district_code=district_code,
-                        mode="transit",
-                        dest_override=dest,
-                        dest_lat_override=dest_lat,
-                        dest_lng_override=dest_lng,
-                    )
-                    new_calls_used += 1
-                    if cr:
-                        result["commute_transit_minutes"] = cr.duration_minutes
-                        result["_commute_route_summary"] = cr.route_summary
-                    else:
-                        logger.warning(
-                            "[DailyOrchestrator] 출퇴근 결과 없음 (quota 소모됨): %s", apt_name
+            need_api_call = False
+            for mode in ("transit", "car", "walking"):
+                key = f"commute_{_MODE_TO_KEY[mode]}_minutes"
+                cached = self._commute_svc.get_cached(origin_key, dest, mode)
+                if cached is not None:
+                    result[key] = cached.duration_minutes
+                    if mode == "transit":
+                        result["_commute_route_summary"] = cached.route_summary
+                    logger.debug("[DailyOrchestrator] 캐시 히트 (%s): %s", mode, apt_name)
+                else:
+                    need_api_call = True
+
+            if need_api_call and new_calls_used < max_new_calls:
+                for mode in ("transit", "car", "walking"):
+                    key = f"commute_{_MODE_TO_KEY[mode]}_minutes"
+                    if result.get(key) is not None:
+                        continue
+                    try:
+                        cr = self._commute_svc.get(
+                            origin_key=origin_key,
+                            road_address=road_address,
+                            apt_name=apt_name,
+                            district_code=district_code,
+                            mode=mode,
+                            dest_override=dest,
+                            dest_lat_override=dest_lat,
+                            dest_lng_override=dest_lng,
                         )
-                    logger.info(
-                        "[DailyOrchestrator] 출퇴근 API 호출 %d/%d: %s",
-                        new_calls_used, max_new_calls, apt_name,
-                    )
-                except Exception as e:
-                    logger.warning("[DailyOrchestrator] Commute 실패 %s: %s", apt_name, e)
-            else:
+                        if cr:
+                            result[key] = cr.duration_minutes
+                            if mode == "transit":
+                                result["_commute_route_summary"] = cr.route_summary
+                    except Exception as e:
+                        logger.warning("[DailyOrchestrator] %s 실패 %s: %s", mode, apt_name, e)
+                new_calls_used += 1
+                logger.info(
+                    "[DailyOrchestrator] 출퇴근 API 호출 %d/%d: %s",
+                    new_calls_used, max_new_calls, apt_name,
+                )
+            elif need_api_call:
                 logger.info(
                     "[DailyOrchestrator] 출퇴근 quota 소진 (%d/%d), 스킵: %s",
                     new_calls_used, max_new_calls, apt_name,
@@ -312,6 +309,7 @@ class DailyReportOrchestrator:
             market_summary="",
             candidates=[],
             markdown=markdown,
+            slack_text="",
             generated_at=datetime.now().isoformat(),
         )
         self._repo.save(report)
