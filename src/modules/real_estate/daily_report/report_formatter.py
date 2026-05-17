@@ -266,3 +266,54 @@ def build_markdown(
         lines.append("")
 
     return "\n".join(lines)
+
+
+_SPARK_CHARS = "▁▂▃▄▅▆▇█"
+
+
+def _text_sparkline(points: List) -> str:
+    if not points:
+        return ""
+    prices = [p["price_eok"] for p in points]
+    p_min, p_max = min(prices), max(prices)
+    if p_max == p_min:
+        return "▄" * len(prices)
+    return "".join(
+        _SPARK_CHARS[int((p - p_min) / (p_max - p_min) * 7)]
+        for p in prices
+    )
+
+
+def _slack_candidate_block(c: dict) -> str:
+    trend = _extract_trend(c)
+    commute = _extract_commute(c)
+
+    name = c.get("apt_name", "?")
+    score_pct = int(c.get("composite_score", 0) * 100)
+    verdict = c.get("_verdict", "")
+    key_points = c.get("_key_points", [])
+
+    spark = _text_sparkline(trend["points"])
+    avg = trend["avg_eok"]
+    chg = trend["change_pct"]
+    arrow = "▲" if chg > 0 else ("▼" if chg < 0 else "―")
+
+    transit = commute["transit_minutes"]
+    car = commute["car_minutes"]
+    transit_str = f"🚌 {transit}분" if transit is not None else "🚌 조회불가"
+    car_str = f" | 🚗 {car}분" if car is not None else ""
+
+    lines = [
+        f"*{name}* — 종합 {score_pct}점",
+        f"💰 {avg:.1f}억 {arrow} {abs(chg):.1f}% {spark}",
+        f"{transit_str}{car_str}",
+    ]
+    if verdict:
+        lines.append(f"🔍 {verdict}")
+    lines.extend(f"• {kp}" for kp in key_points[:3])
+    return "\n".join(lines)
+
+
+def build_slack(candidates: List[Dict]) -> str:
+    blocks = [_slack_candidate_block(c) for c in candidates]
+    return "\n\n---\n\n".join(blocks)

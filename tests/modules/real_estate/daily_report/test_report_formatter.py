@@ -264,3 +264,59 @@ class TestBuildMarkdown:
         assert "데일리 부동산 브리핑" in md
         assert "래미안" in md
         assert "<!-- stats -->" not in md
+
+
+class TestBuildSlack:
+    def _make_candidate(self, transit=35, car=20):
+        return {
+            "apt_name": "래미안", "sigungu": "강남구",
+            "composite_score": 0.85,
+            "_recent_tx_points": [
+                {"price_eok": 8.5, "deal_date": "2026-05-07"},
+                {"price_eok": 8.8, "deal_date": "2026-05-10"},
+            ],
+            "avg_recent_price": 880_000_000,
+            "price_change_pct": 3.5,
+            "exclusive_area": 84.0,
+            "commute_transit_minutes": transit,
+            "commute_car_minutes": car,
+            "commute_walk_minutes": None,
+            "_commute_route_summary": "",
+            "_verdict": "매수 검토",
+            "_key_points": ["✅ 역세권"],
+            "_location_score": None,
+        }
+
+    def test_build_slack_contains_apt_name(self):
+        from modules.real_estate.daily_report.report_formatter import build_slack
+        result = build_slack([self._make_candidate()])
+        assert "래미안" in result
+
+    def test_build_slack_no_svg(self):
+        from modules.real_estate.daily_report.report_formatter import build_slack
+        result = build_slack([self._make_candidate()])
+        assert "<svg" not in result
+
+    def test_build_slack_has_text_sparkline(self):
+        from modules.real_estate.daily_report.report_formatter import build_slack
+        result = build_slack([self._make_candidate()])
+        spark_chars = set("▁▂▃▄▅▆▇█")
+        assert any(ch in result for ch in spark_chars)
+
+    def test_build_slack_transit_shown(self):
+        from modules.real_estate.daily_report.report_formatter import build_slack
+        result = build_slack([self._make_candidate(transit=35)])
+        assert "35분" in result
+
+    def test_build_slack_none_transit_shows_unavailable(self):
+        from modules.real_estate.daily_report.report_formatter import build_slack
+        result = build_slack([self._make_candidate(transit=None)])
+        assert "조회불가" in result or "조회 불가" in result
+
+    def test_build_slack_multiple_candidates_separated(self):
+        from modules.real_estate.daily_report.report_formatter import build_slack
+        c1 = self._make_candidate()
+        c2 = {**self._make_candidate(), "apt_name": "힐스테이트"}
+        result = build_slack([c1, c2])
+        assert "래미안" in result
+        assert "힐스테이트" in result
