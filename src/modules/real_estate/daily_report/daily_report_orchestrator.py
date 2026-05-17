@@ -17,7 +17,7 @@ from modules.real_estate.report_orchestrator import (
 from modules.real_estate.location.location_scorer import LocationScorer
 from modules.real_estate.trend_analyzer import TrendAnalyzer
 from modules.real_estate.poi_collector import PoiCollector
-from modules.real_estate.daily_report.report_formatter import build_markdown
+from modules.real_estate.daily_report.report_formatter import build_markdown, build_slack
 from .models import DailyReport
 from .transaction_aggregator import TransactionAggregator
 from .daily_report_repository import DailyReportRepository
@@ -198,6 +198,8 @@ class DailyReportOrchestrator:
             insights_map=insights_map,
         )
 
+        slack_text = build_slack(candidates)
+
         # Step 7. 직렬화 가능한 candidates
         serializable_candidates = [
             {k: v for k, v in c.items() if not k.startswith("_")}
@@ -213,6 +215,7 @@ class DailyReportOrchestrator:
             market_summary=market_summary,
             candidates=serializable_candidates,
             markdown=markdown,
+            slack_text=slack_text,
             generated_at=datetime.now().isoformat(),
         )
 
@@ -306,6 +309,7 @@ class DailyReportOrchestrator:
             market_summary="",
             candidates=[],
             markdown=markdown,
+            slack_text="",
             generated_at=datetime.now().isoformat(),
         )
         self._repo.save(report)

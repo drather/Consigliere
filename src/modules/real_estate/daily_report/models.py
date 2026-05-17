@@ -28,5 +28,6 @@ class DailyReport:
     macro_summary: str
     market_summary: str            # LLM 생성 시장 총평
     candidates: List[dict]         # enrich 완료 단지 목록 (직렬화 가능)
-    markdown: str                  # 최종 렌더링 MD
+    markdown: str                  # 최종 렌더링 MD (HTML unsafe 포함 — Streamlit unsafe_allow_html=True)
+    slack_text: str                # Slack mrkdwn 전용 (SVG 없음, 텍스트 스파크라인)
     generated_at: str

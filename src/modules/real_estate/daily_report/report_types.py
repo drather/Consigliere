@@ -26,7 +26,7 @@ class CandidateSummary(TypedDict):
     sigungu: str
     area_sqm: float
     household_count: int
-    composite_score: int     # 0~100 정수
+    composite_score: float   # 0.0 ~ 1.0 (aggregator 원본 값; 화면 표시 시 * 100)
     verdict: str
     key_points: List[str]
     trend: TrendData

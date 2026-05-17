@@ -703,7 +703,7 @@ def generate_daily_report(req: DailyReportRequest = None):
         slack_sent = False
         try:
             slack = SlackSender()
-            slack.send(md_to_slack(report.markdown))
+            slack.send(report.slack_text)
             slack_sent = True
             logger.info("[API] Slack 전송 완료 — daily report %s", date_str)
         except Exception as e:
