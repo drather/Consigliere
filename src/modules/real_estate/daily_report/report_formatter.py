@@ -4,7 +4,7 @@ report_formatter — DimensionResult 기반 제네릭 출력 계층.
 """
 import itertools
 from typing import Dict, List, Optional
-from .report_types import TrendData, CommuteData, TxPoint
+from .report_types import TrendData, CommuteData
 
 
 _TREND_COUNTER = itertools.count()
@@ -134,7 +134,7 @@ def render_commute(commute: CommuteData) -> str:
     transit_str = fmt(commute["transit_minutes"])
     car_str = fmt(commute["car_minutes"])
     walk_str = fmt(commute["walk_minutes"])
-    route = commute.get("route_summary", "")
+    route = commute["route_summary"]
 
     lines = [
         "**🚌 출퇴근**",
@@ -236,7 +236,7 @@ def build_markdown(
     macro_summary: str,
     market_summary: str,
     candidates: List[Dict],
-    insights_map: Dict[str, Dict],
+    insights_map: Dict[str, Dict],  # API 호환성 유지 — Task 7에서 orchestrator가 _verdict/_key_points를 candidate dict에 직접 주입
 ) -> str:
     lines = [
         f"# 데일리 부동산 브리핑 — {date_str}",
