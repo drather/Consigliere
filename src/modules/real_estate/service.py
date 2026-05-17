@@ -539,25 +539,73 @@ class RealEstateAgent:
         else:
             results["job3"] = self.fetch_macro_data()
 
-        # ── Job 4: 리포트 생성 (항상 실행) ───────────────────────────
-        results["job4"] = self.generate_report(district_code, target_date)
+        # ── Job 4: 데일리 리포트 생성 (항상 실행) ────────────────────
+        job4_result, slack_text = self._generate_new_daily_report(target_date)
+        results["job4"] = job4_result
 
-        if send_slack:
+        if send_slack and slack_text:
             try:
                 from core.notify.slack import SlackSender
-                sender = SlackSender()
-                report_dir = os.path.join(os.getenv("LOCAL_STORAGE_PATH", "./data"), "real_estate", "reports")
-                filename = os.path.join(report_dir, f"{target_date.isoformat()}_Report.json")
-                if os.path.exists(filename):
-                    with open(filename, "r", encoding="utf-8") as f:
-                        saved = json.load(f)
-                    sender.send("📊 부동산 인사이트 리포트가 도착했습니다.", blocks=saved.get("blocks", []))
-                    results["slack"] = "sent"
+                SlackSender().send(slack_text)
+                results["slack"] = "sent"
             except Exception as e:
                 logger.error(f"[Pipeline] Slack send failed: {e}")
                 results["slack"] = f"error: {e}"
 
         return results
+
+    def _generate_new_daily_report(self, target_date: date):
+        """DailyReportOrchestrator로 새 형식 리포트 생성 → data/daily_reports/ 저장.
+
+        Returns (result_dict, slack_text). slack_text는 실패 시 빈 문자열.
+        """
+        from modules.real_estate.daily_report.transaction_aggregator import TransactionAggregator
+        from modules.real_estate.daily_report.daily_report_repository import DailyReportRepository
+        from modules.real_estate.daily_report.daily_report_orchestrator import DailyReportOrchestrator
+        from modules.real_estate.poi_collector import PoiCollector
+        from modules.real_estate.trend_analyzer import TrendAnalyzer
+        from modules.real_estate.geocoder import GeocoderService
+        from modules.macro.service import MacroCollectionService
+        from modules.real_estate.report_orchestrator import _calc_budget
+
+        try:
+            cfg = self.config
+            daily_cfg = cfg.get("daily_report", {})
+            storage_path = daily_cfg.get("storage_path", "data/daily_reports")
+            re_db = cfg.get("real_estate_db_path", "data/real_estate.db")
+            kakao_key = os.getenv("KAKAO_API_KEY", "")
+            macro_db = cfg.get("macro_db_path", "data/macro.db")
+
+            persona = PersonaManager().load()
+            macro_latest = MacroCollectionService(db_path=macro_db).get_latest(domain="real_estate")
+            macro_lines = [f"{m.get('name','')}: {m.get('value','')}{m.get('unit','')}" for m in (macro_latest or [])]
+            macro_summary = " | ".join(macro_lines[:6])
+            budget_available = _calc_budget(persona, macro_summary)
+
+            geocoder = GeocoderService(api_key=kakao_key, cache_path=cfg.get("geocode_cache_path", "data/geocode_cache.db"))
+            report_repo = DailyReportRepository(storage_path=storage_path)
+            orchestrator = DailyReportOrchestrator(
+                llm=self.llm,
+                prompt_loader=self.prompt_loader,
+                aggregator=TransactionAggregator(db_path=re_db),
+                report_repo=report_repo,
+                db_path=re_db,
+                poi_collector=PoiCollector(api_key=kakao_key, db_path=re_db),
+                trend_analyzer=TrendAnalyzer(db_path=re_db),
+                commute_svc=self.commute_service,
+                geocoder=geocoder,
+                max_new_commute_api_calls=daily_cfg.get("max_new_commute_api_calls", 5),
+            )
+            report = orchestrator.generate(
+                target_date=target_date,
+                persona=persona,
+                macro_summary=macro_summary,
+                budget_available=budget_available,
+            )
+            return {"success": True, "tx_count": report.total_transactions, "date": target_date.isoformat()}, report.slack_text
+        except Exception as e:
+            logger.error(f"[Pipeline/Job4] DailyReportOrchestrator 실패: {e}")
+            return {"success": False, "error": str(e)}, ""
 
     def _resolve_interest_districts(self, persona_data: Dict[str, Any], override_code: Optional[str]) -> List[str]:
         """persona.interest_areas 이름 → config.yaml 코드 목록 변환.
