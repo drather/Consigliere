@@ -233,13 +233,9 @@ def render_scores(residential: List, investment: List) -> str:
     lines = ["**실거주 점수 분석**"]
     for dr in residential:
         lines.append(f"- {dr.label}: **{dr.score}점**")
-        for sub in dr.evidence:
-            lines.append(f"  - {sub}")
     lines += ["", "**투자성 점수 분석**"]
     for dr in investment:
         lines.append(f"- {dr.label}: **{dr.score}점**")
-        for sub in dr.evidence:
-            lines.append(f"  - {sub}")
     return "\n".join(lines)
 
 
@@ -336,12 +332,14 @@ def _render_header(c: dict, index: int) -> str:
 def build_candidate_card(c: dict, index: int = 0) -> str:
     trend = _extract_trend(c)
     commute = _extract_commute(c)
+    location = _extract_location_summary(c)
     ls = c.get("_location_score")
 
     parts = [
         _render_header(c, index),
         render_trend(trend),
         render_commute(commute),
+        render_location_summary(location) if location else "",
         render_scores(ls.residential_results, ls.investment_results) if ls else "",
         render_verdict(c.get("_verdict", "")),
         render_keypoints(c.get("_key_points", [])),

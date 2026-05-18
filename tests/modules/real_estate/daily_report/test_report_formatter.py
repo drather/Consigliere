@@ -133,7 +133,7 @@ class TestRenderScores:
         assert "🚇 교통" in result
         assert "80점" in result
         assert "🛍️ 상업" in result
-        assert "음식점 15개" in result
+        assert "음식점 15개" not in result   # evidence는 표시하지 않음
 
     def test_empty_lists_returns_empty(self):
         from modules.real_estate.daily_report.report_formatter import render_scores
@@ -146,6 +146,14 @@ class TestRenderScores:
         result = render_scores(res, [])
         assert "🔮 미지의차원" in result
         assert "99점" in result
+
+    def test_evidence_bullets_not_shown(self):
+        from modules.real_estate.daily_report.report_formatter import render_scores
+        from modules.real_estate.location.dimension_result import DimensionResult
+        res = [DimensionResult(id="transportation", label="🚇 교통", score=80, evidence=["대중교통 22분", "2호선 경로"])]
+        result = render_scores(res, [])
+        assert "대중교통 22분" not in result
+        assert "2호선 경로" not in result
 
 
 class TestRenderVerdictKeypoints:
@@ -239,6 +247,36 @@ class TestBuildCandidateCard:
         from modules.real_estate.daily_report.report_formatter import build_candidate_card
         result = build_candidate_card(self._make_candidate())
         assert "<!-- stats -->" not in result
+
+    def test_build_candidate_card_has_location_block(self):
+        """_poi가 있을 때 입지 현황 블록이 포함된다."""
+        from modules.real_estate.daily_report.report_formatter import build_candidate_card
+        from unittest.mock import MagicMock
+        mock_poi = MagicMock()
+        mock_poi.subway_stations = [{"name": "강남", "line": "2호선", "walk_minutes": 8}]
+        mock_poi.marts_count = 2
+        mock_poi.convenience_count = 0
+        mock_poi.cafe_count = 5
+        mock_poi.restaurant_count = 20
+        mock_poi.pharmacy_count = 3
+        mock_poi.medical_count = 4
+        mock_poi.park_nearest_m = 250
+        mock_poi.nuisance_high_count = 0
+        mock_poi.nuisance_mid_count = 0
+        c = {
+            "apt_name": "래미안", "sigungu": "강남구",
+            "exclusive_area": 84.0, "household_count": 1200,
+            "composite_score": 0.85, "avg_recent_price": 880_000_000,
+            "price_change_pct": 2.5,
+            "_recent_tx_points": [{"price_eok": 8.8, "deal_date": "2026-05-10"}],
+            "commute_transit_minutes": 22, "commute_car_minutes": 15,
+            "commute_walk_minutes": None, "_commute_route_summary": "",
+            "_location_score": None, "_verdict": "", "_key_points": [],
+            "_poi": mock_poi,
+        }
+        result = build_candidate_card(c)
+        assert "📍 입지 현황" in result
+        assert "강남(2호선)" in result
 
 
 class TestBuildMarkdown:
