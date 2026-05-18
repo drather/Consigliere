@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS school_scores (
     nearby_school_count         INTEGER NOT NULL DEFAULT 0,
     avg_students_per_class      REAL NOT NULL DEFAULT 0,
     avg_students_per_teacher    REAL NOT NULL DEFAULT 0,
+    avg_transfer_rate           REAL NOT NULL DEFAULT 0,
     score                       INTEGER NOT NULL DEFAULT 50,
     collected_at                TEXT NOT NULL,
     UNIQUE(complex_code, school_kind)
@@ -113,6 +114,13 @@ class SchoolRepository:
                 conn.execute(
                     "ALTER TABLE school_teacher_records"
                     " ADD COLUMN transfer_in_rate REAL NOT NULL DEFAULT 0.0"
+                )
+            except Exception:
+                pass  # column already exists
+            try:
+                conn.execute(
+                    "ALTER TABLE school_scores"
+                    " ADD COLUMN avg_transfer_rate REAL NOT NULL DEFAULT 0"
                 )
             except Exception:
                 pass  # column already exists
@@ -273,14 +281,17 @@ class SchoolRepository:
         sql = """
         INSERT INTO school_scores
             (complex_code, school_kind, nearby_school_count,
-             avg_students_per_class, avg_students_per_teacher, score, collected_at)
+             avg_students_per_class, avg_students_per_teacher,
+             avg_transfer_rate, score, collected_at)
         VALUES
             (:complex_code, :school_kind, :nearby_school_count,
-             :avg_students_per_class, :avg_students_per_teacher, :score, :collected_at)
+             :avg_students_per_class, :avg_students_per_teacher,
+             :avg_transfer_rate, :score, :collected_at)
         ON CONFLICT(complex_code, school_kind) DO UPDATE SET
             nearby_school_count=excluded.nearby_school_count,
             avg_students_per_class=excluded.avg_students_per_class,
             avg_students_per_teacher=excluded.avg_students_per_teacher,
+            avg_transfer_rate=excluded.avg_transfer_rate,
             score=excluded.score,
             collected_at=excluded.collected_at
         """
@@ -291,6 +302,7 @@ class SchoolRepository:
                 "nearby_school_count": sc.nearby_school_count,
                 "avg_students_per_class": sc.avg_students_per_class,
                 "avg_students_per_teacher": sc.avg_students_per_teacher,
+                "avg_transfer_rate": sc.avg_transfer_rate,
                 "score": sc.score,
                 "collected_at": sc.collected_at or datetime.now(timezone.utc).isoformat(),
             })
@@ -354,4 +366,5 @@ def _row_to_score(r: sqlite3.Row) -> SchoolScore:
         avg_students_per_teacher=r["avg_students_per_teacher"],
         score=r["score"],
         collected_at=r["collected_at"],
+        avg_transfer_rate=r["avg_transfer_rate"] if "avg_transfer_rate" in r.keys() else 0.0,
     )

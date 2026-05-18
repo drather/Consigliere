@@ -49,3 +49,4 @@ class SchoolScore:
     avg_students_per_teacher: float
     score: int                  # 0~100
     collected_at: str
+    avg_transfer_rate: float = 0.0   # 전입생 비율 평균 (MVIN_SUM / STDNT_SUM)

@@ -283,3 +283,37 @@ class TestSchoolRepository:
     def test_get_score_not_found_returns_none(self):
         repo = self._repo()
         assert repo.get_score("NOTEXIST", "total") is None
+
+
+def test_school_score_has_avg_transfer_rate_field():
+    """SchoolScore dataclass에 avg_transfer_rate 필드가 존재해야 한다."""
+    sc = SchoolScore(
+        complex_code="CC001",
+        school_kind="total",
+        nearby_school_count=3,
+        avg_students_per_class=0.0,
+        avg_students_per_teacher=14.5,
+        score=78,
+        collected_at="2026-05-18T00:00:00+00:00",
+        avg_transfer_rate=0.065,
+    )
+    assert sc.avg_transfer_rate == 0.065
+
+
+def test_upsert_and_get_score_roundtrip_with_transfer_rate():
+    """avg_transfer_rate가 저장되고 조회된다."""
+    repo = SchoolRepository(db_path=":memory:")
+    sc = SchoolScore(
+        complex_code="CC_TRANSFER",
+        school_kind="total",
+        nearby_school_count=4,
+        avg_students_per_class=0.0,
+        avg_students_per_teacher=15.2,
+        score=82,
+        collected_at="2026-05-18T00:00:00+00:00",
+        avg_transfer_rate=0.072,
+    )
+    repo.upsert_school_score(sc)
+    retrieved = repo.get_score("CC_TRANSFER", "total")
+    assert retrieved is not None
+    assert retrieved.avg_transfer_rate == 0.072

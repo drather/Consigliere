@@ -245,6 +245,7 @@ class SchoolService:
                 avg_students_per_teacher=0.0,
                 score=50,
                 collected_at=now,
+                avg_transfer_rate=0.0,
             )
             self._repo.upsert_school_score(result)
             return result
@@ -289,6 +290,7 @@ class SchoolService:
             avg_students_per_teacher=avg_per_teacher,
             score=score,
             collected_at=now,
+            avg_transfer_rate=avg_transfer_rate,
         )
         self._repo.upsert_school_score(result)
         return result
