@@ -115,14 +115,14 @@ class SchoolRepository:
                     "ALTER TABLE school_teacher_records"
                     " ADD COLUMN transfer_in_rate REAL NOT NULL DEFAULT 0.0"
                 )
-            except Exception:
+            except sqlite3.OperationalError:
                 pass  # column already exists
             try:
                 conn.execute(
                     "ALTER TABLE school_scores"
-                    " ADD COLUMN avg_transfer_rate REAL NOT NULL DEFAULT 0"
+                    " ADD COLUMN avg_transfer_rate REAL NOT NULL DEFAULT 0.0"
                 )
-            except Exception:
+            except sqlite3.OperationalError:
                 pass  # column already exists
 
     def upsert_school(self, s: SchoolInfo) -> None:
@@ -366,5 +366,5 @@ def _row_to_score(r: sqlite3.Row) -> SchoolScore:
         avg_students_per_teacher=r["avg_students_per_teacher"],
         score=r["score"],
         collected_at=r["collected_at"],
-        avg_transfer_rate=r["avg_transfer_rate"] if "avg_transfer_rate" in r.keys() else 0.0,
+        avg_transfer_rate=r["avg_transfer_rate"],
     )

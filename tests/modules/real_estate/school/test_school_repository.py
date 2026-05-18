@@ -59,6 +59,7 @@ def test_school_score_fields():
         collected_at="2026-05-08T00:00:00+00:00",
     )
     assert sc.score == 72
+    assert sc.avg_transfer_rate == 0.0
 
 
 def _make_school(**kwargs) -> SchoolInfo:
