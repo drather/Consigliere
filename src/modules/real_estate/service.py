@@ -567,6 +567,7 @@ class RealEstateAgent:
         from modules.real_estate.geocoder import GeocoderService
         from modules.macro.service import MacroCollectionService
         from modules.real_estate.report_orchestrator import _calc_budget
+        from modules.real_estate.school.school_repository import SchoolRepository
 
         try:
             cfg = self.config
@@ -595,6 +596,7 @@ class RealEstateAgent:
                 commute_svc=self.commute_service,
                 geocoder=geocoder,
                 max_new_commute_api_calls=daily_cfg.get("max_new_commute_api_calls", 5),
+                school_repo=SchoolRepository(db_path=re_db),
             )
             report = orchestrator.generate(
                 target_date=target_date,
