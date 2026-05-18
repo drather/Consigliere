@@ -33,3 +33,32 @@ class CandidateSummary(TypedDict):
     commute: CommuteData
     residential_results: List[Any]   # List[DimensionResult]
     investment_results: List[Any]    # List[DimensionResult]
+
+
+class SubwayStation(TypedDict):
+    name: str           # "강남"
+    line: str           # "2호선"
+    walk_minutes: int   # 도보 분
+
+
+class LocationSummaryData(TypedDict, total=False):
+    # 역세권
+    subway_stations: List[SubwayStation]
+    # 생활편의
+    mart_count: int
+    convenience_count: int
+    cafe_count: int
+    restaurant_count: int
+    pharmacy_count: int
+    medical_count: int
+    # 자연
+    park_nearest_m: int     # 0 = 반경 내 없음
+    # 학군
+    school_nearby_count: int
+    school_transfer_rate: float   # 0.0~1.0
+    school_avg_per_teacher: float
+    school_score: int             # 0~100
+    school_label: str             # "학군 우수" / "학군 양호" / "학군 평이"
+    # 혐오시설
+    nuisance_high_count: int
+    nuisance_mid_count: int
