@@ -4,7 +4,7 @@ report_formatter — DimensionResult 기반 제네릭 출력 계층.
 """
 import itertools
 from typing import Dict, List, Optional
-from .report_types import TrendData, CommuteData
+from .report_types import TrendData, CommuteData, LocationSummaryData
 
 
 _TREND_COUNTER = itertools.count()
@@ -147,6 +147,86 @@ def render_commute(commute: CommuteData) -> str:
     return "\n".join(lines)
 
 
+def _school_label(transfer_rate: float, nearby: int) -> str:
+    if transfer_rate >= 0.06 or nearby >= 3:
+        return "학군 우수"
+    elif transfer_rate >= 0.03 or nearby >= 1:
+        return "학군 양호"
+    else:
+        return "학군 평이"
+
+
+def render_location_summary(loc: LocationSummaryData) -> str:
+    lines = ["**📍 입지 현황**", ""]
+
+    # 역세권
+    stations = loc.get("subway_stations", [])
+    if stations:
+        station_parts = [
+            f"{s['name']}({s['line']}) 도보 {s['walk_minutes']}분"
+            for s in stations
+        ]
+        lines.append(f"🚇 **역세권** {'  ·  '.join(station_parts)}")
+    else:
+        lines.append("🚇 **역세권** 역 없음")
+
+    # 생활편의
+    amenity_parts = []
+    if loc.get("mart_count", 0) > 0:
+        amenity_parts.append(f"마트 {loc['mart_count']}")
+    if loc.get("convenience_count", 0) > 0:
+        amenity_parts.append(f"편의점 {loc['convenience_count']}")
+    if loc.get("cafe_count", 0) > 0:
+        amenity_parts.append(f"카페 {loc['cafe_count']}")
+    if loc.get("restaurant_count", 0) > 0:
+        amenity_parts.append(f"식당 {loc['restaurant_count']}")
+    if loc.get("pharmacy_count", 0) > 0:
+        amenity_parts.append(f"약국 {loc['pharmacy_count']}")
+    if amenity_parts:
+        lines.append(f"🛒 **생활편의** {'  ·  '.join(amenity_parts)}")
+
+    # 의료
+    medical = loc.get("medical_count", 0)
+    if medical > 0:
+        lines.append(f"🏥 **의료** 병원·의원 {medical}곳")
+
+    # 자연
+    park_m = loc.get("park_nearest_m", 0)
+    if park_m > 0:
+        lines.append(f"🌳 **자연** 공원 {park_m}m 이내")
+    else:
+        lines.append("🌳 **자연** 반경 내 공원 없음")
+
+    # 학군
+    school_score = loc.get("school_score")
+    if school_score is not None:
+        nearby = loc.get("school_nearby_count", 0)
+        transfer = loc.get("school_transfer_rate", 0.0)
+        per_teacher = loc.get("school_avg_per_teacher", 0.0)
+        label = loc.get("school_label", "")
+        school_parts = [f"반경 1km 학교 {nearby}곳"]
+        if transfer > 0:
+            school_parts.append(f"전입률 {transfer * 100:.1f}%")
+        if per_teacher > 0:
+            school_parts.append(f"교사1인당 학생 {per_teacher:.0f}명")
+        lines.append(f"🏫 **학군** {'  ·  '.join(school_parts)} → **{label}**")
+    else:
+        lines.append("🏫 **학군** 학교 정보 수집 전")
+
+    # 혐오시설 (있을 때만 행 표시)
+    high = loc.get("nuisance_high_count", 0)
+    mid = loc.get("nuisance_mid_count", 0)
+    if high > 0 or mid > 0:
+        nuisance_parts = []
+        if high > 0:
+            nuisance_parts.append(f"고위험 {high}곳")
+        if mid > 0:
+            nuisance_parts.append(f"중위험 {mid}곳")
+        lines.append(f"⚠️ **혐오시설** {'  ·  '.join(nuisance_parts)}")
+
+    return "\n".join(lines)
+
+
 def render_scores(residential: List, investment: List) -> str:
     if not residential and not investment:
         return ""
@@ -200,6 +280,45 @@ def _extract_commute(c: dict) -> CommuteData:
         walk_minutes=c.get("commute_walk_minutes"),
         route_summary=c.get("_commute_route_summary", ""),
     )
+
+
+def _extract_location_summary(c: dict) -> Optional[LocationSummaryData]:
+    poi = c.get("_poi")
+    if poi is None:
+        return None
+
+    # 역세권 — 도보 시간순 정렬, 최대 2개
+    stations = sorted(poi.subway_stations, key=lambda s: s.get("walk_minutes", 99))[:2]
+    subway = [
+        {"name": s.get("name", "?"), "line": s.get("line", "?"), "walk_minutes": s.get("walk_minutes", 0)}
+        for s in stations
+    ]
+
+    loc: LocationSummaryData = {
+        "subway_stations": subway,
+        "mart_count": poi.marts_count,
+        "convenience_count": poi.convenience_count,
+        "cafe_count": poi.cafe_count,
+        "restaurant_count": poi.restaurant_count,
+        "pharmacy_count": poi.pharmacy_count,
+        "medical_count": poi.medical_count,
+        "park_nearest_m": poi.park_nearest_m,
+        "nuisance_high_count": poi.nuisance_high_count,
+        "nuisance_mid_count": poi.nuisance_mid_count,
+    }
+
+    school_score = c.get("school_score")
+    if school_score is not None:
+        loc["school_nearby_count"] = c.get("school_nearby_count", 0)
+        loc["school_transfer_rate"] = c.get("school_transfer_rate", 0.0)
+        loc["school_avg_per_teacher"] = c.get("school_avg_per_teacher", 0.0)
+        loc["school_score"] = school_score
+        loc["school_label"] = _school_label(
+            c.get("school_transfer_rate", 0.0),
+            c.get("school_nearby_count", 0),
+        )
+
+    return loc
 
 
 def _render_header(c: dict, index: int) -> str:
