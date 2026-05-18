@@ -92,6 +92,7 @@ class DailyReportOrchestrator:
         commute_svc=None,
         geocoder=None,
         max_new_commute_api_calls: int = 5,
+        school_repo=None,
     ):
         self._llm = llm
         self._prompt_loader = prompt_loader
@@ -103,6 +104,7 @@ class DailyReportOrchestrator:
         self._commute_svc = commute_svc
         self._geocoder = geocoder
         self._max_new_commute_api_calls = max_new_commute_api_calls
+        self._school_repo = school_repo
 
     def generate(
         self,
@@ -137,6 +139,8 @@ class DailyReportOrchestrator:
             candidates = self._enrich_with_commute_quota(
                 candidates, dest, dest_lat, dest_lng, self._max_new_commute_api_calls
             )
+        if self._school_repo:
+            candidates = self._enrich_with_school(candidates)
         if self._trend_analyzer:
             preferred_areas = (
                 persona.get("apartment_preferences", {}).get("preferred_area_sqm", [84.0])
@@ -292,6 +296,32 @@ class DailyReportOrchestrator:
                     new_calls_used, max_new_calls, apt_name,
                 )
 
+            enriched.append(result)
+        return enriched
+
+    def _enrich_with_school(self, candidates: List[Dict]) -> List[Dict]:
+        if self._school_repo is None:
+            return candidates
+
+        enriched = []
+        for c in candidates:
+            result = dict(c)
+            complex_code = c.get("complex_code", "")
+            if not complex_code:
+                enriched.append(result)
+                continue
+            try:
+                cached = self._school_repo.get_score(complex_code, "total")
+                if cached is not None:
+                    result["school_score"] = cached.score
+                    result["school_nearby_count"] = cached.nearby_school_count
+                    result["school_avg_per_teacher"] = cached.avg_students_per_teacher
+                    result["school_transfer_rate"] = cached.avg_transfer_rate
+            except Exception as e:
+                logger.warning(
+                    "[DailyOrchestrator] school enrich 실패 %s: %s",
+                    c.get("apt_name"), e,
+                )
             enriched.append(result)
         return enriched
 
