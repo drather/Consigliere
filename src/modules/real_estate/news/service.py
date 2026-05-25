@@ -138,7 +138,7 @@ class NewsService:
             "articles": [
                 {
                     "title": a.title,
-                    "url": a.link,
+                    "url": a.origin_link,
                     "description": a.description,
                     "pub_date": a.pub_date,
                 }
