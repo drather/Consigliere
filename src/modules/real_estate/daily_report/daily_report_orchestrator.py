@@ -13,6 +13,9 @@ from modules.real_estate.report_orchestrator import (
     _enrich_with_building,
     _enrich_with_trend,
     _resolve_workplace_coords,
+    _enrich_with_comparative,
+    _enrich_with_yield,
+    _enrich_with_supply,
 )
 from modules.real_estate.location.location_scorer import LocationScorer
 from modules.real_estate.trend_analyzer import TrendAnalyzer
@@ -128,6 +131,9 @@ class DailyReportOrchestrator:
         geocoder=None,
         max_new_commute_api_calls: int = 5,
         school_repo=None,
+        comp_analyzer=None,       # ComparativeAnalyzer
+        yield_calculator=None,    # YieldCalculator
+        supply_analyzer=None,     # SupplyRiskAnalyzer
     ):
         self._llm = llm
         self._prompt_loader = prompt_loader
@@ -140,6 +146,9 @@ class DailyReportOrchestrator:
         self._geocoder = geocoder
         self._max_new_commute_api_calls = max_new_commute_api_calls
         self._school_repo = school_repo
+        self._comp_analyzer = comp_analyzer
+        self._yield_calculator = yield_calculator
+        self._supply_analyzer = supply_analyzer
 
     def generate(
         self,
@@ -181,6 +190,11 @@ class DailyReportOrchestrator:
                 persona.get("apartment_preferences", {}).get("preferred_area_sqm", [84.0])
             )
             candidates = _enrich_with_trend(candidates, self._trend_analyzer, preferred_areas=preferred_areas)
+
+        # 비교·수익·공급 분석
+        candidates = _enrich_with_comparative(candidates, self._comp_analyzer)
+        candidates = _enrich_with_yield(candidates, self._yield_calculator)
+        candidates = _enrich_with_supply(candidates, self._supply_analyzer)
 
         # Step 4. LocationScorer 실행 — evidence 포함 DimensionResult 생성
         scorer = _load_scorer()
