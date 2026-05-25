@@ -4,7 +4,7 @@ report_formatter — DimensionResult 기반 제네릭 출력 계층.
 """
 import itertools
 from typing import Dict, List, Optional
-from .report_types import TrendData, CommuteData, LocationSummaryData
+from .report_types import TrendData, CommuteData, LocationSummaryData, CompData, YieldData, SupplyData
 
 
 _TREND_COUNTER = itertools.count()
@@ -317,6 +317,88 @@ def _extract_location_summary(c: dict) -> Optional[LocationSummaryData]:
     return loc
 
 
+def _extract_comp(c: dict) -> "Optional[CompData]":
+    if c.get("_comp_district_avg_per_sqm") is None:
+        return None
+    return CompData(
+        district_avg_per_sqm=c["_comp_district_avg_per_sqm"],
+        pct_vs_avg=c.get("_comp_pct_vs_avg", 0.0),
+        similar_units=c.get("_comp_similar_units", []),
+    )
+
+
+def _extract_yield(c: dict) -> "Optional[YieldData]":
+    if c.get("_yield_jeonse_rate") is None:
+        return None
+    return YieldData(
+        jeonse_rate=c["_yield_jeonse_rate"],
+        jeonse_avg=c.get("_yield_jeonse_avg", 0),
+        gap_cost=c.get("_yield_gap_cost", 0),
+        monthly_cost=c.get("_yield_monthly_cost", 0),
+        jeonse_sample=c.get("_yield_jeonse_sample", 0),
+    )
+
+
+def _extract_supply(c: dict) -> "Optional[SupplyData]":
+    if c.get("_supply_nearby_units") is None and not c.get("_news_catalysts"):
+        return None
+    return SupplyData(
+        nearby_units=c.get("_supply_nearby_units", 0),
+        supply_period=c.get("_supply_period", ""),
+        news_catalysts=c.get("_news_catalysts", []),
+    )
+
+
+def render_price_comparison(comp: "Optional[CompData]") -> str:
+    if not comp or not comp.get("district_avg_per_sqm"):
+        return ""
+    avg_man = comp["district_avg_per_sqm"] / 10000
+    pct = comp["pct_vs_avg"]
+    sign = "▲" if pct > 0 else "▼"
+    color_word = "비쌈" if pct > 0 else "저렴"
+    sign_pct = f"+{pct:.1f}%" if pct > 0 else f"{pct:.1f}%"
+    lines = [f"**💹 가격 위치** — 구 평균 ㎡당 {avg_man:.0f}만원 대비 {sign} {sign_pct} {color_word}"]
+    similars = comp.get("similar_units", [])
+    if similars:
+        parts = [f"{u['name']} {u['price_per_sqm']/10000:.0f}만" for u in similars[:3]]
+        lines.append(f"유사 단지: {' · '.join(parts)}")
+    return "\n".join(lines)
+
+
+def render_yield_analysis(yield_r: "Optional[YieldData]") -> str:
+    if not yield_r or yield_r.get("jeonse_rate") is None:
+        return ""
+    rate_pct = yield_r["jeonse_rate"] * 100
+    gap_eok = yield_r["gap_cost"] / 10000
+    monthly = yield_r["monthly_cost"]
+    sample = yield_r.get("jeonse_sample", 0)
+    return (
+        f"**🏠 수익 구조** — 전세가율 {rate_pct:.1f}% · "
+        f"갭투자 {gap_eok:.1f}억 · 월 보유비용 {monthly}만원 "
+        f"*(전세 {sample}건 기준)*"
+    )
+
+
+def render_supply_risk(supply: "Optional[SupplyData]") -> str:
+    if not supply:
+        return ""
+    units = supply.get("nearby_units", 0)
+    period = supply.get("supply_period", "")
+    catalysts = supply.get("news_catalysts", [])
+
+    lines = []
+    if units > 0:
+        lines.append(f"⚠️ **공급 리스크** — 반경 2km {units:,}세대 입주 예정 ({period})")
+    else:
+        lines.append("✅ **공급 리스크** — 반경 2km 공급 없음")
+
+    for cat in catalysts[:3]:
+        icon = "✅" if cat.get("type") == "positive" else "❌"
+        lines.append(f"{icon} {cat.get('title', '')}")
+
+    return "\n".join(lines)
+
+
 def _render_header(c: dict, index: int) -> str:
     name = c.get("apt_name", "?")
     score_pct = int(c.get("composite_score", 0) * 100)
@@ -335,11 +417,19 @@ def build_candidate_card(c: dict, index: int = 0) -> str:
     location = _extract_location_summary(c)
     ls = c.get("_location_score")
 
+    # New data extraction
+    comp = _extract_comp(c)
+    yield_r = _extract_yield(c)
+    supply = _extract_supply(c)
+
     parts = [
         _render_header(c, index),
+        render_price_comparison(comp),
         render_trend(trend),
         render_commute(commute),
         render_location_summary(location) if location else "",
+        render_yield_analysis(yield_r),
+        render_supply_risk(supply),
         render_scores(ls.residential_results, ls.investment_results) if ls else "",
         render_verdict(c.get("_verdict", "")),
         render_keypoints(c.get("_key_points", [])),
