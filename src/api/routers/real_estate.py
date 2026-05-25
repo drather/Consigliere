@@ -19,9 +19,13 @@ from api.dependencies import (
     get_school_service,
     get_jeonse_repo,
     get_jeonse_client,
+    get_supply_repo,
+    get_supply_client,
 )
 from modules.real_estate.jeonse.repository import JeonseRepository
 from modules.real_estate.jeonse.client import JeonseClient
+from modules.real_estate.supply.repository import SupplyRepository
+from modules.real_estate.supply.client import SupplyClient
 from modules.real_estate.building_master.building_master_service import BuildingMasterService
 from modules.real_estate.commute.commute_service import CommuteService
 from modules.real_estate.school.school_service import SchoolService
@@ -903,3 +907,14 @@ def collect_jeonse(
         logger.info("[/jobs/jeonse/collect] %s: %d건 수집, %d건 저장", code, len(txs), saved)
 
     return {"year_month": target_ym, "district_count": len(codes), "saved_count": total_saved}
+
+
+@router.post("/jobs/supply/collect")
+def collect_supply(
+    supply_repo: SupplyRepository = Depends(get_supply_repo),
+    supply_client: SupplyClient = Depends(get_supply_client),
+):
+    """청약홈 API에서 분양 일정을 수집해 SQLite에 저장."""
+    results = supply_client.fetch(page=1, per_page=500)
+    saved = supply_repo.save_bulk(results)
+    return {"fetched_count": len(results), "saved_count": saved}
