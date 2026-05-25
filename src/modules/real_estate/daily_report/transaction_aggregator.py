@@ -35,6 +35,12 @@ top_area AS (
         WHERE deal_date >= :date_from AND apt_master_id IS NOT NULL
         GROUP BY apt_master_id, exclusive_area
     ) WHERE rn = 1
+),
+byr AS (
+    SELECT apt_master_id, MAX(build_year) AS build_year
+    FROM transactions
+    WHERE build_year > 0
+    GROUP BY apt_master_id
 )
 SELECT
     am.id                          AS apt_master_id,
@@ -53,12 +59,14 @@ SELECT
     COALESCE(ta.exclusive_area, 84.0) AS exclusive_area,
     COALESCE(a.household_count, 0) AS household_count,
     a.road_address,
-    am.pnu
+    am.pnu,
+    COALESCE(byr.build_year, 2000)  AS build_year
 FROM recent r
 JOIN apt_master am ON r.apt_master_id = am.id
 LEFT JOIN prior p ON r.apt_master_id = p.apt_master_id
 LEFT JOIN top_area ta ON r.apt_master_id = ta.apt_master_id
 LEFT JOIN apartments a ON am.complex_code = a.complex_code
+LEFT JOIN byr ON byr.apt_master_id = am.id
 ORDER BY r.recent_tx_count DESC
 LIMIT :limit
 """

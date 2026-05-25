@@ -362,7 +362,7 @@ def render_price_comparison(comp: "Optional[CompData]") -> str:
     if similars:
         parts = [f"{u['name']} {u['price_per_sqm']/10000:.0f}만" for u in similars[:3]]
         lines.append(f"유사 단지: {' · '.join(parts)}")
-    return "\n".join(lines)
+    return "  \n".join(lines)
 
 
 def render_yield_analysis(yield_r: "Optional[YieldData]") -> str:
@@ -396,7 +396,7 @@ def render_supply_risk(supply: "Optional[SupplyData]") -> str:
         icon = "✅" if cat.get("type") == "positive" else "❌"
         lines.append(f"{icon} {cat.get('title', '')}")
 
-    return "\n".join(lines)
+    return "  \n".join(lines)
 
 
 def _render_header(c: dict, index: int) -> str:

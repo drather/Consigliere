@@ -630,6 +630,13 @@ def generate_daily_report(req: DailyReportRequest = None):
     from modules.real_estate.daily_report.transaction_aggregator import TransactionAggregator
     from modules.real_estate.daily_report.daily_report_repository import DailyReportRepository
     from modules.real_estate.daily_report.daily_report_orchestrator import DailyReportOrchestrator
+    from modules.real_estate.transaction_repository import TransactionRepository
+    from modules.real_estate.comparative.analyzer import ComparativeAnalyzer
+    from modules.real_estate.yield_analysis.calculator import YieldCalculator
+    from modules.real_estate.supply.risk_analyzer import SupplyRiskAnalyzer
+    from modules.real_estate.jeonse.repository import JeonseRepository
+    from modules.real_estate.supply.repository import SupplyRepository
+    from modules.real_estate.news.service import NewsService
     from modules.macro.service import MacroCollectionService
 
     if req is None:
@@ -686,6 +693,11 @@ def generate_daily_report(req: DailyReportRequest = None):
         )
 
         max_commute_calls = daily_cfg.get("max_new_commute_api_calls", 5)
+        tx_repo = TransactionRepository(db_path=re_db)
+        jeonse_repo = JeonseRepository(db_path=re_db)
+        supply_repo = SupplyRepository(db_path=re_db)
+        yield_cfg = cfg.get("yield_analysis", {})
+        news_svc = NewsService()
         orchestrator = DailyReportOrchestrator(
             llm=llm,
             prompt_loader=prompt_loader,
@@ -697,6 +709,17 @@ def generate_daily_report(req: DailyReportRequest = None):
             commute_svc=commute_svc,
             geocoder=geocoder,
             max_new_commute_api_calls=max_commute_calls,
+            comp_analyzer=ComparativeAnalyzer(tx_repo=tx_repo),
+            yield_calculator=YieldCalculator(
+                jeonse_repo=jeonse_repo,
+                mortgage_rate=float(yield_cfg.get("mortgage_rate", 0.035)),
+            ),
+            supply_analyzer=SupplyRiskAnalyzer(
+                supply_repo=supply_repo,
+                news_service=news_svc,
+                llm=llm,
+                prompt_loader=prompt_loader,
+            ),
         )
 
         report = orchestrator.generate(
