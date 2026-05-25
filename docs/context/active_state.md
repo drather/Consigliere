@@ -1,47 +1,49 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-05-09
-**Current Active Feature:** Location Scoring Redesign — 실거주/투자 이중 점수 체계 (2026-05-09 시작)
-- SchoolInfoClient (apiType=0/10/17, pban_yr 필수) + SchoolRepository + SchoolService 구현
-- scoring.py school_score 통합 (SchoolService 점수 우선, POI/키워드 fallback)
-- API 엔드포인트 2개: POST /jobs/school/collect, GET /dashboard/real-estate/school/{complex_code}
-- 대시보드 Tab1 학군 분석 expander 추가 (반경 1km 학교 수 / 학급당 학생수 / 교사 1인당 / 학군점수)
-- 46 테스트 PASS
-- feature/school-district-analysis 브랜치, master 머지 대기
+**Last Updated:** 2026-05-25
 
 ## 현재 포커스
-- **Branch:** `feature/location-scoring-redesign`
-- **Status:** ✅ 구현 완료, master 머지 대기 (2026-05-09)
-  - 기존 ScoringEngine(5차원) → LocationScorer(실거주 5차원 + 투자 4차원) 전면 교체
-  - POI 수집 6개 카테고리 추가 (편의점·약국·병원·공원·음식점·카페)
-  - 8-task 구현 계획: `docs/superpowers/plans/2026-05-09-location-scoring-redesign.md`
-
-## 선행 완료 작업
-- **Branch:** `feature/school-district-analysis` → master 머지 완료 (2026-05-09)
-- **Status:** ✅ 학교알리미 학군 분석 구현 (전입률 기반 점수, 46 테스트 PASS)
-
 - **Branch:** `master`
-- **Status:** ✅ ODsay 대중교통 API 교체 완료 (2026-05-07)
-  - `OdsayClient` + `HybridCommuteClient` 신규 구현
-  - Tmap transit(일 10회) → ODsay(일 1,000회) 교체
-  - 주입처 4곳 교체, 51개 commute 테스트 PASS
+- **Status:** ✅ 부동산 리포트 품질 업그레이드 완료 (2026-05-25)
+  - ComparativeAnalyzer / YieldCalculator / SupplyRiskAnalyzer 3개 신규 분석 모듈
+  - JeonseClient(국토부 전월세 API) + JeonseRepository
+  - SupplyClient(아파트 공급 일정) + SupplyRepository(Haversine 반경 쿼리)
+  - DailyReportOrchestrator enrich pipeline: _enrich_with_comparative/yield/supply 추가
+  - report_formatter: render_price_comparison / render_yield / render_supply 추가
+  - InsightOrchestrator → DailyReportOrchestrator 파이프라인 전환 완료
 
-## 선행 브랜치 (미머지)
-- **Branch:** `feature/real-estate-sqlite-redesign`
-- **Status:** ✅ 구현 완료 — 본 브랜치 완료 후 함께 머지 예정
-- **완료 내용:**
-  - ChromaDB → SQLite 마이그레이션
-  - 데이터 클렌징 (`cleanse_apartment_names.py`) — complex_code 매핑 75.6% → 79.8%
-  - `ApartmentRepository`, `TransactionRepository` normalize-on-save 적용
-  - E2E Playwright 테스트 28개
+## 오늘 완료 (2026-05-25)
+- **학군 데이터 초기 수집:** 69개 지구 → 3,968개 학교 수집, 7,145개 단지 중 4,130개 `school_scores` 캐싱
+  - 리포트 "🏫 학군 학교 정보 수집 전" 해소 완료
 
-## 최근 완료 작업
+## 최근 완료 작업 (2026-05-09 이후)
+
+- **2026-05-25: 부동산 리포트 품질 업그레이드**
+  - Jeonse/Supply/Comparative/Yield 4개 모듈 + formatter + orchestrator 연동
+  - Job4: InsightOrchestrator → DailyReportOrchestrator 전환 완료
+  - 버그 수정: comp/yield/supply analyzer 미주입, macro dict updated_at 타입 오류
+
+- **2026-05-18: 학군/입지 formatter 통합 + POI 고도화 설계**
+  - SchoolRepository → DailyReportOrchestrator 주입
+  - render_location_summary, _school_label, 입지 현황 블록 삽입
+  - POI 입지분석 고도화 설계 문서 작성 (`docs/superpowers/plans/`)
+  - SchoolScore에 avg_transfer_rate 필드 추가
+
+- **2026-05-17: 데일리 리포트 카드 리디자인 완성**
+  - TypedDict 6-레이어 아키텍처 (report_types.py)
+  - SVG 스파크라인 (상승=초록, 하락=빨강, 최신=★)
+  - 출퇴근 3모드 카드 (대중교통/자가용/도보)
+  - build_slack() Slack mrkdwn 조립 + DailyReport.slack_text 연결
+  - Job4 파이프라인: DailyReportOrchestrator 교체, max_new_commute_api_calls 5→20
+
+- **2026-05-10: Location Scoring Redesign + formatter 기반 구축**
+  - DimensionResult 데이터클래스 + 10개 Dimension label/evidence() 구현
+  - NuisanceDimension + POI nuisance 9개 키워드 수집
+  - LocationScore → List[DimensionResult] 전환
+  - report_formatter.py 제네릭 출력 계층 신규 구현
+  - TransactionAggregator: _recent_tx_points 주입, DB 커넥션 누수 수정
+
+## 이전 완료 작업 요약 (2026-04 이전은 history.md 참조)
 - **completed:** 주소 기반 2차 매핑 구현 (2026-04-27)
-  - `map_by_address()`: complex_code → apartments.road_address → building_master 주소 매칭
-  - `_normalize_addr()`: 괄호 제거 + 마지막 2토큰("도로명 번지") 추출
-  - `get_apt_addresses_by_complex()`: apartments 테이블 bulk 로드
-  - 2차 매핑 207건 추가 → 누적 2,908건 / 6,037건 (48.2%)
-  - CLI `--map-address` 플래그 추가
-  - 8/8 단위 테스트 통과
 - **completed:** PNU 기반 Building Master DB 구축 (2026-04-25)
   - 건축HUB 총괄표제부 API(`getBrRecapTitleInfo`) → `building_master` 테이블 구축
   - `apt_master` 이름 유사도 매핑(SequenceMatcher ≥ 0.8) — pnu/mapping_score 컬럼 추가
@@ -117,23 +119,14 @@
 
 ## 다음 작업 로드맵
 
-### 1순위 — 카카오 POI 기반 입지 분석
-- **목표:** 단지 주변 주요 시설(편의점, 마트, 병원, 지하철역 등)을 카카오 로컬 API로 수집하여 입지 점수 산출
-- **배경:** 현재 `poi_collector.py` 존재하나 리포트/대시보드에 미통합. 실거래 분석에 입지 요소 추가 필요
-- **작업:**
-  - 카카오 로컬 API (`/v2/local/search/category`) 카테고리별 POI 수집
-  - 단지 기준 반경 N km 내 시설 수 집계 → 입지 점수 모델
-  - 리포트 및 대시보드에 입지 분석 섹션 추가
-- **참고:** 카카오 API 키 이미 `.env`에 존재 (`KAKAO_API_KEY`)
+### 1순위 — POI 입지분석 고도화
+- **목표:** 이미 수집된 POI 데이터를 LocationScorer(DimensionResult)와 연동하여 리포트에 입지 상세 반영
+- **설계 문서:** `docs/superpowers/plans/2026-05-09-location-scoring-redesign.md`
+- **배경:** location/ 패키지 + formatter 기반 구축 완료 (2026-05-10), POI enrich pipeline 연결만 남음
 
-### 2순위 — 학교알리미 기반 학군 분석
-- **목표:** 단지 인근 초/중/고교 학업성취도, 학급당 학생 수 등 학군 데이터 수집 및 점수화
-- **배경:** 학군은 부동산 가치에 큰 영향. 학교알리미(schoolinfo.go.kr) 공공 API 활용
-- **작업:**
-  - 학교알리미 OpenAPI 키 발급 및 `.env` 등록
-  - 단지 → 학군구역 매핑 (행정구역 코드 기반)
-  - 학교 데이터 수집 클라이언트 + 저장소 구현
-  - 리포트 및 대시보드에 학군 분석 섹션 추가
+### 2순위 — 전세/공급 데이터 n8n 자동 수집 등록
+- **목표:** JeonseClient / SupplyClient 신규 수집 Job을 n8n 스케줄에 등록 (주 1회)
+- **배경:** 2026-05-25 구현 완료, 수동 트리거만 가능한 상태
 
 ### 3순위 — E2E 테스트 코드 업데이트
 - **목표:** Transaction-First 전환 이후 변경된 Tab1(아파트 탐색) UX에 맞게 E2E 테스트 정비

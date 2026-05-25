@@ -1,5 +1,58 @@
 # Project Consigliere: History
-**Last Updated:** 2026-05-09
+**Last Updated:** 2026-05-25
+
+## 2026-05-25: 학군 데이터 초기 수집 완료
+
+- **트리거:** 리포트에 "🏫 학군 학교 정보 수집 전" 표시 확인 → `school_scores` 테이블이 비어있음 발견
+- **조치:**
+  - Step 1: `SchoolService.collect_by_district()` 를 69개 지구 전체에 적용 → 3,968개 학교 수집 (school_info/student_records/teacher_records)
+  - Step 2: `SchoolService.calculate_score()` 를 7,145개 단지에 일괄 적용 → 4,130개 `school_scores` 캐싱
+- **결과:** 이후 리포트 생성 시 학군 블록 정상 표시 (반경 1km 학교 수, 전입률, 교사 1인당 학생 수, 학군 라벨)
+- **참고:** 2026년 학교알리미 데이터는 2026-05-30 공개 예정 → 현재는 2025년 데이터 기준
+
+## 2026-05-25: 부동산 리포트 품질 업그레이드
+
+- **Feature:** `master` (report-quality-upgrade 작업 일괄 머지)
+- **신규 모듈 3종:**
+  - `src/modules/real_estate/comparative/` — `ComparativeAnalyzer`: 동일 구 평균 매매가 대비, 유사 단지(세대수±30%, 준공연도±5년) 가격 비교
+  - `src/modules/real_estate/yield_calculator/` — `YieldCalculator`: 전세가율 산출, 갭투자비용(매매-전세), 월 보유비용 (모기지+관리비)
+  - `src/modules/real_estate/supply/` — `SupplyRiskAnalyzer`: 반경 3km 예정 공급물량 + 뉴스 호재/악재 분류 종합 리스크 평가
+- **신규 데이터 수집:**
+  - `JeonseClient`: 국토부 전월세 실거래가 API 연동 + `JeonseRepository` + `POST /jobs/jeonse/collect`
+  - `SupplyClient`: 아파트 공급 일정 API + `SupplyRepository` (Haversine 반경 쿼리) + `POST /jobs/supply/collect`
+- **DailyReportOrchestrator 확장:**
+  - `_enrich_with_comparative()`, `_enrich_with_yield()`, `_enrich_with_supply()` 추가
+  - `InsightOrchestrator → DailyReportOrchestrator` 파이프라인 전환 완료
+- **report_formatter 확장:**
+  - `CompData`, `YieldData`, `SupplyData` TypedDict 추가
+  - `render_price_comparison()`, `render_yield()`, `render_supply()` 추가
+- **LLM 프롬프트:** `daily_strategy.md` — verdict 수치 기반 판단 로직 + _format_candidate_for_llm 3개 블록 추가
+- **버그 수정 3건:**
+  - comp/yield/supply analyzer 미주입 (service.py 생성자 누락)
+  - macro dict `updated_at` 문자열 키 isinstance 체크 오류
+  - 데이터 파싱 버그 (파싱 결과 타입 불일치)
+
+## 2026-05-17~18: 데일리 리포트 카드 리디자인 + 학군/입지 formatter 통합
+
+- **Feature:** master (5월 중순 작업 연속 머지)
+- **데일리 리포트 카드 리디자인 (2026-05-10~17):**
+  - `report_types.py` — TxPoint/TrendData/CommuteData/CandidateSummary/LocationSummaryData TypedDict 계약 (6-레이어 아키텍처)
+  - `report_formatter.py` — 제네릭 출력 계층 신규 구현
+    - `render_trend()`: SVG 스파크라인 (상승=초록, 하락=빨강, 최신=★)
+    - `render_commute()`: 대중교통/자가용/도보 3모드 카드
+    - `render_verdict()`, `render_key_points()`: LLM 결과 포맷
+    - `build_candidate_card()`: dict→TypedDict 추출 경계
+    - `build_slack()`: Slack mrkdwn 조립 (텍스트 스파크라인)
+  - `TransactionAggregator`: `_recent_tx_points` 주입, DB 커넥션 누수 수정 (try/finally)
+  - `DailyReportOrchestrator`: 출퇴근 3모드(대중교통/자가용/도보) + _verdict/_key_points LLM 주입
+  - `DailyReport.slack_text` 필드 추가 → build_slack() Slack 경로 연결
+  - **파이프라인 정비:** Job4를 DailyReportOrchestrator로 교체 (대시보드 저장 누락 수정), max_new_commute_api_calls 5→20
+- **학군/입지 formatter 통합 (2026-05-18):**
+  - `SchoolScore`에 `avg_transfer_rate` 필드 추가 + Repository 마이그레이션
+  - `render_location_summary()`, `_extract_location_summary()`, `_school_label()` 추가
+  - 입지 현황 블록 `build_candidate_card()` 삽입
+  - `SchoolRepository` → `DailyReportOrchestrator` 주입 + `_enrich_with_school()` 파이프라인
+- **설계 문서:** POI 입지분석 고도화 spec/plan (`docs/superpowers/plans/2026-05-09-location-scoring-redesign.md` 등)
 
 ## 2026-05-09: Location Scoring Redesign — 실거주/투자 이중 점수 체계
 
