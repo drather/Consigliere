@@ -1,5 +1,6 @@
 import sqlite3
-from datetime import date, timedelta
+import threading
+from datetime import date
 from typing import List, Optional
 from .models import JeonseTransaction
 
@@ -29,22 +30,11 @@ class JeonseRepository:
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_DDL)
         self._conn.commit()
+        self._lock = threading.Lock()
 
     def save(self, tx: JeonseTransaction) -> None:
-        self._conn.execute(
-            """INSERT OR IGNORE INTO jeonse_transactions
-               (complex_code, apt_name, district_code, deal_date,
-                exclusive_area, deposit, monthly_rent, contract_type, floor)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
-            (tx.complex_code, tx.apt_name, tx.district_code, tx.deal_date,
-             tx.exclusive_area, tx.deposit, tx.monthly_rent, tx.contract_type, tx.floor)
-        )
-        self._conn.commit()
-
-    def save_bulk(self, txs: List[JeonseTransaction]) -> int:
-        saved = 0
-        for tx in txs:
-            cur = self._conn.execute(
+        with self._lock:
+            self._conn.execute(
                 """INSERT OR IGNORE INTO jeonse_transactions
                    (complex_code, apt_name, district_code, deal_date,
                     exclusive_area, deposit, monthly_rent, contract_type, floor)
@@ -52,8 +42,22 @@ class JeonseRepository:
                 (tx.complex_code, tx.apt_name, tx.district_code, tx.deal_date,
                  tx.exclusive_area, tx.deposit, tx.monthly_rent, tx.contract_type, tx.floor)
             )
-            saved += cur.rowcount
-        self._conn.commit()
+            self._conn.commit()
+
+    def save_bulk(self, txs: List[JeonseTransaction]) -> int:
+        saved = 0
+        with self._lock:
+            for tx in txs:
+                cur = self._conn.execute(
+                    """INSERT OR IGNORE INTO jeonse_transactions
+                       (complex_code, apt_name, district_code, deal_date,
+                        exclusive_area, deposit, monthly_rent, contract_type, floor)
+                       VALUES (?,?,?,?,?,?,?,?,?)""",
+                    (tx.complex_code, tx.apt_name, tx.district_code, tx.deal_date,
+                     tx.exclusive_area, tx.deposit, tx.monthly_rent, tx.contract_type, tx.floor)
+                )
+                saved += cur.rowcount
+            self._conn.commit()
         return saved
 
     def get_recent(
@@ -65,32 +69,34 @@ class JeonseRepository:
         district_code: Optional[str] = None,
         jeonse_only: bool = False,
     ) -> List[JeonseTransaction]:
-        cutoff = (date.today() - timedelta(days=months * 30)).isoformat()
-        contract_filter = "AND contract_type = 'jeonse'" if jeonse_only else ""
+        today = date.today()
+        year = today.year - (months // 12)
+        month = today.month - (months % 12)
+        if month <= 0:
+            month += 12
+            year -= 1
+        cutoff = today.replace(year=year, month=month).isoformat()
+
+        clauses = ["exclusive_area BETWEEN ? AND ?", "deal_date >= ?"]
+        params: list = [area - 5, area + 5, cutoff]
+
+        if jeonse_only:
+            clauses.append("contract_type = ?")
+            params.append("jeonse")
 
         if complex_code:
-            rows = self._conn.execute(
-                f"""SELECT * FROM jeonse_transactions
-                    WHERE complex_code = ?
-                      AND exclusive_area BETWEEN ? AND ?
-                      AND deal_date >= ?
-                      {contract_filter}
-                    ORDER BY deal_date DESC""",
-                (complex_code, area - 5, area + 5, cutoff)
-            ).fetchall()
+            clauses.insert(0, "complex_code = ?")
+            params.insert(0, complex_code)
         elif apt_name and district_code:
-            rows = self._conn.execute(
-                f"""SELECT * FROM jeonse_transactions
-                    WHERE apt_name = ?
-                      AND district_code = ?
-                      AND exclusive_area BETWEEN ? AND ?
-                      AND deal_date >= ?
-                      {contract_filter}
-                    ORDER BY deal_date DESC""",
-                (apt_name, district_code, area - 5, area + 5, cutoff)
-            ).fetchall()
+            clauses.insert(0, "district_code = ?")
+            params.insert(0, district_code)
+            clauses.insert(0, "apt_name = ?")
+            params.insert(0, apt_name)
         else:
             return []
+
+        sql = "SELECT * FROM jeonse_transactions WHERE " + " AND ".join(clauses) + " ORDER BY deal_date DESC"
+        rows = self._conn.execute(sql, params).fetchall()
 
         return [JeonseTransaction(
             id=r["id"], complex_code=r["complex_code"], apt_name=r["apt_name"],
