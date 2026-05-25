@@ -13,6 +13,9 @@ from modules.real_estate.report_orchestrator import (
     _enrich_with_building,
     _enrich_with_trend,
     _resolve_workplace_coords,
+    _enrich_with_comparative,
+    _enrich_with_yield,
+    _enrich_with_supply,
 )
 from modules.real_estate.location.location_scorer import LocationScorer
 from modules.real_estate.trend_analyzer import TrendAnalyzer
@@ -76,6 +79,41 @@ def _format_candidate_for_llm(c: Dict) -> str:
             f"변동 {trend.price_change_pct:+.1f}%, "
             f"월거래량 {trend.monthly_volume:.1f}건"
         )
+    # 비교 분석
+    comp_pct = c.get("_comp_pct_vs_avg")
+    if comp_pct is not None:
+        similar = c.get("_comp_similar_units", [])
+        similar_str = ", ".join(
+            f"{u['name']} {u['price_per_sqm']/10000:.0f}만/㎡" for u in similar[:2]
+        )
+        lines.append(
+            f"- 가격 위치: 구 평균 대비 {comp_pct:+.1f}%"
+            + (f" (유사: {similar_str})" if similar_str else "")
+        )
+
+    # 수익 구조
+    jeonse_rate = c.get("_yield_jeonse_rate")
+    if jeonse_rate is not None:
+        gap_eok = c.get("_yield_gap_cost", 0) / 10000
+        monthly = c.get("_yield_monthly_cost", 0)
+        lines.append(
+            f"- 수익구조: 전세가율 {jeonse_rate*100:.1f}%, "
+            f"갭 {gap_eok:.1f}억, 월 보유비용 {monthly}만원"
+        )
+
+    # 공급·호재 리스크
+    supply_units = c.get("_supply_nearby_units", 0)
+    catalysts = c.get("_news_catalysts", [])
+    if supply_units > 0 or catalysts:
+        pos = [x["title"] for x in catalysts if x.get("type") == "positive"][:1]
+        neg = [x["title"] for x in catalysts if x.get("type") == "negative"][:1]
+        parts = [f"반경 공급 {supply_units:,}세대({c.get('_supply_period','')})"]
+        if pos:
+            parts.append(f"호재: {pos[0][:20]}")
+        if neg:
+            parts.append(f"악재: {neg[0][:20]}")
+        lines.append(f"- 공급/호재: {', '.join(parts)}")
+
     return "\n".join(lines)
 
 
@@ -93,6 +131,9 @@ class DailyReportOrchestrator:
         geocoder=None,
         max_new_commute_api_calls: int = 5,
         school_repo=None,
+        comp_analyzer=None,       # ComparativeAnalyzer
+        yield_calculator=None,    # YieldCalculator
+        supply_analyzer=None,     # SupplyRiskAnalyzer
     ):
         self._llm = llm
         self._prompt_loader = prompt_loader
@@ -105,6 +146,9 @@ class DailyReportOrchestrator:
         self._geocoder = geocoder
         self._max_new_commute_api_calls = max_new_commute_api_calls
         self._school_repo = school_repo
+        self._comp_analyzer = comp_analyzer
+        self._yield_calculator = yield_calculator
+        self._supply_analyzer = supply_analyzer
 
     def generate(
         self,
@@ -146,6 +190,11 @@ class DailyReportOrchestrator:
                 persona.get("apartment_preferences", {}).get("preferred_area_sqm", [84.0])
             )
             candidates = _enrich_with_trend(candidates, self._trend_analyzer, preferred_areas=preferred_areas)
+
+        # 비교·수익·공급 분석
+        candidates = _enrich_with_comparative(candidates, self._comp_analyzer)
+        candidates = _enrich_with_yield(candidates, self._yield_calculator)
+        candidates = _enrich_with_supply(candidates, self._supply_analyzer)
 
         # Step 4. LocationScorer 실행 — evidence 포함 DimensionResult 생성
         scorer = _load_scorer()

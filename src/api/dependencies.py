@@ -129,3 +129,33 @@ _school_service = SchoolService(
 
 def get_school_service() -> SchoolService:
     return _school_service
+
+
+from modules.real_estate.jeonse.repository import JeonseRepository
+from modules.real_estate.jeonse.client import JeonseClient
+
+_jeonse_repo = JeonseRepository(db_path=_re_db_path)
+_jeonse_client = JeonseClient()
+
+
+def get_jeonse_repo() -> JeonseRepository:
+    return _jeonse_repo
+
+
+def get_jeonse_client() -> JeonseClient:
+    return _jeonse_client
+
+
+from modules.real_estate.supply.repository import SupplyRepository
+from modules.real_estate.supply.client import SupplyClient
+
+_supply_repo = SupplyRepository(db_path=_re_db_path)
+_supply_client = SupplyClient()
+
+
+def get_supply_repo() -> SupplyRepository:
+    return _supply_repo
+
+
+def get_supply_client() -> SupplyClient:
+    return _supply_client

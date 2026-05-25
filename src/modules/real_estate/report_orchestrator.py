@@ -266,6 +266,81 @@ def _enrich_with_trend(
     return enriched
 
 
+def _enrich_with_comparative(candidates: List[Dict], analyzer) -> List[Dict]:
+    if analyzer is None:
+        return candidates
+    enriched = []
+    for c in candidates:
+        result = dict(c)
+        try:
+            comp = analyzer.analyze(
+                complex_code=c.get("complex_code", ""),
+                district_code=c.get("district_code", ""),
+                exclusive_area=c.get("exclusive_area", 84.0),
+                build_year=c.get("build_year", 2000),
+                avg_sale_price=c.get("avg_recent_price", 0),
+            )
+            result["_comp_district_avg_per_sqm"] = comp.district_avg_per_sqm
+            result["_comp_pct_vs_avg"] = comp.pct_vs_avg
+            result["_comp_similar_units"] = [
+                {"name": u.name, "price_per_sqm": u.price_per_sqm}
+                for u in comp.similar_units
+            ]
+        except Exception as e:
+            logger.warning("[Comparative] 실패 %s: %s", c.get("apt_name"), e)
+        enriched.append(result)
+    return enriched
+
+
+def _enrich_with_yield(candidates: List[Dict], calculator) -> List[Dict]:
+    if calculator is None:
+        return candidates
+    enriched = []
+    for c in candidates:
+        result = dict(c)
+        try:
+            yr = calculator.calculate(
+                complex_code=c.get("complex_code"),
+                apt_name=c.get("apt_name", ""),
+                district_code=c.get("district_code", ""),
+                exclusive_area=c.get("exclusive_area", 84.0),
+                avg_sale_price=int(c.get("avg_recent_price", 0) / 10000),
+            )
+            if yr is not None:
+                result["_yield_jeonse_rate"] = yr.jeonse_rate
+                result["_yield_jeonse_avg"] = yr.jeonse_avg
+                result["_yield_gap_cost"] = yr.gap_cost
+                result["_yield_monthly_cost"] = yr.monthly_cost
+                result["_yield_jeonse_sample"] = yr.jeonse_sample
+        except Exception as e:
+            logger.warning("[Yield] 실패 %s: %s", c.get("apt_name"), e)
+        enriched.append(result)
+    return enriched
+
+
+def _enrich_with_supply(candidates: List[Dict], analyzer) -> List[Dict]:
+    if analyzer is None:
+        return candidates
+    enriched = []
+    for c in candidates:
+        result = dict(c)
+        lat, lng = c.get("lat"), c.get("lng")
+        if lat and lng:
+            try:
+                risk = analyzer.analyze(
+                    lat=lat, lng=lng,
+                    apt_name=c.get("apt_name", ""),
+                    sigungu=c.get("sigungu", ""),
+                )
+                result["_supply_nearby_units"] = risk.nearby_units
+                result["_supply_period"] = risk.supply_period
+                result["_news_catalysts"] = risk.news_catalysts
+            except Exception as e:
+                logger.warning("[Supply] 실패 %s: %s", c.get("apt_name"), e)
+        enriched.append(result)
+    return enriched
+
+
 def _call_location_agent(llm: BaseLLMClient, prompt_loader: PromptLoader, candidates: List[Dict]) -> Dict[str, str]:
     poi_input = [
         {

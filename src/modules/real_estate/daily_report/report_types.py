@@ -62,3 +62,28 @@ class LocationSummaryData(TypedDict, total=False):
     # 혐오시설
     nuisance_high_count: int
     nuisance_mid_count: int
+
+
+class SimilarUnitData(TypedDict):
+    name: str
+    price_per_sqm: float
+
+
+class CompData(TypedDict, total=False):
+    district_avg_per_sqm: float
+    pct_vs_avg: float
+    similar_units: List[SimilarUnitData]
+
+
+class YieldData(TypedDict, total=False):
+    jeonse_rate: float
+    jeonse_avg: int
+    gap_cost: int
+    monthly_cost: int
+    jeonse_sample: int
+
+
+class SupplyData(TypedDict, total=False):
+    nearby_units: int
+    supply_period: str
+    news_catalysts: List[dict]

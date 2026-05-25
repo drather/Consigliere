@@ -17,7 +17,15 @@ from api.dependencies import (
     get_commute_service,
     get_building_master_service,
     get_school_service,
+    get_jeonse_repo,
+    get_jeonse_client,
+    get_supply_repo,
+    get_supply_client,
 )
+from modules.real_estate.jeonse.repository import JeonseRepository
+from modules.real_estate.jeonse.client import JeonseClient
+from modules.real_estate.supply.repository import SupplyRepository
+from modules.real_estate.supply.client import SupplyClient
 from modules.real_estate.building_master.building_master_service import BuildingMasterService
 from modules.real_estate.commute.commute_service import CommuteService
 from modules.real_estate.school.school_service import SchoolService
@@ -622,6 +630,13 @@ def generate_daily_report(req: DailyReportRequest = None):
     from modules.real_estate.daily_report.transaction_aggregator import TransactionAggregator
     from modules.real_estate.daily_report.daily_report_repository import DailyReportRepository
     from modules.real_estate.daily_report.daily_report_orchestrator import DailyReportOrchestrator
+    from modules.real_estate.transaction_repository import TransactionRepository
+    from modules.real_estate.comparative.analyzer import ComparativeAnalyzer
+    from modules.real_estate.yield_analysis.calculator import YieldCalculator
+    from modules.real_estate.supply.risk_analyzer import SupplyRiskAnalyzer
+    from modules.real_estate.jeonse.repository import JeonseRepository
+    from modules.real_estate.supply.repository import SupplyRepository
+    from modules.real_estate.news.service import NewsService
     from modules.macro.service import MacroCollectionService
 
     if req is None:
@@ -678,6 +693,11 @@ def generate_daily_report(req: DailyReportRequest = None):
         )
 
         max_commute_calls = daily_cfg.get("max_new_commute_api_calls", 5)
+        tx_repo = TransactionRepository(db_path=re_db)
+        jeonse_repo = JeonseRepository(db_path=re_db)
+        supply_repo = SupplyRepository(db_path=re_db)
+        yield_cfg = cfg.get("yield_analysis", {})
+        news_svc = NewsService()
         orchestrator = DailyReportOrchestrator(
             llm=llm,
             prompt_loader=prompt_loader,
@@ -689,6 +709,17 @@ def generate_daily_report(req: DailyReportRequest = None):
             commute_svc=commute_svc,
             geocoder=geocoder,
             max_new_commute_api_calls=max_commute_calls,
+            comp_analyzer=ComparativeAnalyzer(tx_repo=tx_repo),
+            yield_calculator=YieldCalculator(
+                jeonse_repo=jeonse_repo,
+                mortgage_rate=float(yield_cfg.get("mortgage_rate", 0.035)),
+            ),
+            supply_analyzer=SupplyRiskAnalyzer(
+                supply_repo=supply_repo,
+                news_service=news_svc,
+                llm=llm,
+                prompt_loader=prompt_loader,
+            ),
         )
 
         report = orchestrator.generate(
@@ -869,3 +900,44 @@ def collect_poi(
     except Exception as e:
         logger.error("[POI Collect] 오류: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── 전세/월세 수집 Job ────────────────────────────────────────────────────────
+
+class JeonseCollectRequest(BaseModel):
+    district_codes: Optional[List[str]] = Field(None, description="수집할 법정동 코드 목록 (None=config 전체)")
+    year_month: Optional[str] = Field(None, description="YYYYMM (기본: 이번달)")
+
+
+@router.post("/jobs/jeonse/collect")
+def collect_jeonse(
+    request: JeonseCollectRequest = JeonseCollectRequest(),
+    jeonse_repo: JeonseRepository = Depends(get_jeonse_repo),
+    jeonse_client: JeonseClient = Depends(get_jeonse_client),
+):
+    """전세/월세 실거래 데이터를 국토부 API에서 수집해 SQLite에 저장."""
+    from datetime import datetime as _dt
+    from modules.real_estate.config import RealEstateConfig
+    cfg = RealEstateConfig()
+    target_ym = request.year_month or _dt.now().strftime("%Y%m")
+    codes = request.district_codes or [d["code"] for d in cfg.get("districts", [])]
+
+    total_saved = 0
+    for code in codes:
+        txs = jeonse_client.fetch(district_code=code, year_month=target_ym)
+        saved = jeonse_repo.save_bulk(txs)
+        total_saved += saved
+        logger.info("[/jobs/jeonse/collect] %s: %d건 수집, %d건 저장", code, len(txs), saved)
+
+    return {"year_month": target_ym, "district_count": len(codes), "saved_count": total_saved}
+
+
+@router.post("/jobs/supply/collect")
+def collect_supply(
+    supply_repo: SupplyRepository = Depends(get_supply_repo),
+    supply_client: SupplyClient = Depends(get_supply_client),
+):
+    """청약홈 API에서 분양 일정을 수집해 SQLite에 저장."""
+    results = supply_client.fetch(page=1, per_page=500)
+    saved = supply_repo.save_bulk(results)
+    return {"fetched_count": len(results), "saved_count": saved}

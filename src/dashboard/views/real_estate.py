@@ -1056,10 +1056,7 @@ def _render_daily_report_tab():
                 else:
                     st.error(f"생성 실패: {r}")
 
-    if "daily_report_dates" not in st.session_state:
-        st.session_state.daily_report_dates = DashboardClient.list_daily_reports()
-
-    dates = st.session_state.get("daily_report_dates", [])
+    dates = DashboardClient.list_daily_reports()
 
     if not dates:
         st.info("저장된 데일리 리포트가 없습니다. '오늘 리포트 생성' 버튼을 눌러주세요.")
@@ -1069,13 +1066,9 @@ def _render_daily_report_tab():
         selected_date = st.selectbox("날짜 선택", options=dates, index=0, key="daily_report_date_select")
 
     if selected_date:
-        _cache_key = f"daily_report__{selected_date}"
-        if _cache_key not in st.session_state:
-            with st.spinner("리포트 로딩 중..."):
-                resp = DashboardClient.get_daily_report(selected_date)
-                st.session_state[_cache_key] = resp.get("markdown", "")
-
-        markdown = st.session_state.get(_cache_key, "")
+        with st.spinner("리포트 로딩 중..."):
+            resp = DashboardClient.get_daily_report(selected_date)
+            markdown = resp.get("markdown", "")
         if markdown:
             st.markdown(markdown, unsafe_allow_html=True)
         else:
