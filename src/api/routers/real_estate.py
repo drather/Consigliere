@@ -17,7 +17,11 @@ from api.dependencies import (
     get_commute_service,
     get_building_master_service,
     get_school_service,
+    get_jeonse_repo,
+    get_jeonse_client,
 )
+from modules.real_estate.jeonse.repository import JeonseRepository
+from modules.real_estate.jeonse.client import JeonseClient
 from modules.real_estate.building_master.building_master_service import BuildingMasterService
 from modules.real_estate.commute.commute_service import CommuteService
 from modules.real_estate.school.school_service import SchoolService
@@ -869,3 +873,33 @@ def collect_poi(
     except Exception as e:
         logger.error("[POI Collect] 오류: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── 전세/월세 수집 Job ────────────────────────────────────────────────────────
+
+class JeonseCollectRequest(BaseModel):
+    district_codes: Optional[List[str]] = Field(None, description="수집할 법정동 코드 목록 (None=config 전체)")
+    year_month: Optional[str] = Field(None, description="YYYYMM (기본: 이번달)")
+
+
+@router.post("/jobs/jeonse/collect")
+def collect_jeonse(
+    request: JeonseCollectRequest = JeonseCollectRequest(),
+    jeonse_repo: JeonseRepository = Depends(get_jeonse_repo),
+    jeonse_client: JeonseClient = Depends(get_jeonse_client),
+):
+    """전세/월세 실거래 데이터를 국토부 API에서 수집해 SQLite에 저장."""
+    from datetime import datetime as _dt
+    from modules.real_estate.config import RealEstateConfig
+    cfg = RealEstateConfig()
+    target_ym = request.year_month or _dt.now().strftime("%Y%m")
+    codes = request.district_codes or [d["code"] for d in cfg.get("districts", [])]
+
+    total_saved = 0
+    for code in codes:
+        txs = jeonse_client.fetch(district_code=code, year_month=target_ym)
+        saved = jeonse_repo.save_bulk(txs)
+        total_saved += saved
+        logger.info("[/jobs/jeonse/collect] %s: %d건 수집, %d건 저장", code, len(txs), saved)
+
+    return {"year_month": target_ym, "district_count": len(codes), "saved_count": total_saved}
