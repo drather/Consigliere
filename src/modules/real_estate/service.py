@@ -445,7 +445,7 @@ class RealEstateAgent:
         macro_data = self._load_stored_macro(target_date) or {}
         macro_parts = []
         for key, entry in macro_data.items():
-            if entry and entry.get("value") is not None:
+            if isinstance(entry, dict) and entry.get("value") is not None:
                 macro_parts.append(f"{entry.get('label', key)}: {entry['value']}{entry.get('unit', '')}")
         macro_summary = " | ".join(macro_parts)
 
