@@ -34,6 +34,17 @@ from .commute.hybrid_commute_client import HybridCommuteClient
 from .commute.commute_repository import CommuteRepository
 from .commute.commute_service import CommuteService
 from .geocoder import GeocoderService
+from .daily_report.daily_report_orchestrator import DailyReportOrchestrator
+from .daily_report.daily_report_repository import DailyReportRepository
+from .daily_report.transaction_aggregator import TransactionAggregator
+from .trend_analyzer import TrendAnalyzer
+from .poi_collector import PoiCollector
+from .comparative.analyzer import ComparativeAnalyzer
+from .yield_analysis.calculator import YieldCalculator
+from .supply.repository import SupplyRepository
+from .supply.risk_analyzer import SupplyRiskAnalyzer
+from .jeonse.repository import JeonseRepository
+from .school.school_repository import SchoolRepository
 
 logger = get_logger(__name__)
 
@@ -104,16 +115,60 @@ class RealEstateAgent:
         # Commute Service (T-map 기반 출퇴근 시간 캐시)
         commute_cfg = self.config.get("commute", {})
         commute_db = self.config.get("commute_cache_db_path", "data/commute_cache.db")
-        kakao_key = os.getenv("KAKAO_API_KEY", "")
+        self._kakao_key = os.getenv("KAKAO_API_KEY", "")
         tmap_key = os.getenv("TMAP_API_KEY", "")
+        self.geocoder = GeocoderService(
+            api_key=self._kakao_key,
+            cache_path=self.config.get("geocode_cache_path", "data/geocode_cache.db"),
+        )
         self.commute_service = CommuteService(
             repo=CommuteRepository(db_path=commute_db, ttl_days=int(commute_cfg.get("cache_ttl_days", 90))),
             tmap_client=HybridCommuteClient(
                 odsay=OdsayClient(api_key=os.getenv("ODSAY_API_KEY", "")),
                 tmap=TmapClient(api_key=tmap_key),
             ),
-            geocoder=GeocoderService(api_key=kakao_key),
+            geocoder=self.geocoder,
             config=commute_cfg,
+        )
+
+        # Daily Report Orchestrator (Job4 신규 파이프라인)
+        daily_cfg = self.config.get("daily_report", {})
+        storage_path = daily_cfg.get("storage_path", "data/daily_reports")
+        self.school_repo = SchoolRepository(db_path=re_db)
+
+        _jeonse_repo = JeonseRepository(db_path=re_db)
+        _supply_repo = SupplyRepository(db_path=re_db)
+
+        self._comp_analyzer = ComparativeAnalyzer(tx_repo=self.tx_repo)
+        self._yield_calculator = YieldCalculator(
+            jeonse_repo=_jeonse_repo,
+            mortgage_rate=float(self.config.get("scoring", {}).get("mortgage_rate", 0.0283)),
+        )
+        self._supply_analyzer = SupplyRiskAnalyzer(
+            supply_repo=_supply_repo,
+            news_service=self.news_service,
+            llm=self.llm,
+            prompt_loader=self.prompt_loader,
+        )
+
+        _aggregator = TransactionAggregator(db_path=re_db)
+        _daily_report_repo = DailyReportRepository(storage_path=storage_path)
+
+        self.daily_report_orchestrator = DailyReportOrchestrator(
+            llm=self.llm,
+            prompt_loader=self.prompt_loader,
+            aggregator=_aggregator,
+            report_repo=_daily_report_repo,
+            db_path=re_db,
+            poi_collector=PoiCollector(api_key=self._kakao_key, db_path=re_db),
+            trend_analyzer=TrendAnalyzer(db_path=re_db),
+            commute_svc=self.commute_service,
+            geocoder=self.geocoder,
+            max_new_commute_api_calls=daily_cfg.get("max_new_commute_api_calls", 5),
+            school_repo=self.school_repo,
+            comp_analyzer=self._comp_analyzer,
+            yield_calculator=self._yield_calculator,
+            supply_analyzer=self._supply_analyzer,
         )
 
     def log_tour(self, user_text: str) -> str:
@@ -381,90 +436,46 @@ class RealEstateAgent:
         return {**stats, "elapsed_seconds": elapsed}
 
     def generate_report(self, district_code: Optional[str] = None, target_date: Optional[date] = None) -> Dict[str, Any]:
-        """Job 4: SQLite tx_repo 기반 인사이트 리포트 생성."""
-        from dataclasses import asdict
+        """Job 4: DailyReportOrchestrator 기반 리포트 생성."""
         if target_date is None:
             target_date = date.today()
-        logger.info(f"[Job4] Generating report for {target_date}, district_code={district_code}")
+        logger.info(f"[Job4] Generating daily report for {target_date}")
 
-        # 1. 뉴스/거시경제 로드
-        news_text = self._load_stored_news(target_date)
+        # 거시경제 로드 → macro_summary 문자열 생성
         macro_data = self._load_stored_macro(target_date) or {}
-        news_articles = self._load_stored_news_articles(target_date)
+        macro_parts = []
+        for key, entry in macro_data.items():
+            if entry and entry.get("value") is not None:
+                macro_parts.append(f"{entry.get('label', key)}: {entry['value']}{entry.get('unit', '')}")
+        macro_summary = " | ".join(macro_parts)
 
-        # 2. 주담대금리 추출 → 예산 계산
-        policy_context = fetch_latest_financial_policies()
+        # 페르소나 로드
         persona_data = self._load_persona()
+        user = persona_data.get("user", {})
+        budget_available = int(user.get("assets", {}).get("total", 0))
 
-        mortgage_rate = None
-        loan_entry = macro_data.get("loan_rate", {})
-        if loan_entry and loan_entry.get("value") is not None:
-            mortgage_rate = float(loan_entry["value"]) / 100.0
-            logger.info(f"[Job4] 주담대금리 {loan_entry['value']}% 적용")
-
-        budget_plan = self.calculator.calculate_budget(persona_data, policy_context, mortgage_rate=mortgage_rate)
-        budget_ceiling = budget_plan.final_max_price
-
-        # 3. 관심 지역 코드 목록
-        target_codes = self._resolve_interest_districts(persona_data, district_code)
-        logger.info(f"[Job4] districts: {target_codes}")
-
-        # 4. SQLite tx_repo에서 실거래가 조회
-        recent_days = self.config.get("report", {}).get("recent_days", 7)
-        cutoff = (target_date - timedelta(days=recent_days)).isoformat()
-        all_txs: List[Dict[str, Any]] = []
-        for code in target_codes:
-            try:
-                rows = self.tx_repo.get_by_district(code, limit=200, date_from=cutoff)
-                all_txs.extend(asdict(tx) for tx in rows)
-            except Exception as e:
-                logger.error(f"[Job4] tx_repo 조회 실패 {code}: {e}")
-
-        # 5. 중복 제거
-        seen_keys: set[str] = set()
-        deduped_txs = []
-        for tx in all_txs:
-            key = _make_dedup_key(tx)
-            if key not in seen_keys:
-                seen_keys.add(key)
-                deduped_txs.append(tx)
-
-        # 6. 가격 ±band 필터 (예산과 관련성 높은 매물만)
-        band = self.config.get("report", {}).get("budget_band_ratio", 0.1)
-        lo, hi = budget_ceiling * (1 - band), budget_ceiling * (1 + band)
-        candidates = [tx for tx in deduped_txs if lo <= tx.get("price", 0) <= hi]
-        logger.info(f"[Job4] 예산 {budget_ceiling/1e8:.1f}억 ±{band*100:.0f}% → {len(candidates)}건 (전체 {len(deduped_txs)}건)")
-
-        # 7. area_intel enrich
-        area_intel = self._load_area_intel()
-        workplace_station = persona_data.get("commute", {}).get("workplace_station", "")
-        candidates = self._enrich_transactions(candidates, area_intel, workplace_station)
-
-        # 8. Python 데이터 준비
-        interest_areas = persona_data.get("user", {}).get("interest_areas", [])
-        news_str = news_text
-        horea_data = self._extract_horea_data(news_str, interest_areas) if news_str.strip() else {}
-        macro_summary = self._format_macro_summary(macro_data)
-        horea_text = self._horea_data_to_text(horea_data)
-
-        # 9. 오케스트레이터에 위임
-        preference_rules = PreferenceRulesManager().get()
-        report_json = self.insight_orchestrator.generate_strategy(
+        # DailyReportOrchestrator 호출
+        persona = {
+            "commute": self.config.get("commute", {}),
+            "apartment_preferences": user.get("apartment_preferences", {}),
+            "investment_style": user.get("investment_style", "균형"),
+        }
+        report = self.daily_report_orchestrator.generate(
             target_date=target_date,
-            candidates=candidates,
-            budget_plan=budget_plan,
-            persona_data=persona_data,
-            preference_rules=preference_rules,
-            scoring_config=self.config.get("scoring", {}),
-            report_config=self.config.get("report", {}),
-            horea_data=horea_data,
+            days=int(self.config.get("report", {}).get("recent_days", 7)),
+            top_k=int(self.config.get("report", {}).get("top_k", 5)),
+            persona=persona,
             macro_summary=macro_summary,
-            horea_text=horea_text,
-            news_articles=news_articles,
+            budget_available=budget_available,
         )
 
-        self._save_report(report_json, target_date, len(candidates))
-        return {"success": True, "tx_count": len(candidates), "date": target_date.isoformat()}
+        return {
+            "date": report.date,
+            "markdown": report.markdown,
+            "slack_text": report.slack_text,
+            "top_k": report.top_k,
+            "total_transactions": report.total_transactions,
+        }
 
     def _job1_done_flag(self, target_date: date) -> str:
         """Job1 완료 마커 파일 경로."""
@@ -559,22 +570,11 @@ class RealEstateAgent:
 
         Returns (result_dict, slack_text). slack_text는 실패 시 빈 문자열.
         """
-        from modules.real_estate.daily_report.transaction_aggregator import TransactionAggregator
-        from modules.real_estate.daily_report.daily_report_repository import DailyReportRepository
-        from modules.real_estate.daily_report.daily_report_orchestrator import DailyReportOrchestrator
-        from modules.real_estate.poi_collector import PoiCollector
-        from modules.real_estate.trend_analyzer import TrendAnalyzer
-        from modules.real_estate.geocoder import GeocoderService
         from modules.macro.service import MacroCollectionService
         from modules.real_estate.report_orchestrator import _calc_budget
-        from modules.real_estate.school.school_repository import SchoolRepository
 
         try:
             cfg = self.config
-            daily_cfg = cfg.get("daily_report", {})
-            storage_path = daily_cfg.get("storage_path", "data/daily_reports")
-            re_db = cfg.get("real_estate_db_path", "data/real_estate.db")
-            kakao_key = os.getenv("KAKAO_API_KEY", "")
             macro_db = cfg.get("macro_db_path", "data/macro.db")
 
             persona = PersonaManager().load()
@@ -583,22 +583,7 @@ class RealEstateAgent:
             macro_summary = " | ".join(macro_lines[:6])
             budget_available = _calc_budget(persona, macro_summary)
 
-            geocoder = GeocoderService(api_key=kakao_key, cache_path=cfg.get("geocode_cache_path", "data/geocode_cache.db"))
-            report_repo = DailyReportRepository(storage_path=storage_path)
-            orchestrator = DailyReportOrchestrator(
-                llm=self.llm,
-                prompt_loader=self.prompt_loader,
-                aggregator=TransactionAggregator(db_path=re_db),
-                report_repo=report_repo,
-                db_path=re_db,
-                poi_collector=PoiCollector(api_key=kakao_key, db_path=re_db),
-                trend_analyzer=TrendAnalyzer(db_path=re_db),
-                commute_svc=self.commute_service,
-                geocoder=geocoder,
-                max_new_commute_api_calls=daily_cfg.get("max_new_commute_api_calls", 5),
-                school_repo=SchoolRepository(db_path=re_db),
-            )
-            report = orchestrator.generate(
+            report = self.daily_report_orchestrator.generate(
                 target_date=target_date,
                 persona=persona,
                 macro_summary=macro_summary,
