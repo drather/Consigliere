@@ -43,6 +43,14 @@ def _load_scorer() -> Optional[LocationScorer]:
         return None
 
 
+def _try_load_loc_repo(db_path: str) -> Optional[LocationRepository]:
+    try:
+        return LocationRepository(db_path)
+    except Exception as e:
+        logger.warning("[DailyOrchestrator] LocationRepository 초기화 실패: %s", e)
+        return None
+
+
 def _format_candidate_for_llm(c: Dict) -> str:
     lines = [f"### {c.get('apt_name', '?')} ({c.get('sigungu', '')})"]
     lines.append(
@@ -135,6 +143,7 @@ class DailyReportOrchestrator:
         comp_analyzer=None,       # ComparativeAnalyzer
         yield_calculator=None,    # YieldCalculator
         supply_analyzer=None,     # SupplyRiskAnalyzer
+        loc_repo=None,            # LocationRepository
     ):
         self._llm = llm
         self._prompt_loader = prompt_loader
@@ -150,7 +159,7 @@ class DailyReportOrchestrator:
         self._comp_analyzer = comp_analyzer
         self._yield_calculator = yield_calculator
         self._supply_analyzer = supply_analyzer
-        self._loc_repo = LocationRepository(self._db_path)
+        self._loc_repo = loc_repo or _try_load_loc_repo(db_path)
 
     def generate(
         self,
@@ -205,7 +214,8 @@ class DailyReportOrchestrator:
                 try:
                     loc_score = scorer.score(c)
                     c["_location_score"] = loc_score
-                    self._loc_repo.upsert_score(loc_score)
+                    if self._loc_repo:
+                        self._loc_repo.upsert_score(loc_score)
                 except Exception as e:
                     logger.warning("[DailyOrchestrator] scorer.score 실패 %s: %s", c.get("apt_name"), e)
 

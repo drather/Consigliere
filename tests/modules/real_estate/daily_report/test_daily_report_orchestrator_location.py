@@ -59,22 +59,41 @@ def _make_orchestrator(tmp_path) -> DailyReportOrchestrator:
 class TestLocationScorePersistence:
     def test_upsert_score_called_after_scoring(self, tmp_path):
         """generate() 실행 후 LocationRepository.upsert_score가 최소 1회 호출되어야 한다."""
+        from modules.real_estate.location.location_scorer import LocationScore, LocationScorer
+        from unittest.mock import patch
+
         orch = _make_orchestrator(tmp_path)
         mock_loc_repo = MagicMock()
         orch._loc_repo = mock_loc_repo
 
-        orch.generate(
-            target_date=date(2026, 5, 27),
-            days=3,
-            top_k=5,
-            persona={},
-            macro_summary="기준금리: 3.5%",
+        mock_scorer = MagicMock(spec=LocationScorer)
+        mock_scorer.score.return_value = LocationScore(
+            complex_code="CC001",
+            residential_total=75,
+            residential_results=[],
+            investment_total=65,
+            investment_results=[],
+            scored_at="2026-05-27T00:00:00+00:00",
         )
+        with patch(
+            "modules.real_estate.daily_report.daily_report_orchestrator._load_scorer",
+            return_value=mock_scorer,
+        ):
+            orch.generate(
+                target_date=date(2026, 5, 27),
+                days=3,
+                top_k=5,
+                persona={},
+                macro_summary="기준금리: 3.5%",
+            )
 
         mock_loc_repo.upsert_score.assert_called()
 
     def test_upsert_score_called_once_per_candidate(self, tmp_path):
         """후보 단지 수만큼 upsert_score가 호출되어야 한다."""
+        from modules.real_estate.location.location_scorer import LocationScore, LocationScorer
+        from unittest.mock import patch
+
         orch = _make_orchestrator(tmp_path)
         orch._aggregator.aggregate.return_value = [
             _make_candidate("래미안"),
@@ -84,38 +103,66 @@ class TestLocationScorePersistence:
         mock_loc_repo = MagicMock()
         orch._loc_repo = mock_loc_repo
 
-        orch.generate(
-            target_date=date(2026, 5, 27),
-            days=3,
-            top_k=5,
-            persona={},
-            macro_summary="",
+        mock_scorer = MagicMock(spec=LocationScorer)
+        mock_scorer.score.return_value = LocationScore(
+            complex_code="CC001",
+            residential_total=75,
+            residential_results=[],
+            investment_total=65,
+            investment_results=[],
+            scored_at="2026-05-27T00:00:00+00:00",
         )
+        with patch(
+            "modules.real_estate.daily_report.daily_report_orchestrator._load_scorer",
+            return_value=mock_scorer,
+        ):
+            orch.generate(
+                target_date=date(2026, 5, 27),
+                days=3,
+                top_k=5,
+                persona={},
+                macro_summary="",
+            )
 
         assert mock_loc_repo.upsert_score.call_count == 3
 
     def test_upsert_score_receives_location_score_object(self, tmp_path):
         """upsert_score에 전달되는 인자가 complex_code 속성을 가진 LocationScore여야 한다."""
-        from modules.real_estate.location.location_scorer import LocationScore
+        from modules.real_estate.location.location_scorer import LocationScore, LocationScorer
+        from unittest.mock import patch
 
         orch = _make_orchestrator(tmp_path)
         mock_loc_repo = MagicMock()
         orch._loc_repo = mock_loc_repo
 
-        orch.generate(
-            target_date=date(2026, 5, 27),
-            days=3,
-            top_k=5,
-            persona={},
-            macro_summary="",
+        # Guarantee scorer always runs by patching _load_scorer
+        mock_scorer = MagicMock(spec=LocationScorer)
+        mock_scorer.score.return_value = LocationScore(
+            complex_code="CC001",
+            residential_total=75,
+            residential_results=[],
+            investment_total=65,
+            investment_results=[],
+            scored_at="2026-05-27T00:00:00+00:00",
         )
+        with patch(
+            "modules.real_estate.daily_report.daily_report_orchestrator._load_scorer",
+            return_value=mock_scorer,
+        ):
+            orch.generate(
+                target_date=date(2026, 5, 27),
+                days=3,
+                top_k=5,
+                persona={},
+                macro_summary="",
+            )
 
-        if mock_loc_repo.upsert_score.called:
-            arg = mock_loc_repo.upsert_score.call_args_list[0].args[0]
-            assert isinstance(arg, LocationScore)
-            assert hasattr(arg, "complex_code")
-            assert hasattr(arg, "residential_total")
-            assert hasattr(arg, "investment_total")
+        mock_loc_repo.upsert_score.assert_called()
+        arg = mock_loc_repo.upsert_score.call_args_list[0].args[0]
+        assert isinstance(arg, LocationScore)
+        assert hasattr(arg, "complex_code")
+        assert hasattr(arg, "residential_total")
+        assert hasattr(arg, "investment_total")
 
     def test_loc_repo_initialized_in_constructor(self, tmp_path):
         """DailyReportOrchestrator가 생성될 때 _loc_repo 속성이 존재해야 한다."""
