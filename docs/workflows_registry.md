@@ -15,7 +15,7 @@ This registry tracks all automated routines, background tasks, and n8n workflows
 | `WR-004`   | Real Estate | Real Estate News Insight        | 06:00 KST          | Analyzes news and sends insights to Slack (Email/SMS disabled) | Active | `KI3Arb7F8lZiqtlK` |
 | `WR-005`   | Real Estate | Real Estate Monitor (Slack)     | 08:00 KST          | Fetches daily summary API and sends Slack Block Kit      | Active | -                  |
 | `WR-006`   | Real Estate | Real Estate Comprehensive Insight Report | 08:30 KST          | Combines transactions and news into a Slack insight report | Active | -                  |
-| `WR-007`   | Real Estate | Jeonse & Supply Weekly Collect  | 매주 일요일 05:00 KST | 전세/공급 데이터 주 1회 자동 수집 (실패 시 Slack) | Active | - |
+| `WR-007`   | Real Estate | Jeonse & Supply Weekly Collect  | 매주 일요일 05:00 KST | 전세/공급 데이터 주 1회 자동 수집 (실패 시 Slack) | Active | `EbHtr48rdQJn1Emn` |
 
 ## Suspended / Hidden Routines
 

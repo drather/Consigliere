@@ -1,9 +1,12 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-05-25
+**Last Updated:** 2026-05-27
 
 ## 현재 포커스
 - **Branch:** `master`
-- **Status:** ✅ POI 입지 점수 DB 저장 연결 완료 (2026-05-27)
+- **Status:** ✅ jeonse-supply-n8n-schedule 구현 완료, n8n UI 수동 검증 대기 (2026-05-27)
+  - WR-007 Jeonse & Supply Weekly Collect 배포 완료 (n8n ID: `EbHtr48rdQJn1Emn`)
+  - 매주 일요일 05:00 KST 전세/공급 수집 스케줄 등록
+  - POI 입지 점수 DB 저장 연결도 동일 날 완료
   - DailyReportOrchestrator → LocationRepository.upsert_score() 연결
   - location_scores 테이블에 단지별 실거주/투자 점수 저장
   - 대시보드 단지 클릭 시 점수 카드 정상 표시 가능
@@ -15,6 +18,7 @@
   - InsightOrchestrator → DailyReportOrchestrator 파이프라인 전환 완료
 
 ## 오늘 완료 (2026-05-27)
+- **jeonse-supply-n8n-schedule:** WR-007 n8n 배포 완료 (ID: `EbHtr48rdQJn1Emn`), 수동 UI 검증 대기
 - **POI 입지 점수 DB 저장 연결:** DailyReportOrchestrator upsert_score 연결, 신규 테스트 5개
 
 ## 최근 완료 작업 (2026-05-09 이후)
@@ -127,8 +131,8 @@
 - **배경:** location/ 패키지 + formatter 기반 구축 완료 (2026-05-10), POI enrich pipeline 연결만 남음
 
 ### 2순위 — 전세/공급 데이터 n8n 자동 수집 등록
-- **목표:** JeonseClient / SupplyClient 신규 수집 Job을 n8n 스케줄에 등록 (주 1회)
-- **배경:** 2026-05-25 구현 완료, 수동 트리거만 가능한 상태
+- **목표:** ✅ 완료 (2026-05-27) — WR-007 배포, n8n ID: `EbHtr48rdQJn1Emn`
+- **배경:** 2026-05-25 구현 완료, 2026-05-27 n8n 스케줄 등록 완료. UI 수동 실행 검증 대기.
 
 ### 3순위 — E2E 테스트 코드 업데이트
 - **목표:** Transaction-First 전환 이후 변경된 Tab1(아파트 탐색) UX에 맞게 E2E 테스트 정비

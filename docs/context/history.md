@@ -1,6 +1,12 @@
 # Project Consigliere: History
 **Last Updated:** 2026-05-27
 
+## 2026-05-27 — 전세/공급 n8n 스케줄 등록
+
+- `workflows/real_estate/jeonse_supply_collect.json` 신규: 매주 일요일 05:00 KST 전세/공급 수집 (실패 시 Slack)
+- `scripts/deploy_workflows.py` + `docs/workflows_registry.md` WR-007 등록
+- n8n 배포 완료, ID: `EbHtr48rdQJn1Emn`
+
 ## 2026-05-27: POI 입지 점수 DB 저장 연결
 
 - **Feature:** master 직접 작업 (poi-location-db-persist)
