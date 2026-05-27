@@ -3,7 +3,10 @@
 
 ## 현재 포커스
 - **Branch:** `master`
-- **Status:** ✅ 부동산 리포트 품질 업그레이드 완료 (2026-05-25)
+- **Status:** ✅ POI 입지 점수 DB 저장 연결 완료 (2026-05-27)
+  - DailyReportOrchestrator → LocationRepository.upsert_score() 연결
+  - location_scores 테이블에 단지별 실거주/투자 점수 저장
+  - 대시보드 단지 클릭 시 점수 카드 정상 표시 가능
   - ComparativeAnalyzer / YieldCalculator / SupplyRiskAnalyzer 3개 신규 분석 모듈
   - JeonseClient(국토부 전월세 API) + JeonseRepository
   - SupplyClient(아파트 공급 일정) + SupplyRepository(Haversine 반경 쿼리)
@@ -11,9 +14,8 @@
   - report_formatter: render_price_comparison / render_yield / render_supply 추가
   - InsightOrchestrator → DailyReportOrchestrator 파이프라인 전환 완료
 
-## 오늘 완료 (2026-05-25)
-- **학군 데이터 초기 수집:** 69개 지구 → 3,968개 학교 수집, 7,145개 단지 중 4,130개 `school_scores` 캐싱
-  - 리포트 "🏫 학군 학교 정보 수집 전" 해소 완료
+## 오늘 완료 (2026-05-27)
+- **POI 입지 점수 DB 저장 연결:** DailyReportOrchestrator upsert_score 연결, 신규 테스트 5개
 
 ## 최근 완료 작업 (2026-05-09 이후)
 

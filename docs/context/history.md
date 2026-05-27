@@ -1,5 +1,13 @@
 # Project Consigliere: History
-**Last Updated:** 2026-05-25
+**Last Updated:** 2026-05-27
+
+## 2026-05-27: POI 입지 점수 DB 저장 연결
+
+- **Feature:** master 직접 작업 (poi-location-db-persist)
+- **배경:** `DailyReportOrchestrator`에서 `LocationScorer.score()` 계산 후 `LocationRepository.upsert_score()` 미호출 → 대시보드 항상 "리포트 생성 후 표시됩니다" 표시
+- **변경:** `daily_report_orchestrator.py` — `_try_load_loc_repo` 헬퍼, `loc_repo` DI 파라미터, `upsert_score` 호출 추가
+- **테스트:** 신규 5개 (기존 회귀 없음, 전체 PASS)
+- **성과:** Job4 실행 후 `location_scores` 테이블에 단지별 점수 저장 → 대시보드 점수 카드 정상 표시 가능
 
 ## 2026-05-25: 학군 데이터 초기 수집 완료
 
