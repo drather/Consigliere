@@ -24,7 +24,13 @@
         "url": "http://consigliere_api:8000/jobs/jeonse/collect",
         "sendBody": true,
         "bodyParameters": {"parameters": []},
-        "options": {}
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -58,7 +64,13 @@
         "url": "http://consigliere_api:8000/jobs/supply/collect",
         "sendBody": true,
         "bodyParameters": {"parameters": []},
-        "options": {}
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
