@@ -1,0 +1,164 @@
+{
+  "name": "Jeonse & Supply Weekly Collect",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 5 * * 0"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "schedule-trigger",
+      "name": "Weekly Schedule (Sunday 05:00)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://consigliere_api:8000/jobs/jeonse/collect",
+        "sendBody": true,
+        "bodyParameters": {"parameters": []},
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 0],
+      "id": "collect-jeonse",
+      "name": "Collect Jeonse"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "conditions": [
+            {
+              "leftValue": "={{ $response.statusCode }}",
+              "rightValue": 200,
+              "operator": {"type": "number", "operation": "equals"}
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 0],
+      "id": "if-jeonse-ok",
+      "name": "Jeonse OK?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://consigliere_api:8000/jobs/supply/collect",
+        "sendBody": true,
+        "bodyParameters": {"parameters": []},
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, -80],
+      "id": "collect-supply",
+      "name": "Collect Supply"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://consigliere_api:8000/notify/slack",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "=⚠️ *[전세/공급수집]* 전세 수집 실패 ({{ $now.format('YYYY-MM-DD HH:mm') }})"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 80],
+      "id": "slack-jeonse-error",
+      "name": "Slack Jeonse Error"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "conditions": [
+            {
+              "leftValue": "={{ $response.statusCode }}",
+              "rightValue": 200,
+              "operator": {"type": "number", "operation": "equals"}
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, -80],
+      "id": "if-supply-ok",
+      "name": "Supply OK?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://consigliere_api:8000/notify/slack",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "=⚠️ *[전세/공급수집]* 공급 수집 실패 ({{ $now.format('YYYY-MM-DD HH:mm') }})"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, -160],
+      "id": "slack-supply-error",
+      "name": "Slack Supply Error"
+    }
+  ],
+  "connections": {
+    "Weekly Schedule (Sunday 05:00)": {
+      "main": [
+        [{"node": "Collect Jeonse", "type": "main", "index": 0}]
+      ]
+    },
+    "Collect Jeonse": {
+      "main": [
+        [{"node": "Jeonse OK?", "type": "main", "index": 0}]
+      ]
+    },
+    "Jeonse OK?": {
+      "main": [
+        [{"node": "Collect Supply", "type": "main", "index": 0}],
+        [{"node": "Slack Jeonse Error", "type": "main", "index": 0}]
+      ]
+    },
+    "Collect Supply": {
+      "main": [
+        [{"node": "Supply OK?", "type": "main", "index": 0}]
+      ]
+    },
+    "Supply OK?": {
+      "main": [
+        [],
+        [{"node": "Slack Supply Error", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
