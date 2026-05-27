@@ -18,6 +18,7 @@ from modules.real_estate.report_orchestrator import (
     _enrich_with_supply,
 )
 from modules.real_estate.location.location_scorer import LocationScorer
+from modules.real_estate.location.location_repository import LocationRepository
 from modules.real_estate.trend_analyzer import TrendAnalyzer
 from modules.real_estate.poi_collector import PoiCollector
 from modules.real_estate.daily_report.report_formatter import build_markdown, build_slack
@@ -149,6 +150,7 @@ class DailyReportOrchestrator:
         self._comp_analyzer = comp_analyzer
         self._yield_calculator = yield_calculator
         self._supply_analyzer = supply_analyzer
+        self._loc_repo = LocationRepository(self._db_path)
 
     def generate(
         self,
@@ -201,7 +203,9 @@ class DailyReportOrchestrator:
         if scorer:
             for c in candidates:
                 try:
-                    c["_location_score"] = scorer.score(c)
+                    loc_score = scorer.score(c)
+                    c["_location_score"] = loc_score
+                    self._loc_repo.upsert_score(loc_score)
                 except Exception as e:
                     logger.warning("[DailyOrchestrator] scorer.score 실패 %s: %s", c.get("apt_name"), e)
 
