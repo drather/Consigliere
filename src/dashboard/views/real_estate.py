@@ -5,6 +5,8 @@ import streamlit as st
 import pandas as pd
 from typing import Dict, List
 
+_API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000")
+
 try:
     from streamlit_folium import st_folium
 except ImportError:
@@ -316,7 +318,7 @@ def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int =
                 with st.spinner("심층 분석 중... (LLM 처리 시 최대 2분 소요)"):
                     try:
                         _resp = _req.post(
-                            "http://localhost:8000/jobs/apt/analyze",
+                            f"{_API_BASE}/jobs/apt/analyze",
                             json={"complex_code": _analysis_complex_code, "send_slack": True},
                             timeout=180,
                         )
@@ -338,7 +340,7 @@ def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int =
                 import requests as _req
                 try:
                     _resp = _req.get(
-                        f"http://localhost:8000/dashboard/apt/analysis/{_analysis_complex_code}/latest",
+                        f"{_API_BASE}/dashboard/apt/analysis/{_analysis_complex_code}/latest",
                         timeout=10,
                     )
                     if _resp.status_code == 200:

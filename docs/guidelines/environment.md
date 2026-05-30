@@ -38,6 +38,27 @@ arch -arm64 .venv/bin/pip install <package>
 - API 재시작: `docker compose restart api`
 - x86_64(i386) 바이너리를 Rosetta로 설치하지 않는다 (ChromaDB 등 C 확장 오류 원인).
 
+### ⚠️ CRITICAL: 코드/환경변수 변경 후 반드시 컨테이너 재기동
+
+`src/` 코드 변경, `.env` 변경 시 해당 컨테이너를 **반드시** 재기동해야 반영된다.  
+컨테이너는 볼륨 마운트(`./src:/app/src`)로 파일을 공유하지만, 파이썬 모듈 캐시와 환경변수는 재기동 시에만 갱신된다.
+
+```bash
+# src/ 코드 변경 후
+docker compose restart api
+docker compose restart dashboard
+
+# .env 변경 후 (환경변수 반영)
+docker compose restart api
+docker compose restart dashboard
+
+# 재기동 후 정상 확인
+curl http://localhost:8000/health
+```
+
+> **자주 하는 실수:** 코드를 수정하고 브라우저에서 바로 확인하면 이전 버전이 실행된다.  
+> API/대시보드 모두 재기동 후 테스트한다.
+
 ---
 
 ## 3. 환경변수 관리
