@@ -100,7 +100,7 @@ class TestAptAnalysisOrchestrator:
         jeonse_repo.get_by_complex.assert_called_once_with("CC001")
         loc_repo.get_score.assert_called_once_with("CC001")
         macro_svc.fetch_latest_macro_data.assert_called_once()
-        commute_repo.get_all_by_origin.assert_called_once()
+        commute_repo.get_all_by_origin.assert_called_once_with("11680__래미안블레스티지")
 
     def test_analyze_calculates_jeonse_ratio(self):
         orch, *_ = _build_orchestrator()
@@ -110,9 +110,10 @@ class TestAptAnalysisOrchestrator:
         assert abs(report.jeonse_ratio - 60.0) < 0.1
 
     def test_analyze_includes_llm_insight(self):
-        orch, *_ = _build_orchestrator()
+        orch, *_, llm = _build_orchestrator()
         report = orch.analyze("CC001")
         assert "강남" in report.llm_insight
+        llm.generate.assert_called_once()
 
     def test_analyze_raises_value_error_when_complex_not_found(self):
         orch, apt_master_repo, *_ = _build_orchestrator()

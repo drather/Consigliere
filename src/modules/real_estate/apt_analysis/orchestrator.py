@@ -1,6 +1,8 @@
+import os
 from datetime import datetime, timezone
 from typing import Optional
 
+from .formatter import format_slack, format_markdown
 from .models import AptAnalysisReport
 
 try:
@@ -24,6 +26,7 @@ class AptAnalysisOrchestrator:
         macro_svc,
         commute_repo,
         llm,
+        geocoder=None,
     ):
         self._apt_master_repo = apt_master_repo
         self._apt_details_repo = apt_details_repo
@@ -34,6 +37,7 @@ class AptAnalysisOrchestrator:
         self._macro_svc = macro_svc
         self._commute_repo = commute_repo
         self._llm = llm
+        self._geocoder = geocoder
 
     def analyze(self, complex_code: str) -> AptAnalysisReport:
         apt_entry = self._apt_master_repo.get_by_complex_code(complex_code)
@@ -63,7 +67,6 @@ class AptAnalysisOrchestrator:
 
         generated_at = datetime.now(timezone.utc).isoformat()
 
-        from .formatter import format_slack, format_markdown
         report = AptAnalysisReport(
             complex_code=complex_code,
             apt_name=apt_name,
@@ -120,12 +123,13 @@ class AptAnalysisOrchestrator:
         apt_name = getattr(apt_entry, "apt_name", "")
 
         try:
-            import os
             from modules.real_estate.geocoder import GeocoderService
-            geocoder = GeocoderService(
-                api_key=os.getenv("KAKAO_API_KEY", ""),
-                cache_path=os.getenv("GEOCODE_CACHE_PATH", "data/geocode_cache.db"),
-            )
+            geocoder = self._geocoder
+            if geocoder is None:
+                geocoder = GeocoderService(
+                    api_key=os.getenv("KAKAO_API_KEY", ""),
+                    cache_path=os.getenv("GEOCODE_CACHE_PATH", "data/geocode_cache.db"),
+                )
             coords = geocoder.geocode(apt_name, getattr(apt_entry, "district_code", ""), address=road_address)
             if coords is None:
                 return None
@@ -134,7 +138,7 @@ class AptAnalysisOrchestrator:
             result = analyzer.analyze(lat=lat, lng=lng, apt_name=apt_name, sigungu=sigungu)
             return f"반경 3km 공급 {result.nearby_units:,}세대 ({result.supply_period}) — {self._risk_level(result.nearby_units)}"
         except Exception as e:
-            logger.warning("[AptAnalysisOrchestrator] supply risk 조회 실패: %s", e)
+            logger.warning("[AptAnalysisOrchestrator] supply_risk 계산 실패 (None 반환): %s", e)
             return None
 
     @staticmethod
