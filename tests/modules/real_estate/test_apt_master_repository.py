@@ -601,3 +601,28 @@ class TestSearchMinHousehold:
         results = repo.search(sigungu="강남구", min_household_count=500)
         # 필터 미적용으로 전건 반환됨 (fallback 동작)
         assert len(results) == 2
+
+
+def test_get_by_complex_code_returns_entry():
+    from modules.real_estate.apt_master_repository import AptMasterRepository
+    from modules.real_estate.models import AptMasterEntry
+    repo = AptMasterRepository(db_path=":memory:")
+    entry = AptMasterEntry(
+        apt_name="래미안블레스티지",
+        district_code="11680",
+        sido="서울특별시",
+        sigungu="강남구",
+        complex_code="CC123",
+        tx_count=10,
+    )
+    repo.upsert(entry)
+    found = repo.get_by_complex_code("CC123")
+    assert found is not None
+    assert found.apt_name == "래미안블레스티지"
+    assert found.complex_code == "CC123"
+
+
+def test_get_by_complex_code_returns_none_when_not_found():
+    from modules.real_estate.apt_master_repository import AptMasterRepository
+    repo = AptMasterRepository(db_path=":memory:")
+    assert repo.get_by_complex_code("NONEXISTENT") is None

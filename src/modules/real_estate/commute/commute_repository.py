@@ -105,3 +105,27 @@ class CommuteRepository:
             ),
         )
         self._conn.commit()
+
+    def get_all_by_origin(self, origin_key: str) -> list:
+        """origin_key에 해당하는 모든 캐시 항목 반환 (destination/mode 무관)."""
+        rows = self._conn.execute(
+            "SELECT * FROM commute_cache WHERE origin_key = ?",
+            (origin_key,)
+        ).fetchall()
+        results = []
+        for row in rows:
+            try:
+                legs = json.loads(row["route_json"])
+            except (json.JSONDecodeError, TypeError):
+                legs = []
+            results.append(CommuteResult(
+                origin_key=row["origin_key"],
+                destination=row["destination"],
+                mode=row["mode"],
+                duration_minutes=row["duration_minutes"],
+                distance_meters=row["distance_meters"],
+                cached=True,
+                legs=legs,
+                route_summary=row["route_summary"] or "",
+            ))
+        return results

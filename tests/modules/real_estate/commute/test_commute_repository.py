@@ -147,3 +147,33 @@ class TestCommuteResultModel:
         r = CommuteResult("k", "삼성역", "transit", 59, 1200, legs=legs, route_summary="302번 → 잠실역 → 2호선 → 삼성역")
         assert r.legs[0]["route"] == "302"
         assert r.route_summary == "302번 → 잠실역 → 2호선 → 삼성역"
+
+
+# ── get_all_by_origin ─────────────────────────────────────────────────────────
+
+@pytest.fixture
+def commute_repo(tmp_path):
+    from modules.real_estate.commute.commute_repository import CommuteRepository
+    return CommuteRepository(db_path=str(tmp_path / "commute.db"))
+
+
+def test_get_all_by_origin_returns_all_modes(commute_repo):
+    from modules.real_estate.commute.models import CommuteResult
+    for mode in ("transit", "car"):
+        commute_repo.upsert(CommuteResult(
+            origin_key="41135__래미안",
+            destination="삼성역",
+            mode=mode,
+            duration_minutes=35,
+            distance_meters=15000,
+        ))
+    results = commute_repo.get_all_by_origin("41135__래미안")
+    assert len(results) == 2
+    modes = {r.mode for r in results}
+    assert "transit" in modes
+    assert "car" in modes
+
+
+def test_get_all_by_origin_returns_empty_when_no_data(commute_repo):
+    results = commute_repo.get_all_by_origin("NONEXISTENT__단지")
+    assert results == []

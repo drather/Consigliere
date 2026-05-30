@@ -150,6 +150,25 @@ class AptMasterRepository:
             ).fetchone()
         return _row_to_entry(row) if row else None
 
+    def get_by_complex_code(self, complex_code: str) -> Optional[AptMasterEntry]:
+        """complex_code로 단지 조회 (apartments JOIN 포함, 실패 시 fallback)."""
+        try:
+            with self._conn() as conn:
+                row = conn.execute(
+                    "SELECT am.*, a.household_count, a.road_address, a.approved_date "
+                    "FROM apt_master am "
+                    "LEFT JOIN apartments a ON am.complex_code = a.complex_code "
+                    "WHERE am.complex_code = ?",
+                    (complex_code,)
+                ).fetchone()
+        except Exception:
+            with self._conn() as conn:
+                row = conn.execute(
+                    "SELECT * FROM apt_master WHERE complex_code = ?",
+                    (complex_code,)
+                ).fetchone()
+        return _row_to_entry(row) if row else None
+
     def count(self) -> int:
         """저장된 단지 수 반환."""
         with self._conn() as conn:
