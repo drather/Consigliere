@@ -3,7 +3,7 @@ import re
 import sys
 import streamlit as st
 import pandas as pd
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 _API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000")
 
