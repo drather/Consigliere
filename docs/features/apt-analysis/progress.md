@@ -9,4 +9,4 @@
 - [x] Task 7: Formatter
 - [x] Task 8: API 엔드포인트
 - [x] Task 9: 대시보드 Tab1 버튼
-- [ ] Task 10: Docker Compose + Context 업데이트
+- [x] Task 10: Docker Compose + Context 업데이트

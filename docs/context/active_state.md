@@ -1,25 +1,16 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-05-27
+**Last Updated:** 2026-05-30
 
 ## 현재 포커스
 - **Branch:** `master`
-- **Status:** ✅ jeonse-supply-n8n-schedule 구현 완료, n8n UI 수동 검증 대기 (2026-05-27)
-  - WR-007 Jeonse & Supply Weekly Collect 배포 완료 (n8n ID: `EbHtr48rdQJn1Emn`)
-  - 매주 일요일 05:00 KST 전세/공급 수집 스케줄 등록
-  - POI 입지 점수 DB 저장 연결도 동일 날 완료
-  - DailyReportOrchestrator → LocationRepository.upsert_score() 연결
-  - location_scores 테이블에 단지별 실거주/투자 점수 저장
-  - 대시보드 단지 클릭 시 점수 카드 정상 표시 가능
-  - ComparativeAnalyzer / YieldCalculator / SupplyRiskAnalyzer 3개 신규 분석 모듈
-  - JeonseClient(국토부 전월세 API) + JeonseRepository
-  - SupplyClient(아파트 공급 일정) + SupplyRepository(Haversine 반경 쿼리)
-  - DailyReportOrchestrator enrich pipeline: _enrich_with_comparative/yield/supply 추가
-  - report_formatter: render_price_comparison / render_yield / render_supply 추가
-  - InsightOrchestrator → DailyReportOrchestrator 파이프라인 전환 완료
+- **Status:** ✅ apt-analysis 구현 완료 (2026-05-30)
+  - 개별 아파트 심층 분석 기능 (AptAnalysisOrchestrator + ClaudeCodeClient/GeminiCliClient CLI 기반)
+  - POST /jobs/apt/analyze + GET /dashboard/apt/analysis 엔드포인트 추가
+  - Tab1 🔬 심층 분석 / 📋 이전 분석 보기 버튼 추가
+  - AptAnalysisRepository (real_estate.db apt_analysis_reports 테이블)
 
-## 오늘 완료 (2026-05-27)
-- **jeonse-supply-n8n-schedule:** WR-007 n8n 배포 완료 (ID: `EbHtr48rdQJn1Emn`), 수동 UI 검증 대기
-- **POI 입지 점수 DB 저장 연결:** DailyReportOrchestrator upsert_score 연결, 신규 테스트 5개
+## 오늘 완료 (2026-05-30)
+- **apt-analysis:** 개별 아파트 심층 분석 기능 구현 완료 (LLM CLI 기반, DB 저장, Slack, 대시보드)
 
 ## 최근 완료 작업 (2026-05-09 이후)
 

@@ -1,5 +1,14 @@
 # Project Consigliere: History
-**Last Updated:** 2026-05-27
+**Last Updated:** 2026-05-30
+
+## 2026-05-30 — 개별 아파트 심층 분석 기능
+
+- `src/modules/real_estate/apt_analysis/` 신규 패키지 (ClaudeCodeClient/GeminiCliClient 로컬 CLI 기반)
+- POST /jobs/apt/analyze + GET /dashboard/apt/analysis 엔드포인트
+- Tab1 🔬 심층 분석 / 📋 이전 분석 보기 버튼 추가
+- AptAnalysisRepository (real_estate.db apt_analysis_reports 테이블)
+
+---
 
 ## 2026-05-27 — 전세/공급 n8n 스케줄 등록
 

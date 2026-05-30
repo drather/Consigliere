@@ -20,6 +20,11 @@ services:
       - ./src:/app/src
       - ./data:/app/data
       - ./tests:/app/tests
+      - ~/.claude:/root/.claude:ro
+      - /usr/local/bin/claude:/usr/local/bin/claude:ro
+      # Gemini CLI 사용 시 아래 두 줄 주석 해제:
+      # - ~/.config/gemini:/root/.config/gemini:ro
+      # - /usr/local/bin/gemini:/usr/local/bin/gemini:ro
     depends_on:
       - chromadb
     networks:
