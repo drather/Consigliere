@@ -161,7 +161,11 @@ class AptMasterRepository:
                     "WHERE am.complex_code = ?",
                     (complex_code,)
                 ).fetchone()
-        except Exception:
+        except sqlite3.OperationalError:
+            logger.warning(
+                "[AptMasterRepository] apartments 테이블 없음 — get_by_complex_code fallback: %s",
+                complex_code,
+            )
             with self._conn() as conn:
                 row = conn.execute(
                     "SELECT * FROM apt_master WHERE complex_code = ?",

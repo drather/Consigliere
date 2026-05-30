@@ -626,3 +626,24 @@ def test_get_by_complex_code_returns_none_when_not_found():
     from modules.real_estate.apt_master_repository import AptMasterRepository
     repo = AptMasterRepository(db_path=":memory:")
     assert repo.get_by_complex_code("NONEXISTENT") is None
+
+
+def test_get_by_complex_code_fallback_when_no_apartments_table():
+    """apartments 테이블이 없어도 apt_master 직접 조회로 fallback해야 한다."""
+    from modules.real_estate.apt_master_repository import AptMasterRepository
+    from modules.real_estate.models import AptMasterEntry
+    # :memory: DB에는 apartments 테이블이 없으므로 자동으로 fallback 경로를 탄다
+    repo = AptMasterRepository(db_path=":memory:")
+    entry = AptMasterEntry(
+        apt_name="래미안팰리스",
+        district_code="11680",
+        sido="서울특별시",
+        sigungu="강남구",
+        complex_code="CC999",
+        tx_count=5,
+    )
+    repo.upsert(entry)
+    found = repo.get_by_complex_code("CC999")
+    assert found is not None
+    assert found.complex_code == "CC999"
+    assert found.apt_name == "래미안팰리스"
