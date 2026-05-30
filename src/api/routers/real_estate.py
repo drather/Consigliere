@@ -941,3 +941,103 @@ def collect_supply(
     results = supply_client.fetch(page=1, per_page=500)
     saved = supply_repo.save_bulk(results)
     return {"fetched_count": len(results), "saved_count": saved}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 개별 아파트 심층 분석
+# ─────────────────────────────────────────────────────────────────────────────
+
+class AptAnalyzeRequest(BaseModel):
+    complex_code: str
+    send_slack: bool = True
+
+
+def _get_apt_analysis_repo():
+    from modules.real_estate.config import RealEstateConfig
+    from modules.real_estate.apt_analysis.repository import AptAnalysisRepository
+    cfg = RealEstateConfig()
+    db_path = cfg.get("real_estate_db_path", "data/real_estate.db")
+    return AptAnalysisRepository(db_path=db_path)
+
+
+def _build_apt_analysis_orchestrator():
+    from modules.real_estate.config import RealEstateConfig
+    from modules.real_estate.apt_analysis.orchestrator import AptAnalysisOrchestrator
+    from modules.real_estate.apt_master_repository import AptMasterRepository
+    from modules.real_estate.apartment_repository import ApartmentRepository
+    from modules.real_estate.transaction_repository import TransactionRepository
+    from modules.real_estate.jeonse.repository import JeonseRepository
+    from modules.real_estate.supply.repository import SupplyRepository
+    from modules.real_estate.location.location_repository import LocationRepository
+    from modules.real_estate.macro.service import MacroService
+    from modules.real_estate.commute.commute_repository import CommuteRepository
+    from core.llm import LLMFactory
+
+    cfg = RealEstateConfig()
+    re_db = cfg.get("real_estate_db_path", "data/real_estate.db")
+    commute_db = cfg.get("commute_cache_db_path", "data/commute_cache.db")
+
+    return AptAnalysisOrchestrator(
+        apt_master_repo=AptMasterRepository(db_path=re_db),
+        apt_details_repo=ApartmentRepository(db_path=re_db),
+        tx_repo=TransactionRepository(db_path=re_db),
+        jeonse_repo=JeonseRepository(db_path=re_db),
+        supply_repo=SupplyRepository(db_path=re_db),
+        loc_repo=LocationRepository(db_path=re_db),
+        macro_svc=MacroService(),
+        commute_repo=CommuteRepository(db_path=commute_db),
+        llm=LLMFactory.create(),
+    )
+
+
+def _send_slack_if_needed(report, send_slack: bool) -> None:
+    if not send_slack:
+        return
+    try:
+        from core.notify.slack import SlackSender
+        sender = SlackSender()
+        sender.send(report.slack_text)
+    except Exception as e:
+        logger.warning("[AptAnalyze] Slack 전송 실패: %s", e)
+
+
+def _report_to_dict(report) -> dict:
+    import dataclasses
+    return dataclasses.asdict(report)
+
+
+@router.post("/jobs/apt/analyze")
+def apt_analyze(req: AptAnalyzeRequest):
+    """단지 코드 기반 심층 분석 실행 + 저장 + (선택) Slack 전송."""
+    try:
+        orchestrator = _build_apt_analysis_orchestrator()
+        report = orchestrator.analyze(req.complex_code)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("[AptAnalyze] 분석 실패: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    repo = _get_apt_analysis_repo()
+    repo.save(report)
+    _send_slack_if_needed(report, req.send_slack)
+
+    return {"status": "success", "report": _report_to_dict(report)}
+
+
+@router.get("/dashboard/apt/analysis/{complex_code}/latest")
+def apt_analysis_latest(complex_code: str):
+    """가장 최근 심층 분석 결과 1건 반환. 없으면 404."""
+    repo = _get_apt_analysis_repo()
+    report = repo.get_latest(complex_code)
+    if report is None:
+        raise HTTPException(status_code=404, detail=f"분석 결과 없음: {complex_code}")
+    return _report_to_dict(report)
+
+
+@router.get("/dashboard/apt/analysis/{complex_code}")
+def apt_analysis_history(complex_code: str, limit: int = 10):
+    """분석 이력 목록 반환 (최신순)."""
+    repo = _get_apt_analysis_repo()
+    history = repo.get_history(complex_code, limit=limit)
+    return [_report_to_dict(r) for r in history]

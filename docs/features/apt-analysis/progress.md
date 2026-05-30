@@ -7,6 +7,6 @@
 - [x] Task 5: AptAnalysisReport 모델 + AptAnalysisRepository
 - [x] Task 6: AptAnalysisOrchestrator
 - [x] Task 7: Formatter
-- [ ] Task 8: API 엔드포인트
+- [x] Task 8: API 엔드포인트
 - [ ] Task 9: 대시보드 Tab1 버튼
 - [ ] Task 10: Docker Compose + Context 업데이트
