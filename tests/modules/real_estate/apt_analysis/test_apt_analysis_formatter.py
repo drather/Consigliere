@@ -49,6 +49,7 @@ class TestFormatSlack:
         report.jeonse_ratio = None
         text = format_slack(report)
         assert "래미안블레스티지" in text
+        assert "전세가율" not in text  # must be omitted when None
 
 
 class TestFormatMarkdown:

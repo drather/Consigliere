@@ -19,7 +19,8 @@ def format_slack(report: AptAnalysisReport) -> str:
 
     lines.append("")
     lines.append("*AI 종합 분석*")
-    lines.append(report.llm_insight[:500] + ("..." if len(report.llm_insight) > 500 else ""))
+    insight = report.llm_insight or ""
+    lines.append(insight[:500] + ("..." if len(insight) > 500 else ""))
     return "\n".join(lines)
 
 
@@ -31,7 +32,10 @@ def format_markdown(report: AptAnalysisReport) -> str:
         "## 실거래가 히스토리",
     ]
     for p in report.price_history[:20]:
-        lines.append(f"- {p['date']}: {p['price']:,}원 ({p['area']}㎡)")
+        date = p.get("date", "-")
+        price = p.get("price", 0)
+        area = p.get("area", "-")
+        lines.append(f"- {date}: {price:,}원 ({area}㎡)")
 
     lines += ["", "## 지표 요약"]
     if report.jeonse_ratio is not None:
@@ -48,9 +52,11 @@ def format_markdown(report: AptAnalysisReport) -> str:
 
     macro = report.macro_snapshot
     if macro.get("base_rate"):
-        lines.append(f"- 기준금리: {macro['base_rate'].get('value', '-')}%")
+        rate_val = macro['base_rate'].get('value') or '-'
+        lines.append(f"- 기준금리: {rate_val}%")
     if macro.get("loan_rate"):
-        lines.append(f"- 주담대금리: {macro['loan_rate'].get('value', '-')}%")
+        rate_val = macro['loan_rate'].get('value') or '-'
+        lines.append(f"- 주담대금리: {rate_val}%")
 
     lines += ["", "## AI 종합 분석", report.llm_insight]
     return "\n".join(lines)
