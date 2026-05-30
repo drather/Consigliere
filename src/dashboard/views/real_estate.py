@@ -73,6 +73,60 @@ def _render_tx_dataframe(df: pd.DataFrame, code_to_name: Dict[str, str] = None):
     st.dataframe(df[available].rename(columns=col_map), use_container_width=True, hide_index=True)
 
 
+def _load_poi_from_db(complex_code: str) -> Optional[dict]:
+    """poi_cache에서 단지 POI 데이터를 직접 조회."""
+    import sqlite3, json as _json
+    try:
+        _re_db = os.environ.get("REAL_ESTATE_DB_PATH", "data/real_estate.db")
+        conn = sqlite3.connect(_re_db)
+        row = conn.execute(
+            """SELECT subway_stations, schools_count, academies_count, marts_count,
+                      convenience_count, pharmacy_count, medical_count, park_nearest_m,
+                      restaurant_count, cafe_count, nuisance_high_count, nuisance_mid_count
+               FROM poi_cache WHERE complex_code = ?""",
+            (complex_code,)
+        ).fetchone()
+        conn.close()
+        if not row:
+            return None
+        return {
+            "subway_stations": _json.loads(row[0] or "[]"),
+            "schools_count": row[1] or 0,
+            "academies_count": row[2] or 0,
+            "marts_count": row[3] or 0,
+            "convenience_count": row[4] or 0,
+            "pharmacy_count": row[5] or 0,
+            "medical_count": row[6] or 0,
+            "park_nearest_m": row[7] or 0,
+            "restaurant_count": row[8] or 0,
+            "cafe_count": row[9] or 0,
+            "nuisance_high_count": row[10] or 0,
+            "nuisance_mid_count": row[11] or 0,
+        }
+    except Exception:
+        return None
+
+
+def _load_location_score_from_db(complex_code: str) -> Optional[dict]:
+    """location_scores에서 단지 입지점수를 직접 조회."""
+    try:
+        _re_db = os.environ.get("REAL_ESTATE_DB_PATH", "data/real_estate.db")
+        from modules.real_estate.location.location_repository import LocationRepository as _LocRepo
+        score = _LocRepo(_re_db).get_score(complex_code)
+        if score is None:
+            return None
+        return {
+            "residential_total": score.residential_total,
+            "investment_total": score.investment_total,
+            "results": {
+                "residential": [{"label": dr.label, "score": dr.score, "evidence": dr.evidence} for dr in score.residential_results],
+                "investment": [{"label": dr.label, "score": dr.score, "evidence": dr.evidence} for dr in score.investment_results],
+            },
+        }
+    except Exception:
+        return None
+
+
 def _render_analysis_report(rdata: dict, complex_code: str = "") -> None:
     """AptAnalysisReport dict를 구조화된 형태로 렌더링."""
     import requests as _req
@@ -94,8 +148,10 @@ def _render_analysis_report(rdata: dict, complex_code: str = "") -> None:
     if rdata.get("supply_risk_summary"):
         st.caption(f"🏗️ 공급리스크: {rdata['supply_risk_summary']}")
 
-    # ── 입지 점수 ────────────────────────────────────────────────────────────
+    # ── 입지 점수 (저장된 스냅샷 → live fallback) ────────────────────────────
     loc = rdata.get("location_score")
+    if loc is None and complex_code:
+        loc = _load_location_score_from_db(complex_code)
     if loc:
         st.markdown("#### 📍 입지 점수")
         lc1, lc2 = st.columns(2)
@@ -106,6 +162,8 @@ def _render_analysis_report(rdata: dict, complex_code: str = "") -> None:
                 with st.expander("항목별 상세"):
                     for item in res_items:
                         st.progress(item["score"] / 100, text=f"{item['label']}  {item['score']}점")
+                        for ev in (item.get("evidence") or []):
+                            st.caption(f"　　· {ev}")
         with lc2:
             st.metric("💰 투자 점수", f"{loc.get('investment_total', '-')}점")
             inv_items = (loc.get("results") or {}).get("investment") or []
@@ -113,13 +171,48 @@ def _render_analysis_report(rdata: dict, complex_code: str = "") -> None:
                 with st.expander("항목별 상세"):
                     for item in inv_items:
                         st.progress(item["score"] / 100, text=f"{item['label']}  {item['score']}점")
+                        for ev in (item.get("evidence") or []):
+                            st.caption(f"　　· {ev}")
     else:
-        st.info("입지 점수: 리포트 생성 시점에 데이터 없음")
+        lc1, lc2 = st.columns(2)
+        with lc1:
+            st.info("🏠 실거주 점수\n\n리포트 생성 후 표시됩니다.")
+        with lc2:
+            st.info("💰 투자 점수\n\n리포트 생성 후 표시됩니다.")
+
+    # ── POI 분석 (실시간 조회) ────────────────────────────────────────────────
+    if complex_code:
+        poi = _load_poi_from_db(complex_code)
+        if poi:
+            st.markdown("#### 🗺️ POI 분석 (주변 시설)")
+            stations = poi.get("subway_stations") or []
+            if stations:
+                station_text = " | ".join(f"{s['name']} ({s['walk_minutes']}분)" for s in stations[:5])
+                st.caption(f"🚇 지하철: {station_text}")
+            p1, p2, p3, p4 = st.columns(4)
+            with p1:
+                st.metric("🏫 학교", f"{poi['schools_count']}개")
+            with p2:
+                st.metric("📚 학원", f"{poi['academies_count']}개")
+            with p3:
+                st.metric("🛒 마트", f"{poi['marts_count']}개")
+            with p4:
+                st.metric("🏪 편의점", f"{poi['convenience_count']}개")
+            p5, p6, p7, p8 = st.columns(4)
+            with p5:
+                st.metric("💊 약국", f"{poi['pharmacy_count']}개")
+            with p6:
+                st.metric("🏥 의료", f"{poi['medical_count']}개")
+            with p7:
+                park_m = poi.get("park_nearest_m") or 0
+                st.metric("🌳 공원", f"{park_m}m" if park_m else "-")
+            with p8:
+                st.metric("🍽️ 음식점", f"{poi['restaurant_count']}개")
 
     # ── 출퇴근 ───────────────────────────────────────────────────────────────
     commute = rdata.get("commute_summary")
     if commute:
-        st.markdown("#### 🗺️ 출퇴근 요약")
+        st.markdown("#### 🚗 출퇴근 요약")
         mode_labels = {"transit": "🚌 대중교통", "car": "🚗 자가용", "walking": "🚶 도보"}
         cols = st.columns(len(commute))
         for i, (mode, mins) in enumerate(commute.items()):
