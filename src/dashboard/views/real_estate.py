@@ -303,6 +303,57 @@ def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int =
                 _bcr = _bm.building_coverage_ratio
                 st.metric("건폐율", f"{_bcr:.1f}%" if _bcr is not None else "-")
 
+    # ── 심층 분석 버튼 ───────────────────────────────────────────────────────
+    _analysis_complex_code = getattr(entry, "complex_code", None)
+    if not _analysis_complex_code and details:
+        _analysis_complex_code = getattr(details, "complex_code", None)
+    if _analysis_complex_code:
+        st.markdown("---")
+        _btn_col1, _btn_col2 = st.columns(2)
+        with _btn_col1:
+            if st.button("🔬 심층 분석", key=f"analyze_{_analysis_complex_code}", use_container_width=True):
+                import requests as _req
+                with st.spinner("심층 분석 중... (LLM 처리 시 최대 2분 소요)"):
+                    try:
+                        _resp = _req.post(
+                            "http://localhost:8000/jobs/apt/analyze",
+                            json={"complex_code": _analysis_complex_code, "send_slack": True},
+                            timeout=180,
+                        )
+                        if _resp.status_code == 200:
+                            _rdata = _resp.json().get("report", {})
+                            with st.expander("🔬 심층 분석 결과", expanded=True):
+                                st.markdown(_rdata.get("llm_insight", ""))
+                                if _rdata.get("jeonse_ratio"):
+                                    st.metric("전세가율", f"{_rdata['jeonse_ratio']:.1f}%")
+                                if _rdata.get("supply_risk_summary"):
+                                    st.caption(f"공급리스크: {_rdata['supply_risk_summary']}")
+                        else:
+                            st.error(f"분석 실패: {_resp.status_code}")
+                    except Exception as _e:
+                        st.error(f"서버 오류: {_e}")
+
+        with _btn_col2:
+            if st.button("📋 이전 분석 보기", key=f"prev_analysis_{_analysis_complex_code}", use_container_width=True):
+                import requests as _req
+                try:
+                    _resp = _req.get(
+                        f"http://localhost:8000/dashboard/apt/analysis/{_analysis_complex_code}/latest",
+                        timeout=10,
+                    )
+                    if _resp.status_code == 200:
+                        _rdata = _resp.json()
+                        with st.expander(f"📋 이전 분석 ({_rdata.get('generated_at', '')[:10]})", expanded=True):
+                            st.markdown(_rdata.get("llm_insight", ""))
+                            if _rdata.get("jeonse_ratio"):
+                                st.metric("전세가율", f"{_rdata['jeonse_ratio']:.1f}%")
+                    elif _resp.status_code == 404:
+                        st.info("이전 분석 결과가 없습니다. 먼저 심층 분석을 실행하세요.")
+                    else:
+                        st.error(f"조회 실패: {_resp.status_code}")
+                except Exception as _e:
+                    st.error(f"서버 오류: {_e}")
+
     # ── 실거래가 ──────────────────────────────────────────────────────────────
     st.markdown("### 📈 최근 실거래가")
 
