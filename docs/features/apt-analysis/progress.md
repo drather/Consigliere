@@ -1,8 +1,8 @@
 # Progress
 
 - [x] Task 1: SOP 문서 생성
-- [ ] Task 2: LLM CLI 클라이언트 (TDD Red)
-- [ ] Task 3: LLM CLI 클라이언트 (TDD Green)
+- [x] Task 2: LLM CLI 클라이언트 (TDD Red)
+- [x] Task 3: LLM CLI 클라이언트 (TDD Green)
 - [ ] Task 4: Repository 확장 (JeonseRepo, AptMasterRepo, CommuteRepo)
 - [ ] Task 5: AptAnalysisReport 모델 + AptAnalysisRepository
 - [ ] Task 6: AptAnalysisOrchestrator

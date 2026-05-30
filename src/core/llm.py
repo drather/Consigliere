@@ -348,6 +348,70 @@ class ClaudeClient(BaseLLMClient):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Claude Code CLI Client (subprocess, 로컬 설치 필요)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ClaudeCodeClient(BaseLLMClient):
+    """로컬에 설치된 `claude` CLI를 subprocess로 호출한다."""
+
+    def generate(self, prompt: str) -> str:
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["claude", "--print", prompt],
+                capture_output=True, text=True, timeout=120
+            )
+            return result.stdout.strip()
+        except subprocess.TimeoutExpired:
+            logger.warning("[ClaudeCodeClient] subprocess timeout (120s)")
+            return "분석 시간 초과"
+        except Exception as e:
+            logger.error("[ClaudeCodeClient] subprocess 오류: %s", e)
+            return f"분석 실패: {e}"
+
+    def generate_json(self, prompt: str, max_tokens: int = 8192, metadata=None) -> Dict[str, Any]:
+        raw = self.generate(prompt)
+        if not raw or raw.startswith("분석"):
+            return {"insight": raw or "분석 실패"}
+        parsed = _parse_json_robust(raw, logger, "ClaudeCode")
+        if "error" in parsed and len(parsed) == 1:
+            return {"insight": raw}
+        return parsed
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Gemini CLI Client (subprocess, 로컬 설치 필요)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class GeminiCliClient(BaseLLMClient):
+    """로컬에 설치된 `gemini` CLI를 subprocess로 호출한다."""
+
+    def generate(self, prompt: str) -> str:
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["gemini", prompt],
+                capture_output=True, text=True, timeout=120
+            )
+            return result.stdout.strip()
+        except subprocess.TimeoutExpired:
+            logger.warning("[GeminiCliClient] subprocess timeout (120s)")
+            return "분석 시간 초과"
+        except Exception as e:
+            logger.error("[GeminiCliClient] subprocess 오류: %s", e)
+            return f"분석 실패: {e}"
+
+    def generate_json(self, prompt: str, max_tokens: int = 8192, metadata=None) -> Dict[str, Any]:
+        raw = self.generate(prompt)
+        if not raw or raw.startswith("분석"):
+            return {"insight": raw or "분석 실패"}
+        parsed = _parse_json_robust(raw, logger, "GeminiCli")
+        if "error" in parsed and len(parsed) == 1:
+            return {"insight": raw}
+        return parsed
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # LLM Factory (Model Routing 포함)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -365,6 +429,12 @@ class LLMFactory:
     @staticmethod
     def create(task_type: Optional[TaskType] = None) -> BaseLLMClient:
         provider = os.getenv("LLM_PROVIDER", "gemini").lower()
+        if provider == "claude-code":
+            logger.info("Initializing ClaudeCodeClient (local CLI subprocess).")
+            return ClaudeCodeClient()
+        if provider == "gemini-cli":
+            logger.info("Initializing GeminiCliClient (local CLI subprocess).")
+            return GeminiCliClient()
         if provider == "claude":
             if task_type is None:
                 logger.info("Initializing Claude LLM Client.")
