@@ -73,6 +73,111 @@ def _render_tx_dataframe(df: pd.DataFrame, code_to_name: Dict[str, str] = None):
     st.dataframe(df[available].rename(columns=col_map), use_container_width=True, hide_index=True)
 
 
+def _render_analysis_report(rdata: dict, complex_code: str = "") -> None:
+    """AptAnalysisReport dict를 구조화된 형태로 렌더링."""
+    import requests as _req
+
+    # ── 지표 요약 ────────────────────────────────────────────────────────────
+    macro = rdata.get("macro_snapshot") or {}
+    base_rate = (macro.get("base_rate") or {}).get("value")
+    loan_rate = (macro.get("loan_rate") or {}).get("value")
+
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        jr = rdata.get("jeonse_ratio")
+        st.metric("전세가율", f"{jr:.1f}%" if jr else "-")
+    with m2:
+        st.metric("기준금리", f"{base_rate}%" if base_rate is not None else "-")
+    with m3:
+        st.metric("주담대금리", f"{loan_rate}%" if loan_rate is not None else "-")
+
+    if rdata.get("supply_risk_summary"):
+        st.caption(f"🏗️ 공급리스크: {rdata['supply_risk_summary']}")
+
+    # ── 입지 점수 ────────────────────────────────────────────────────────────
+    loc = rdata.get("location_score")
+    if loc:
+        st.markdown("#### 📍 입지 점수")
+        lc1, lc2 = st.columns(2)
+        with lc1:
+            st.metric("🏠 실거주 점수", f"{loc.get('residential_total', '-')}점")
+            res_items = (loc.get("results") or {}).get("residential") or []
+            if res_items:
+                with st.expander("항목별 상세"):
+                    for item in res_items:
+                        st.progress(item["score"] / 100, text=f"{item['label']}  {item['score']}점")
+        with lc2:
+            st.metric("💰 투자 점수", f"{loc.get('investment_total', '-')}점")
+            inv_items = (loc.get("results") or {}).get("investment") or []
+            if inv_items:
+                with st.expander("항목별 상세"):
+                    for item in inv_items:
+                        st.progress(item["score"] / 100, text=f"{item['label']}  {item['score']}점")
+    else:
+        st.info("입지 점수: 리포트 생성 시점에 데이터 없음")
+
+    # ── 출퇴근 ───────────────────────────────────────────────────────────────
+    commute = rdata.get("commute_summary")
+    if commute:
+        st.markdown("#### 🗺️ 출퇴근 요약")
+        mode_labels = {"transit": "🚌 대중교통", "car": "🚗 자가용", "walking": "🚶 도보"}
+        cols = st.columns(len(commute))
+        for i, (mode, mins) in enumerate(commute.items()):
+            with cols[i]:
+                st.metric(mode_labels.get(mode, mode), f"{mins}분")
+    else:
+        st.caption("출퇴근: 캐시 데이터 없음 (기존 단지 상세 패널에서 조회 가능)")
+
+    # ── 학군 분석 (실시간 조회) ──────────────────────────────────────────────
+    if complex_code:
+        with st.expander("📚 학군 분석", expanded=False):
+            try:
+                school_resp = _req.get(
+                    f"{_API_BASE}/dashboard/real-estate/school/{complex_code}",
+                    timeout=5,
+                )
+                if school_resp.status_code == 200:
+                    sd = school_resp.json()
+                    sc1, sc2, sc3, sc4 = st.columns(4)
+                    with sc1:
+                        st.metric("반경 1km 학교 수", f"{sd.get('nearby_school_count', '-')}개")
+                    with sc2:
+                        avg_cls = sd.get("avg_students_per_class") or 0
+                        st.metric("학급당 평균 학생수", f"{avg_cls:.1f}명" if avg_cls else "-")
+                    with sc3:
+                        avg_tch = sd.get("avg_students_per_teacher") or 0
+                        st.metric("교사 1인당 학생수", f"{avg_tch:.1f}명" if avg_tch else "-")
+                    with sc4:
+                        st.metric("학군 점수", f"{sd.get('score', '-')}/100")
+                    if sd.get("message"):
+                        st.caption(sd["message"])
+                else:
+                    st.caption("학군 정보 없음")
+            except Exception:
+                st.caption("학군 조회 실패")
+
+    # ── 실거래가 이력 ────────────────────────────────────────────────────────
+    price_history = rdata.get("price_history") or []
+    if price_history:
+        st.markdown("#### 📈 실거래가 이력")
+        try:
+            df = pd.DataFrame(price_history)
+            df["억원"] = df["price"] / 1e8
+            df = df.rename(columns={"date": "거래일", "area": "전용면적(㎡)"})
+            st.dataframe(
+                df[["거래일", "전용면적(㎡)", "억원"]].sort_values("거래일", ascending=False),
+                use_container_width=True, hide_index=True
+            )
+        except Exception:
+            for p in price_history[:5]:
+                st.caption(f"{p.get('date')} | {p.get('area')}㎡ | {p.get('price', 0)/1e8:.2f}억")
+
+    # ── AI 종합 분석 ─────────────────────────────────────────────────────────
+    st.markdown("#### 🤖 AI 종합 분석")
+    st.markdown(rdata.get("llm_insight", "분석 결과 없음"))
+    st.caption(f"분석일시: {rdata.get('generated_at', '')[:19]}")
+
+
 def _render_commute_card(commute_data: dict):
     """출퇴근 경로 3단 카드 렌더링."""
     transit_min = commute_data.get("transit")
@@ -241,7 +346,7 @@ def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int =
             try:
                 import requests as _req
                 commute_resp = _req.get(
-                    "http://localhost:8000/dashboard/real-estate/commute",
+                    f"{_API_BASE}/dashboard/real-estate/commute",
                     params={
                         "address": _road_address,
                         "apt_name": entry.apt_name or "",
@@ -264,7 +369,7 @@ def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int =
                 _ccode = getattr(entry, "complex_code", "") or ""
                 _apt_nm = getattr(entry, "apt_name", "") or ""
                 school_resp = _req.get(
-                    f"http://localhost:8000/dashboard/real-estate/school/{_ccode}",
+                    f"{_API_BASE}/dashboard/real-estate/school/{_ccode}",
                     params={"apt_name": _apt_nm, "district_code": _district},
                     timeout=5,
                 )
@@ -325,11 +430,7 @@ def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int =
                         if _resp.status_code == 200:
                             _rdata = _resp.json().get("report", {})
                             with st.expander("🔬 심층 분석 결과", expanded=True):
-                                st.markdown(_rdata.get("llm_insight", ""))
-                                if _rdata.get("jeonse_ratio"):
-                                    st.metric("전세가율", f"{_rdata['jeonse_ratio']:.1f}%")
-                                if _rdata.get("supply_risk_summary"):
-                                    st.caption(f"공급리스크: {_rdata['supply_risk_summary']}")
+                                _render_analysis_report(_rdata, _analysis_complex_code)
                         else:
                             st.error(f"분석 실패: {_resp.status_code}")
                     except Exception as _e:
@@ -346,9 +447,7 @@ def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int =
                     if _resp.status_code == 200:
                         _rdata = _resp.json()
                         with st.expander(f"📋 이전 분석 ({_rdata.get('generated_at', '')[:10]})", expanded=True):
-                            st.markdown(_rdata.get("llm_insight", ""))
-                            if _rdata.get("jeonse_ratio"):
-                                st.metric("전세가율", f"{_rdata['jeonse_ratio']:.1f}%")
+                            _render_analysis_report(_rdata, _analysis_complex_code)
                     elif _resp.status_code == 404:
                         st.info("이전 분석 결과가 없습니다. 먼저 심층 분석을 실행하세요.")
                     else:
