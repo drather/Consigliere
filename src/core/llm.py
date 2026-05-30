@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Any, Optional, List
@@ -348,6 +349,23 @@ class ClaudeClient(BaseLLMClient):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# CLI Client 공통 유틸리티
+# ─────────────────────────────────────────────────────────────────────────────
+
+_CLI_ERROR_RESPONSES = frozenset(["분석 시간 초과", "분석 실패"])
+
+
+def _parse_cli_output(raw: str, tag: str) -> Dict[str, Any]:
+    """CLI 출력을 JSON으로 파싱하거나 insight fallback으로 감싼다."""
+    if not raw or raw in _CLI_ERROR_RESPONSES:
+        return {"insight": raw or "분석 실패"}
+    parsed = _parse_json_robust(raw, logger, tag)
+    if "error" in parsed and len(parsed) == 1:
+        return {"insight": raw}
+    return parsed
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Claude Code CLI Client (subprocess, 로컬 설치 필요)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -355,28 +373,23 @@ class ClaudeCodeClient(BaseLLMClient):
     """로컬에 설치된 `claude` CLI를 subprocess로 호출한다."""
 
     def generate(self, prompt: str) -> str:
-        import subprocess
         try:
             result = subprocess.run(
                 ["claude", "--print", prompt],
                 capture_output=True, text=True, timeout=120
             )
+            if result.returncode != 0:
+                logger.warning("[%s] returncode=%d, stderr=%s", self.__class__.__name__, result.returncode, result.stderr[:200])
             return result.stdout.strip()
         except subprocess.TimeoutExpired:
             logger.warning("[ClaudeCodeClient] subprocess timeout (120s)")
             return "분석 시간 초과"
         except Exception as e:
             logger.error("[ClaudeCodeClient] subprocess 오류: %s", e)
-            return f"분석 실패: {e}"
+            return "분석 실패"
 
     def generate_json(self, prompt: str, max_tokens: int = 8192, metadata=None) -> Dict[str, Any]:
-        raw = self.generate(prompt)
-        if not raw or raw.startswith("분석"):
-            return {"insight": raw or "분석 실패"}
-        parsed = _parse_json_robust(raw, logger, "ClaudeCode")
-        if "error" in parsed and len(parsed) == 1:
-            return {"insight": raw}
-        return parsed
+        return _parse_cli_output(self.generate(prompt), "ClaudeCode")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -387,28 +400,23 @@ class GeminiCliClient(BaseLLMClient):
     """로컬에 설치된 `gemini` CLI를 subprocess로 호출한다."""
 
     def generate(self, prompt: str) -> str:
-        import subprocess
         try:
             result = subprocess.run(
                 ["gemini", prompt],
                 capture_output=True, text=True, timeout=120
             )
+            if result.returncode != 0:
+                logger.warning("[%s] returncode=%d, stderr=%s", self.__class__.__name__, result.returncode, result.stderr[:200])
             return result.stdout.strip()
         except subprocess.TimeoutExpired:
             logger.warning("[GeminiCliClient] subprocess timeout (120s)")
             return "분석 시간 초과"
         except Exception as e:
             logger.error("[GeminiCliClient] subprocess 오류: %s", e)
-            return f"분석 실패: {e}"
+            return "분석 실패"
 
     def generate_json(self, prompt: str, max_tokens: int = 8192, metadata=None) -> Dict[str, Any]:
-        raw = self.generate(prompt)
-        if not raw or raw.startswith("분석"):
-            return {"insight": raw or "분석 실패"}
-        parsed = _parse_json_robust(raw, logger, "GeminiCli")
-        if "error" in parsed and len(parsed) == 1:
-            return {"insight": raw}
-        return parsed
+        return _parse_cli_output(self.generate(prompt), "GeminiCli")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -418,7 +426,12 @@ class GeminiCliClient(BaseLLMClient):
 class LLMFactory:
     """
     Returns the appropriate LLMClient based on the environment variables.
-    task_type을 지정하면 작업 유형에 최적화된 모델을 반환한다.
+    LLM_PROVIDER 값:
+      - claude-code  → ClaudeCodeClient (로컬 CLI subprocess)
+      - gemini-cli   → GeminiCliClient (로컬 CLI subprocess)
+      - claude       → ClaudeClient (API)
+      - gemini       → GeminiClient (API, 기본값)
+    task_type을 지정하면 작업 유형에 최적화된 모델을 반환한다 (claude 전용).
     """
     _CLAUDE_MODEL_ENV_MAP = {
         TaskType.ANALYSIS:   ("CLAUDE_ANALYSIS_MODEL",   "claude-sonnet-4-6"),

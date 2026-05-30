@@ -89,6 +89,24 @@ class TestGeminiCliClient:
             result = client.generate_json("테스트")
         assert result["insight"] == "분당권 유망"
 
+    def test_generate_json_fallback_on_non_json(self):
+        from core.llm import GeminiCliClient
+        client = GeminiCliClient()
+        mock_result = MagicMock()
+        mock_result.stdout = "이 단지는 유망합니다."
+        mock_result.returncode = 0
+        with patch("subprocess.run", return_value=mock_result):
+            result = client.generate_json("테스트")
+        assert "insight" in result
+        assert result["insight"] == "이 단지는 유망합니다."
+
+    def test_get_last_usage_returns_zero_token_usage(self):
+        from core.llm import GeminiCliClient, TokenUsage
+        client = GeminiCliClient()
+        usage = client.get_last_usage()
+        assert isinstance(usage, TokenUsage)
+        assert usage.input_tokens == 0
+
 
 class TestLLMFactoryCliProviders:
     def test_factory_returns_claude_code_client(self):
