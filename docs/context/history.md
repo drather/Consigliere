@@ -1,6 +1,26 @@
 # Project Consigliere: History
 **Last Updated:** 2026-05-31
 
+## 2026-05-31 (후속) — 아키텍처 후속 정리: Tab1 DI 전환 + collect_poi + ReportRepository
+
+- **목표:** 이전 리팩토링에서 미처리된 아키텍처 위반 3건 완전 제거
+- **신규 파일:**
+  - `tests/api/test_report_collect_poi_api.py` — ReportRepository·CollectPOI 엔드포인트 DI 테스트 (5개)
+- **수정 파일:**
+  - `src/modules/real_estate/poi_collector.py` — `get_fresh_complex_codes()` 배치 캐시 조회 추가 (SQLite 999변수 한도 대응 청크 처리)
+  - `src/modules/real_estate/location/location_service.py` — `collect_poi()` + `get_stale_complex_codes()` 추가
+  - `tests/modules/real_estate/test_poi_collector.py` — `TestPoiCollectorGetFreshComplexCodes` 3개 테스트 추가
+  - `tests/modules/real_estate/location/test_location_service.py` — collect_poi/get_stale 2개 테스트 추가
+  - `src/api/dependencies.py` — `get_bm_repo()` + `get_report_repo()` + `get_geocoder_service()` + apt_search limit 싱글톤 등록
+  - `src/dashboard/services.py` — Tab1 래퍼 7개 추가 (count/sidos/sigungus/search/limits/apt_details/bm)
+  - `src/dashboard/views/real_estate.py` — Tab1 Repository 직접 인스턴스화 제거 → services.py 경유
+  - `src/api/routers/real_estate.py` — `_get_report_repo()` 로컬 팩토리 삭제 + `collect_poi` DI 전환
+- **커밋 목록:** 9개 커밋 (2c4c95f → ba3913d)
+- **테스트:** 856 pass, 9 pre-existing failures (기존 미변경)
+- **남은 과제:** `generate_daily_report` 로컬 빌더, `CommuteRepository` 이중 인스턴스화
+
+---
+
 ## 2026-05-31 — Real Estate 아키텍처 리팩토링 + 가이드라인 재편
 
 - **목표:** Layered Architecture + DI 패턴 도입으로 계층 경계 강제. dashboard 수정 시 매번 위아래 계층 수동 수정하던 문제 해결.
@@ -20,7 +40,6 @@
 - **삭제/이동:**
   - `docs/guidelines/application.md` → `architecture.md`에 통합 후 삭제
   - `docs/guidelines/feature_list.md` → `docs/context/feature_list.md`로 이동
-- **후속 과제:** Tab1 Repository 직접 인스턴스화 제거, `_get_report_repo` DI 등록, `collect_poi` 엔드포인트 정리
 
 ---
 
