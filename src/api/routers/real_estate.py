@@ -25,6 +25,8 @@ from api.dependencies import (
     get_apt_analysis_repo,
     get_apt_orchestrator,
     get_report_repo,
+    get_location_service,
+    get_geocoder_service,
 )
 from modules.real_estate.jeonse.repository import JeonseRepository
 from modules.real_estate.jeonse.client import JeonseClient
@@ -44,6 +46,8 @@ from modules.real_estate.presenter import md_to_slack
 from modules.real_estate.apt_analysis.orchestrator import AptAnalysisOrchestrator
 from modules.real_estate.apt_analysis.repository import AptAnalysisRepository
 from modules.real_estate.report_repository import ReportRepository
+from modules.real_estate.location.location_service import LocationService
+from modules.real_estate.geocoder import GeocoderService
 from core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -835,41 +839,18 @@ def get_school_score(
 def collect_poi(
     limit: int = 10,
     apt_master_repo: AptMasterRepository = Depends(get_apt_master_repo),
+    location_service: LocationService = Depends(get_location_service),
+    geocoder: GeocoderService = Depends(get_geocoder_service),
 ):
-    """apt_master 기준 POI 미수집 or 만료(>30일) 단지를 최대 limit개 수집."""
-    import os
-    import sqlite3
-    from datetime import datetime, timedelta
-    from modules.real_estate.config import RealEstateConfig
-    from modules.real_estate.geocoder import GeocoderService
-    from modules.real_estate.poi_collector import PoiCollector
-
+    """apt_master 기준 POI 미수집 or 만료(TTL 기준) 단지를 최대 limit개 수집."""
     try:
-        cfg = RealEstateConfig()
-        re_db = cfg.get("real_estate_db_path", "data/real_estate.db")
-        kakao_key = os.getenv("KAKAO_API_KEY", "")
-        geocode_cache = cfg.get("geocode_cache_path", "data/geocode_cache.db")
-        ttl_days = int(cfg.get("poi_cache_ttl_days", 30))
-
-        geocoder = GeocoderService(api_key=kakao_key, cache_path=geocode_cache)
-        poi_collector = PoiCollector(api_key=kakao_key, db_path=re_db, ttl_days=ttl_days)
-
-        # Identify complex_codes that have no POI cache or expired cache
-        cutoff = (datetime.now() - timedelta(days=ttl_days)).strftime("%Y-%m-%d %H:%M:%S")
-        with sqlite3.connect(re_db) as conn:
-            cached_codes = {
-                row[0]
-                for row in conn.execute(
-                    "SELECT complex_code FROM poi_cache WHERE collected_at > ?", (cutoff,)
-                ).fetchall()
-            }
-
-        # Pull apt_master entries that have a complex_code and are not in fresh cache
-        # search() with no filters returns all entries (with road_address from apartments JOIN)
         all_entries = apt_master_repo.search(limit=10000)
+        all_complex_codes = [e.complex_code for e in all_entries if e.complex_code]
+        stale_codes = location_service.get_stale_complex_codes(all_complex_codes)
+
         candidates = [
             e for e in all_entries
-            if e.complex_code and e.complex_code not in cached_codes
+            if e.complex_code and e.complex_code in stale_codes
         ][:limit]
 
         collected = 0
@@ -885,7 +866,7 @@ def collect_poi(
                 )
                 continue
             lat, lng = coords
-            poi_collector.collect(entry.complex_code, lat, lng)
+            location_service.collect_poi(entry.complex_code, lat, lng)
             collected += 1
             logger.info(
                 "[POI Collect] 수집 완료 — %s (%d/%d)", entry.apt_name, collected, len(candidates)
