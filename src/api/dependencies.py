@@ -159,3 +159,61 @@ def get_supply_repo() -> SupplyRepository:
 
 def get_supply_client() -> SupplyClient:
     return _supply_client
+
+
+# ── Location Service ──────────────────────────────────────────────────────────
+import yaml as _yaml
+from modules.real_estate.location.location_repository import LocationRepository as _LocRepo
+from modules.real_estate.location.location_scorer import LocationScorer
+from modules.real_estate.location.location_service import LocationService
+from modules.real_estate.poi_collector import PoiCollector
+
+
+def _load_scoring_config() -> dict:
+    try:
+        with open("src/modules/real_estate/config.yaml", "r", encoding="utf-8") as f:
+            return (_yaml.safe_load(f) or {}).get("scoring", {})
+    except Exception:
+        return {}
+
+
+_loc_repo = _LocRepo(db_path=_re_db_path)
+_poi_collector = PoiCollector(api_key=os.getenv("KAKAO_API_KEY", ""), db_path=_re_db_path)
+_location_service = LocationService(
+    loc_repo=_loc_repo,
+    poi_collector=_poi_collector,
+    scorer=LocationScorer(config=_load_scoring_config()),
+)
+
+
+def get_location_service() -> LocationService:
+    return _location_service
+
+
+# ── Apt Analysis ──────────────────────────────────────────────────────────────
+from modules.real_estate.apt_analysis.orchestrator import AptAnalysisOrchestrator
+from modules.real_estate.apt_analysis.repository import AptAnalysisRepository
+from modules.real_estate.macro.service import MacroService as _MacroSvc
+from modules.real_estate.commute.commute_repository import CommuteRepository as _CommuteRepo2
+from core.llm import LLMFactory
+
+_apt_analysis_repo = AptAnalysisRepository(db_path=_re_db_path)
+_apt_orchestrator = AptAnalysisOrchestrator(
+    apt_master_repo=_apt_master_repo,
+    apt_details_repo=_apt_repo,
+    tx_repo=_tx_repo,
+    jeonse_repo=_jeonse_repo,
+    supply_repo=_supply_repo,
+    loc_repo=_loc_repo,
+    macro_svc=_MacroSvc(),
+    commute_repo=_CommuteRepo2(db_path=_commute_db_path),
+    llm=LLMFactory.create(),
+)
+
+
+def get_apt_analysis_repo() -> AptAnalysisRepository:
+    return _apt_analysis_repo
+
+
+def get_apt_orchestrator() -> AptAnalysisOrchestrator:
+    return _apt_orchestrator
