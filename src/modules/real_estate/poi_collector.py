@@ -248,18 +248,22 @@ class PoiCollector:
         return None
 
     def get_fresh_complex_codes(self, complex_codes: list) -> set:
-        """Returns set of codes with valid (non-expired) cache. Single DB query."""
+        """Returns set of codes with valid (non-expired) cache. Chunks queries at 900."""
         if not complex_codes:
             return set()
         cutoff = (datetime.now() - timedelta(days=self._ttl_days)).strftime("%Y-%m-%d %H:%M:%S")
-        placeholders = ",".join("?" * len(complex_codes))
-        with sqlite3.connect(self._db_path) as conn:
-            rows = conn.execute(
-                f"SELECT complex_code FROM poi_cache"
-                f" WHERE complex_code IN ({placeholders}) AND collected_at > ?",
-                (*complex_codes, cutoff),
-            ).fetchall()
-        return {row[0] for row in rows}
+        fresh: set = set()
+        for i in range(0, len(complex_codes), 900):
+            chunk = complex_codes[i : i + 900]
+            placeholders = ",".join("?" * len(chunk))
+            with sqlite3.connect(self._db_path) as conn:
+                rows = conn.execute(
+                    f"SELECT complex_code FROM poi_cache"
+                    f" WHERE complex_code IN ({placeholders}) AND collected_at > ?",
+                    (*chunk, cutoff),
+                ).fetchall()
+            fresh.update(row[0] for row in rows)
+        return fresh
 
     def _load_cache(self, complex_code: str) -> Optional[PoiData]:
         with sqlite3.connect(self._db_path) as conn:
