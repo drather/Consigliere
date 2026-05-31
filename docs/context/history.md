@@ -1,5 +1,28 @@
 # Project Consigliere: History
-**Last Updated:** 2026-05-30
+**Last Updated:** 2026-05-31
+
+## 2026-05-31 — Real Estate 아키텍처 리팩토링 + 가이드라인 재편
+
+- **목표:** Layered Architecture + DI 패턴 도입으로 계층 경계 강제. dashboard 수정 시 매번 위아래 계층 수동 수정하던 문제 해결.
+- **신규 파일:**
+  - `docs/guidelines/architecture.md` — 계층 구조·SOLID·DI 원칙 필독 문서
+  - `src/modules/real_estate/location/location_service.py` — POI+Score 통합 서비스 (TDD)
+  - `src/dashboard/services.py` — 대시보드 유일 진입점 (DB/repo 직접 접근 금지)
+  - `tests/modules/real_estate/location/test_location_service.py` — 5개 테스트
+- **수정 파일:**
+  - `CLAUDE.md` — `architecture.md` 4번째 필독 문서로 추가
+  - `docs/guidelines/coding_guide.md` — DI 패턴 섹션 추가
+  - `docs/guidelines/sop.md` — Phase 2.5 아키텍처 준수 체크리스트 강화
+  - `src/modules/real_estate/poi_collector.py` — `get_cached()` public 메서드 추가
+  - `src/api/dependencies.py` — LocationService + AptAnalysis 싱글톤 팩토리 추가
+  - `src/api/routers/real_estate.py` — apt_analyze 3개 엔드포인트 `Depends()` 전환
+  - `src/dashboard/views/real_estate.py` — 직접 sqlite3/LocationRepository 접근 제거
+- **삭제/이동:**
+  - `docs/guidelines/application.md` → `architecture.md`에 통합 후 삭제
+  - `docs/guidelines/feature_list.md` → `docs/context/feature_list.md`로 이동
+- **후속 과제:** Tab1 Repository 직접 인스턴스화 제거, `_get_report_repo` DI 등록, `collect_poi` 엔드포인트 정리
+
+---
 
 ## 2026-05-30 — 개별 아파트 심층 분석 기능
 
