@@ -240,6 +240,13 @@ class PoiCollector:
             result.append({"name": d.get("place_name", ""), "walk_minutes": walk_min})
         return result
 
+    def get_cached(self, complex_code: str) -> Optional[PoiData]:
+        """캐시에서만 조회. 없거나 만료되면 None (API 호출 없음)."""
+        cached = self._load_cache(complex_code)
+        if cached and not self._is_expired(cached.collected_at):
+            return cached
+        return None
+
     def _load_cache(self, complex_code: str) -> Optional[PoiData]:
         with sqlite3.connect(self._db_path) as conn:
             row = conn.execute(
