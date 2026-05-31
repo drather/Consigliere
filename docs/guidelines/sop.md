@@ -61,6 +61,13 @@ arch -arm64 .venv/bin/python3.12 -m pytest tests/ -v
 docker compose restart api
 ```
 
+### 아키텍처 계층 준수
+- [ ] **계층 위치:** 새 코드가 올바른 계층에 위치하는가? (`architecture.md` 참조)
+- [ ] **DI 등록:** 새 Service는 `src/api/dependencies.py`에 factory 함수가 등록되었는가?
+- [ ] **계층 건너뛰기 금지:** 실행계층(FastAPI/Streamlit)이 Repository/sqlite3에 직접 접근하지 않는가?
+- [ ] **출력계층 순수성:** Formatter가 DB나 외부 API를 호출하지 않는가?
+- [ ] **대시보드 진입점:** 대시보드가 `dashboard/services.py`만 import하는가?
+
 ---
 
 ## Phase 3: Documentation

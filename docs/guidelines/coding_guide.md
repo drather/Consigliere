@@ -1,6 +1,6 @@
 # Coding Guide
 
-**Last Updated:** 2026-03-31
+**Last Updated:** 2026-05-31
 
 ## 1. 언어 규칙
 
@@ -23,6 +23,48 @@
 | **DIP** | 구체 클래스가 아닌 추상 인터페이스(`BaseAgent` 등)에 의존. |
 | **Zero Hardcoding** | API 코드, 금리, 지역코드 등 변경 가능한 값은 반드시 `config.yaml` 또는 `.env` 관리. |
 | **Composability** | 모든 서비스는 독립적으로 테스트 가능하고 다른 모듈에서 재사용 가능하게 설계. |
+
+---
+
+## 2-1. DI 패턴 (이 프로젝트 적용법)
+
+**의존성 등록:** 모든 서비스 인스턴스는 `src/api/dependencies.py`에 module-level 싱글톤으로 등록한다.
+
+```python
+# src/api/dependencies.py
+_location_service = LocationService(
+    loc_repo=LocationRepository(db_path=_db),
+    poi_collector=PoiCollector(...),
+    scorer=LocationScorer(...),
+)
+
+def get_location_service() -> LocationService:
+    return _location_service
+```
+
+**FastAPI 라우터:** `Depends(get_*)` 패턴으로 주입한다.
+
+```python
+@router.post("/jobs/apt/analyze")
+def apt_analyze(req: ..., svc = Depends(get_apt_orchestrator)):
+    ...
+```
+
+**Streamlit 대시보드:** `dashboard/services.py`를 통해서만 호출한다. `from modules.real_estate...` 직접 import 금지.
+
+```python
+# dashboard/services.py
+from api.dependencies import get_location_service
+
+def get_location_score(complex_code: str):
+    return get_location_service().get_score(complex_code)
+```
+
+**SRP 적용 기준:**
+- Repository: DB 읽기/쓰기만
+- Orchestrator: 여러 Repository/Client 조율
+- Service: Orchestrator 조립 + Formatter 호출 + 결과 반환
+- Formatter: dict → str/dict 변환만 (순수 함수)
 
 ---
 
