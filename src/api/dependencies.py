@@ -224,15 +224,13 @@ def get_report_repo() -> _ReportRepo:
 
 
 # ── Geocoder Service ──────────────────────────────────────────────────────────
-from modules.real_estate.geocoder import GeocoderService as _GeocoderSvc
-
-_geocoder_service = _GeocoderSvc(
+_geocoder_service = GeocoderService(
     api_key=os.getenv("KAKAO_API_KEY", ""),
     cache_path=_re_config.get("geocode_cache_path", "data/geocode_cache.db"),
 )
 
 
-def get_geocoder_service() -> _GeocoderSvc:
+def get_geocoder_service() -> GeocoderService:
     return _geocoder_service
 
 
