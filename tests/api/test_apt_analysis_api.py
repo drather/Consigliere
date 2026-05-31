@@ -1,8 +1,10 @@
+import dataclasses
 import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 from main import app
+from api.dependencies import get_apt_analysis_repo, get_apt_orchestrator
 
 client = TestClient(app)
 
@@ -28,16 +30,18 @@ def _make_mock_report():
 class TestAptAnalyzeEndpoint:
     def test_analyze_returns_200_with_report(self):
         mock_report = _make_mock_report()
-        with patch("api.routers.real_estate._build_apt_analysis_orchestrator") as mock_build, \
-             patch("api.routers.real_estate._get_apt_analysis_repo") as mock_repo_fn, \
-             patch("api.routers.real_estate._send_slack_if_needed"):
-            mock_orch = MagicMock()
-            mock_orch.analyze.return_value = mock_report
-            mock_build.return_value = mock_orch
-            mock_repo = MagicMock()
-            mock_repo_fn.return_value = mock_repo
+        mock_orch = MagicMock()
+        mock_orch.analyze.return_value = mock_report
+        mock_repo = MagicMock()
 
-            resp = client.post("/jobs/apt/analyze", json={"complex_code": "CC001", "send_slack": False})
+        app.dependency_overrides[get_apt_orchestrator] = lambda: mock_orch
+        app.dependency_overrides[get_apt_analysis_repo] = lambda: mock_repo
+        try:
+            with patch("api.routers.real_estate._send_slack_if_needed"):
+                resp = client.post("/jobs/apt/analyze", json={"complex_code": "CC001", "send_slack": False})
+        finally:
+            app.dependency_overrides.pop(get_apt_orchestrator, None)
+            app.dependency_overrides.pop(get_apt_analysis_repo, None)
 
         assert resp.status_code == 200
         data = resp.json()
@@ -45,62 +49,75 @@ class TestAptAnalyzeEndpoint:
         assert data["report"]["complex_code"] == "CC001"
 
     def test_analyze_returns_404_when_complex_not_found(self):
-        with patch("api.routers.real_estate._build_apt_analysis_orchestrator") as mock_build, \
-             patch("api.routers.real_estate._get_apt_analysis_repo"):
-            mock_orch = MagicMock()
-            mock_orch.analyze.side_effect = ValueError("단지 코드 없음: NOTFOUND")
-            mock_build.return_value = mock_orch
+        mock_orch = MagicMock()
+        mock_orch.analyze.side_effect = ValueError("단지 코드 없음: NOTFOUND")
+        mock_repo = MagicMock()
 
+        app.dependency_overrides[get_apt_orchestrator] = lambda: mock_orch
+        app.dependency_overrides[get_apt_analysis_repo] = lambda: mock_repo
+        try:
             resp = client.post("/jobs/apt/analyze", json={"complex_code": "NOTFOUND"})
+        finally:
+            app.dependency_overrides.pop(get_apt_orchestrator, None)
+            app.dependency_overrides.pop(get_apt_analysis_repo, None)
 
         assert resp.status_code == 404
 
     def test_analyze_saves_to_repository(self):
         mock_report = _make_mock_report()
-        with patch("api.routers.real_estate._build_apt_analysis_orchestrator") as mock_build, \
-             patch("api.routers.real_estate._get_apt_analysis_repo") as mock_repo_fn, \
-             patch("api.routers.real_estate._send_slack_if_needed"):
-            mock_orch = MagicMock()
-            mock_orch.analyze.return_value = mock_report
-            mock_build.return_value = mock_orch
-            mock_repo = MagicMock()
-            mock_repo_fn.return_value = mock_repo
+        mock_orch = MagicMock()
+        mock_orch.analyze.return_value = mock_report
+        mock_repo = MagicMock()
 
-            client.post("/jobs/apt/analyze", json={"complex_code": "CC001", "send_slack": False})
-            mock_repo.save.assert_called_once_with(mock_report)
+        app.dependency_overrides[get_apt_orchestrator] = lambda: mock_orch
+        app.dependency_overrides[get_apt_analysis_repo] = lambda: mock_repo
+        try:
+            with patch("api.routers.real_estate._send_slack_if_needed"):
+                client.post("/jobs/apt/analyze", json={"complex_code": "CC001", "send_slack": False})
+        finally:
+            app.dependency_overrides.pop(get_apt_orchestrator, None)
+            app.dependency_overrides.pop(get_apt_analysis_repo, None)
+
+        mock_repo.save.assert_called_once_with(mock_report)
 
 
 class TestAptAnalysisGetEndpoints:
     def test_get_latest_returns_200_with_report(self):
         mock_report = _make_mock_report()
-        with patch("api.routers.real_estate._get_apt_analysis_repo") as mock_repo_fn:
-            mock_repo = MagicMock()
-            mock_repo.get_latest.return_value = mock_report
-            mock_repo_fn.return_value = mock_repo
+        mock_repo = MagicMock()
+        mock_repo.get_latest.return_value = mock_report
 
+        app.dependency_overrides[get_apt_analysis_repo] = lambda: mock_repo
+        try:
             resp = client.get("/dashboard/apt/analysis/CC001/latest")
+        finally:
+            app.dependency_overrides.pop(get_apt_analysis_repo, None)
 
         assert resp.status_code == 200
         assert resp.json()["complex_code"] == "CC001"
 
     def test_get_latest_returns_404_when_no_report(self):
-        with patch("api.routers.real_estate._get_apt_analysis_repo") as mock_repo_fn:
-            mock_repo = MagicMock()
-            mock_repo.get_latest.return_value = None
-            mock_repo_fn.return_value = mock_repo
+        mock_repo = MagicMock()
+        mock_repo.get_latest.return_value = None
 
+        app.dependency_overrides[get_apt_analysis_repo] = lambda: mock_repo
+        try:
             resp = client.get("/dashboard/apt/analysis/NOTFOUND/latest")
+        finally:
+            app.dependency_overrides.pop(get_apt_analysis_repo, None)
 
         assert resp.status_code == 404
 
     def test_get_history_returns_list(self):
         mock_report = _make_mock_report()
-        with patch("api.routers.real_estate._get_apt_analysis_repo") as mock_repo_fn:
-            mock_repo = MagicMock()
-            mock_repo.get_history.return_value = [mock_report]
-            mock_repo_fn.return_value = mock_repo
+        mock_repo = MagicMock()
+        mock_repo.get_history.return_value = [mock_report]
 
+        app.dependency_overrides[get_apt_analysis_repo] = lambda: mock_repo
+        try:
             resp = client.get("/dashboard/apt/analysis/CC001")
+        finally:
+            app.dependency_overrides.pop(get_apt_analysis_repo, None)
 
         assert resp.status_code == 200
         data = resp.json()
