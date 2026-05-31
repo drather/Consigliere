@@ -11,40 +11,48 @@
 ## 1. 계층 구조
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  실행계층  FastAPI Router / Streamlit View           │
-│  (얇은 Controller — 비즈니스 로직 없음, 10~15줄)     │
-└──────────────────┬──────────────────────────────────┘
-                   │ Depends() / direct factory call
-┌──────────────────▼──────────────────────────────────┐
-│  Service 계층  (단일 진실 공급원)                     │
-│  LocationService / AptAnalysisService /              │
-│  DailyReportService / MacroService                   │
-└─────┬────────────────┬──────────────┬───────────────┘
-      │                │              │
-┌─────▼──────┐  ┌──────▼──────┐  ┌───▼──────────────┐
-│  분석계층   │  │  수집계층   │  │   LLM 계층        │
-│ Orchestrat.│  │ API Clients │  │ LLMClient        │
-│ Analyzer   │  │(MOLIT,Kakao)│  │(Gemini/Claude)   │
-└─────┬──────┘  └──────┬──────┘  └───┬──────────────┘
-      └────────────────┴──────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────┐
-│  저장계층  Repository (SQLite, ChromaDB)              │
-└───────────────────────┬─────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────┐
-│  출력계층  Formatter (Slack / Markdown / 렌더링)      │
-│  (순수 함수 — 입력 dict → 출력 str/component)         │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│  실행계층  FastAPI Router / Streamlit View            │
+│  (얇은 Controller — 비즈니스 로직 없음, 10~15줄)      │
+└───────────────────────┬──────────────────────────────┘
+                        │ Depends() / direct factory call
+┌───────────────────────▼──────────────────────────────┐
+│  Service 계층  (단일 진실 공급원)                      │
+│  LocationService / AptAnalysisService /               │
+│  DailyReportService / MacroService                    │
+│                                                       │
+│  ① 분석/수집/저장 계층에서 raw data 조회               │
+│  ② 출력계층(Formatter)으로 포맷팅                     │
+│  ③ formatted result를 실행계층에 반환                  │
+└──────┬──────────────────────────┬─────────────────────┘
+       │ query / analyze          │ format(raw_data)
+┌──────▼──────────────┐  ┌────────▼────────────────────┐
+│  분석/수집/저장 계층  │  │  출력계층 (Formatter)        │
+│                      │  │  (순수 함수)                 │
+│  - Orchestrator      │  │  - Slack 메시지 포맷          │
+│  - Analyzer          │  │  - Markdown 문서 포맷         │
+│  - API Clients       │  │  - Dashboard 렌더링 dict      │
+│    (MOLIT, Kakao…)   │  │                              │
+│  - LLMClient         │  │  규칙: DB·외부 API 접근 금지  │
+│  - Repository        │  │  입력 dict → 출력 str/dict   │
+└─────────────────────┘  └────────────────────────────┘
+```
+
+**데이터 흐름:**
+```
+실행계층 → Service → 분석/수집/저장 (raw data 조회)
+                  ↓
+           출력계층 (raw data → formatted output)
+                  ↓
+실행계층 → 사용자 (화면 / Slack / Markdown)
 ```
 
 **계층 규칙:**
-- 의존성은 항상 위→아래로만 흐른다
-- 각 계층은 바로 아래 계층만 호출한다 (두 계층 이상 건너뛰기 금지)
 - 실행계층(FastAPI/Streamlit)은 Service 계층만 호출한다
-- Service 계층 이하는 HTTP requests 호출 금지
-- 출력계층은 순수 함수 — DB/외부 API 접근 금지
+- Service 계층은 분석/수집/저장 계층과 출력계층 양쪽을 호출한다
+- 분석/수집/저장 계층은 HTTP requests·Formatter 호출 금지
+- 출력계층은 순수 함수 — DB·외부 API 접근 금지
+- 계층 건너뛰기 금지 (실행계층이 Repository 직접 호출 등)
 
 ---
 
