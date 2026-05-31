@@ -250,3 +250,31 @@ def test_migrate_adds_nuisance_columns():
         assert "nuisance_mid_count" in cols
     finally:
         os.unlink(db_path)
+
+
+class TestPoiCollectorGetFreshComplexCodes:
+    def test_returns_fresh_code(self, db_path):
+        collector = PoiCollector(api_key="test", db_path=db_path, ttl_days=30)
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO poi_cache (complex_code, collected_at) VALUES (?, ?)",
+                ("CC001", now),
+            )
+        result = collector.get_fresh_complex_codes(["CC001", "CC002"])
+        assert result == {"CC001"}
+
+    def test_excludes_expired_code(self, db_path):
+        collector = PoiCollector(api_key="test", db_path=db_path, ttl_days=1)
+        old = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S")
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO poi_cache (complex_code, collected_at) VALUES (?, ?)",
+                ("CC001", old),
+            )
+        result = collector.get_fresh_complex_codes(["CC001"])
+        assert result == set()
+
+    def test_returns_empty_for_empty_input(self, db_path):
+        collector = PoiCollector(api_key="test", db_path=db_path)
+        assert collector.get_fresh_complex_codes([]) == set()
