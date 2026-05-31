@@ -15,10 +15,12 @@ except ImportError:
 try:
     from dashboard.api_client import DashboardClient
     from dashboard.components.map_view import render_master_map_view
+    from dashboard.services import get_location_score, get_location_score_as_dict, get_poi_cached
     from modules.real_estate.geocoder import GeocoderService
 except ImportError:
     from src.dashboard.api_client import DashboardClient
     from src.dashboard.components.map_view import render_master_map_view
+    from src.dashboard.services import get_location_score, get_location_score_as_dict, get_poi_cached
     from src.modules.real_estate.geocoder import GeocoderService
 
 
@@ -96,8 +98,10 @@ def _render_analysis_report(rdata: dict, complex_code: str = "") -> None:
         st.caption(f"🏗️ 공급리스크: {rdata['supply_risk_summary']}")
 
     # ── 입지 점수 (저장된 스냅샷 → live fallback) ────────────────────────────
-    from dashboard.services import get_location_score_as_dict as _get_loc_dict
-    loc = rdata.get("location_score") or (_get_loc_dict(complex_code) if complex_code else None)
+    try:
+        loc = rdata.get("location_score") or (get_location_score_as_dict(complex_code) if complex_code else None)
+    except Exception:
+        loc = rdata.get("location_score")
     if loc:
         st.markdown("#### 📍 입지 점수")
         lc1, lc2 = st.columns(2)
@@ -127,33 +131,35 @@ def _render_analysis_report(rdata: dict, complex_code: str = "") -> None:
             st.info("💰 투자 점수\n\n리포트 생성 후 표시됩니다.")
 
     # ── POI 분석 (실시간 조회) ────────────────────────────────────────────────
-    from dashboard.services import get_poi_cached as _get_poi
-    poi = _get_poi(complex_code) if complex_code else None
+    try:
+        poi = get_poi_cached(complex_code) if complex_code else None
+    except Exception:
+        poi = None
     if poi:
-            st.markdown("#### 🗺️ POI 분석 (주변 시설)")
-            stations = poi.get("subway_stations") or []
-            if stations:
-                station_text = " | ".join(f"{s['name']} ({s['walk_minutes']}분)" for s in stations[:5])
-                st.caption(f"🚇 지하철: {station_text}")
-            p1, p2, p3, p4 = st.columns(4)
-            with p1:
-                st.metric("🏫 학교", f"{poi['schools_count']}개")
-            with p2:
-                st.metric("📚 학원", f"{poi['academies_count']}개")
-            with p3:
-                st.metric("🛒 마트", f"{poi['marts_count']}개")
-            with p4:
-                st.metric("🏪 편의점", f"{poi['convenience_count']}개")
-            p5, p6, p7, p8 = st.columns(4)
-            with p5:
-                st.metric("💊 약국", f"{poi['pharmacy_count']}개")
-            with p6:
-                st.metric("🏥 의료", f"{poi['medical_count']}개")
-            with p7:
-                park_m = poi.get("park_nearest_m") or 0
-                st.metric("🌳 공원", f"{park_m}m" if park_m else "-")
-            with p8:
-                st.metric("🍽️ 음식점", f"{poi['restaurant_count']}개")
+        st.markdown("#### 🗺️ POI 분석 (주변 시설)")
+        stations = poi.get("subway_stations") or []
+        if stations:
+            station_text = " | ".join(f"{s['name']} ({s['walk_minutes']}분)" for s in stations[:5])
+            st.caption(f"🚇 지하철: {station_text}")
+        p1, p2, p3, p4 = st.columns(4)
+        with p1:
+            st.metric("🏫 학교", f"{poi['schools_count']}개")
+        with p2:
+            st.metric("📚 학원", f"{poi['academies_count']}개")
+        with p3:
+            st.metric("🛒 마트", f"{poi['marts_count']}개")
+        with p4:
+            st.metric("🏪 편의점", f"{poi['convenience_count']}개")
+        p5, p6, p7, p8 = st.columns(4)
+        with p5:
+            st.metric("💊 약국", f"{poi['pharmacy_count']}개")
+        with p6:
+            st.metric("🏥 의료", f"{poi['medical_count']}개")
+        with p7:
+            park_m = poi.get("park_nearest_m") or 0
+            st.metric("🌳 공원", f"{park_m}m" if park_m else "-")
+        with p8:
+            st.metric("🍽️ 음식점", f"{poi['restaurant_count']}개")
 
     # ── 출퇴근 ───────────────────────────────────────────────────────────────
     commute = rdata.get("commute_summary")
@@ -356,8 +362,10 @@ def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int =
         )
 
         # ── 실거주 / 투자 점수 카드 ──────────────────────────────────────────────
-        from dashboard.services import get_location_score as _get_loc_score
-        loc_score = _get_loc_score(complex_code or "")
+        try:
+            loc_score = get_location_score(complex_code or "")
+        except Exception:
+            loc_score = None
 
         col_res, col_inv = st.columns(2)
         if loc_score:
