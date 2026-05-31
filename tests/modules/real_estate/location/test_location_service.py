@@ -49,3 +49,15 @@ class TestLocationService:
         scorer.score.assert_called_once_with(candidate)
         loc_repo.upsert_score.assert_called_once_with(mock_score)
         assert result is mock_score
+
+    def test_collect_poi_delegates_to_poi_collector(self):
+        svc, _, poi_collector, *_ = _make_service()
+        svc.collect_poi("CC001", 37.5, 127.0)
+        poi_collector.collect.assert_called_once_with("CC001", 37.5, 127.0)
+
+    def test_get_stale_complex_codes_returns_difference(self):
+        svc, _, poi_collector, *_ = _make_service()
+        poi_collector.get_fresh_complex_codes.return_value = {"CC001"}
+        result = svc.get_stale_complex_codes(["CC001", "CC002"])
+        assert result == {"CC002"}
+        poi_collector.get_fresh_complex_codes.assert_called_once_with(["CC001", "CC002"])

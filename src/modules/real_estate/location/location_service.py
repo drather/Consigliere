@@ -32,3 +32,12 @@ class LocationService:
         score = self._scorer.score(candidate)
         self._loc_repo.upsert_score(score)
         return score
+
+    def collect_poi(self, complex_code: str, lat: float, lng: float) -> None:
+        """POI를 API로 수집하고 캐시에 저장한다."""
+        self._poi_collector.collect(complex_code, lat, lng)
+
+    def get_stale_complex_codes(self, all_codes: list) -> set:
+        """캐시 없거나 만료된 complex_code set 반환 (API 호출 없음)."""
+        fresh = self._poi_collector.get_fresh_complex_codes(all_codes)
+        return set(all_codes) - fresh
