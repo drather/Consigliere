@@ -24,6 +24,7 @@ from api.dependencies import (
     get_supply_client,
     get_apt_analysis_repo,
     get_apt_orchestrator,
+    get_report_repo,
 )
 from modules.real_estate.jeonse.repository import JeonseRepository
 from modules.real_estate.jeonse.client import JeonseClient
@@ -42,6 +43,7 @@ from modules.real_estate.apt_master_repository import AptMasterRepository
 from modules.real_estate.presenter import md_to_slack
 from modules.real_estate.apt_analysis.orchestrator import AptAnalysisOrchestrator
 from modules.real_estate.apt_analysis.repository import AptAnalysisRepository
+from modules.real_estate.report_repository import ReportRepository
 from core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -558,20 +560,10 @@ def collect_building_master(
 
 # ── 전문 컨설턴트 리포트 ──────────────────────────────────────────────
 
-def _get_report_repo():
-    """ReportRepository 인스턴스 반환 (config에서 경로 로드)."""
-    from modules.real_estate.config import RealEstateConfig
-    from modules.real_estate.report_repository import ReportRepository
-    cfg = RealEstateConfig()
-    storage_path = cfg.get("report", {}).get("report_storage_path", "data/real_estate_reports")
-    return ReportRepository(storage_path=storage_path)
-
-
 @router.get("/dashboard/real-estate/professional-reports")
-def list_professional_reports():
+def list_professional_reports(repo: ReportRepository = Depends(get_report_repo)):
     """저장된 전문 리포트 날짜 목록 반환."""
     try:
-        repo = _get_report_repo()
         return {"dates": repo.list_dates()}
     except Exception as e:
         logger.error(f"[API] list_professional_reports 오류: {e}")
@@ -579,10 +571,9 @@ def list_professional_reports():
 
 
 @router.get("/dashboard/real-estate/professional-reports/{date_str}")
-def get_professional_report(date_str: str):
+def get_professional_report(date_str: str, repo: ReportRepository = Depends(get_report_repo)):
     """특정 날짜 전문 리포트 반환."""
     try:
-        repo = _get_report_repo()
         report = repo.load(date_str)
         if report is None:
             raise HTTPException(status_code=404, detail=f"리포트 없음: {date_str}")
