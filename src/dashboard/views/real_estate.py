@@ -15,12 +15,22 @@ except ImportError:
 try:
     from dashboard.api_client import DashboardClient
     from dashboard.components.map_view import render_master_map_view
-    from dashboard.services import get_location_score, get_location_score_as_dict, get_poi_cached
+    from dashboard.services import (
+        get_location_score, get_location_score_as_dict, get_poi_cached,
+        count_apt_masters, get_distinct_sidos, get_distinct_sigungus,
+        search_apt_masters, get_apt_search_limits, get_apt_details,
+        get_building_master_by_pnu,
+    )
     from modules.real_estate.geocoder import GeocoderService
 except ImportError:
     from src.dashboard.api_client import DashboardClient
     from src.dashboard.components.map_view import render_master_map_view
-    from src.dashboard.services import get_location_score, get_location_score_as_dict, get_poi_cached
+    from src.dashboard.services import (
+        get_location_score, get_location_score_as_dict, get_poi_cached,
+        count_apt_masters, get_distinct_sidos, get_distinct_sigungus,
+        search_apt_masters, get_apt_search_limits, get_apt_details,
+        get_building_master_by_pnu,
+    )
     from src.modules.real_estate.geocoder import GeocoderService
 
 
@@ -280,12 +290,11 @@ def _render_commute_card(commute_data: dict):
             st.caption("조회 실패")
 
 
-def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int = 50) -> None:
+def _render_apt_detail_panel(entry, tx_limit: int = 50) -> None:
     """선택된 단지의 상세정보 + 실거래가 패널을 렌더링한다.
 
     Args:
         entry: AptMasterEntry (Transaction-First 마스터) 또는 ApartmentMaster (레거시)
-        apt_repo: ApartmentRepository — complex_code로 상세정보 조회 (optional)
         tx_limit: 실거래가 최대 표시 건수
     """
     from modules.real_estate.models import AptMasterEntry
@@ -299,8 +308,8 @@ def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int =
     details = None
     if is_apt_master_entry:
         # AptMasterEntry: complex_code 있으면 apt_details 조회
-        if entry.complex_code and apt_repo is not None:
-            details = apt_repo.get(entry.complex_code)
+        if entry.complex_code:
+            details = get_apt_details(entry.complex_code)
         if details is None:
             # 상세정보 없는 단지 — Transaction-First에서는 정상 케이스
             st.info("상세정보 없음 (공동주택 기본정보 API 미수록 단지)")
@@ -440,9 +449,9 @@ def _render_apt_detail_panel(entry, apt_repo=None, bm_repo=None, tx_limit: int =
 
     # ── 건물 정보 (용적률·건폐율 from building_master) ───────────────────────
     _pnu = getattr(entry, "pnu", None)
-    if _pnu and bm_repo is not None:
+    if _pnu:
         try:
-            _bm = bm_repo.get_by_mgm_pk(_pnu)
+            _bm = get_building_master_by_pnu(_pnu)
         except Exception:
             _bm = None
         if _bm is not None and (_bm.floor_area_ratio is not None or _bm.building_coverage_ratio is not None):
@@ -591,27 +600,10 @@ def show_real_estate():
     # ──────────────────────────────────────────────────────────
     with tab1:
         try:
-            try:
-                from modules.real_estate.apt_master_repository import AptMasterRepository
-                from modules.real_estate.apartment_repository import ApartmentRepository
-                from modules.real_estate.building_master.building_master_repository import BuildingMasterRepository
-                from modules.real_estate.config import RealEstateConfig
-            except ImportError:
-                from src.modules.real_estate.apt_master_repository import AptMasterRepository
-                from src.modules.real_estate.apartment_repository import ApartmentRepository
-                from src.modules.real_estate.building_master.building_master_repository import BuildingMasterRepository
-                from src.modules.real_estate.config import RealEstateConfig
-
-            _cfg = RealEstateConfig()
-            _re_db_path = _cfg.get("real_estate_db_path", "data/real_estate.db")
-            _tx_limit = int(_cfg.get("apt_search_tx_limit", 50))
-            _map_limit = int(_cfg.get("apt_search_map_limit", 100))
-            _repo = AptMasterRepository(db_path=_re_db_path)
-            _apt_detail_repo = ApartmentRepository(db_path=_re_db_path)
-            _bm_repo = BuildingMasterRepository(db_path=_re_db_path)
+            _tx_limit, _map_limit = get_apt_search_limits()
 
             # apt_master 테이블이 비어 있으면 안내
-            if _repo.count() == 0:
+            if count_apt_masters() == 0:
                 st.warning(
                     "⚠️ apt_master 테이블이 비어 있습니다. "
                     "먼저 마이그레이션 스크립트를 실행하세요:\n\n"
@@ -630,11 +622,11 @@ def show_real_estate():
                         key="master_search_name"
                     )
                 with col_f2:
-                    sido_opts = ["전체"] + _repo.get_distinct_sidos()
+                    sido_opts = ["전체"] + get_distinct_sidos()
                     selected_sido = st.selectbox("시도", sido_opts, key="master_sido")
                     sido_filter = "" if selected_sido == "전체" else selected_sido
                 with col_f3:
-                    sigungu_opts = ["전체"] + _repo.get_distinct_sigungus(sido_filter)
+                    sigungu_opts = ["전체"] + get_distinct_sigungus(sido_filter)
                     selected_sigungu = st.selectbox("시군구", sigungu_opts, key="master_sigungu")
                     sigungu_filter = "" if selected_sigungu == "전체" else selected_sigungu
 
@@ -647,7 +639,7 @@ def show_real_estate():
             # ── 검색 실행 ────────────────────────────────────────────────
             if search_btn or "master_results" not in st.session_state:
                 with st.spinner("검색 중..."):
-                    st.session_state.master_results = _repo.search(
+                    st.session_state.master_results = search_apt_masters(
                         apt_name=search_name,
                         sido=sido_filter,
                         sigungu=sigungu_filter,
@@ -707,8 +699,6 @@ def show_real_estate():
                     if _sel_idx is not None and _sel_idx < len(results):
                         _render_apt_detail_panel(
                             results[_sel_idx],
-                            apt_repo=_apt_detail_repo,
-                            bm_repo=_bm_repo,
                             tx_limit=_tx_limit,
                         )
 
