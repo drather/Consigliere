@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import os
 from datetime import datetime
@@ -42,7 +43,6 @@ from modules.real_estate.presenter import md_to_slack
 from modules.real_estate.apt_analysis.orchestrator import AptAnalysisOrchestrator
 from modules.real_estate.apt_analysis.repository import AptAnalysisRepository
 from core.logger import get_logger
-import dataclasses
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["Real Estate"])
@@ -982,7 +982,11 @@ def apt_analyze(
     except Exception as e:
         logger.error("[AptAnalyze] 분석 실패: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
-    repo.save(report)
+    try:
+        repo.save(report)
+    except Exception as e:
+        logger.error("[AptAnalyze] 저장 실패: %s", e)
+        raise HTTPException(status_code=500, detail="분석 결과 저장 실패")
     _send_slack_if_needed(report, req.send_slack)
     return {"status": "success", "report": dataclasses.asdict(report)}
 
