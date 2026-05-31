@@ -65,6 +65,9 @@ def get_apt_master_repo() -> AptMasterRepository:
 def get_building_master_service() -> BuildingMasterService:
     return _bm_service
 
+def get_bm_repo() -> BuildingMasterRepository:
+    return _bm_repo
+
 def get_automation_service() -> AutomationService:
     return _automation_service
 
@@ -207,3 +210,40 @@ def get_apt_analysis_repo() -> AptAnalysisRepository:
 
 def get_apt_orchestrator() -> AptAnalysisOrchestrator:
     return _apt_orchestrator
+
+
+# ── Report Repository ─────────────────────────────────────────────────────────
+from modules.real_estate.report_repository import ReportRepository as _ReportRepo
+
+_report_storage_path = _re_config.get("report", {}).get("report_storage_path", "data/real_estate_reports")
+_report_repo = _ReportRepo(storage_path=_report_storage_path)
+
+
+def get_report_repo() -> _ReportRepo:
+    return _report_repo
+
+
+# ── Geocoder Service ──────────────────────────────────────────────────────────
+from modules.real_estate.geocoder import GeocoderService as _GeocoderSvc
+
+_geocoder_service = _GeocoderSvc(
+    api_key=os.getenv("KAKAO_API_KEY", ""),
+    cache_path=_re_config.get("geocode_cache_path", "data/geocode_cache.db"),
+)
+
+
+def get_geocoder_service() -> _GeocoderSvc:
+    return _geocoder_service
+
+
+# ── Apt Search Config ─────────────────────────────────────────────────────────
+_apt_search_tx_limit = int(_re_config.get("apt_search_tx_limit", 50))
+_apt_search_map_limit = int(_re_config.get("apt_search_map_limit", 100))
+
+
+def get_apt_search_tx_limit() -> int:
+    return _apt_search_tx_limit
+
+
+def get_apt_search_map_limit() -> int:
+    return _apt_search_map_limit
