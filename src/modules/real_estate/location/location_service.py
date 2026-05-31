@@ -28,6 +28,7 @@ class LocationService:
 
     def enrich_and_save(self, complex_code: str, candidate: dict) -> LocationScore:
         """candidate dict 기반 스코어링 → 저장 → 반환."""
+        candidate = {**candidate, "complex_code": complex_code}
         score = self._scorer.score(candidate)
         self._loc_repo.upsert_score(score)
         return score
