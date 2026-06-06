@@ -113,3 +113,54 @@ class AutomationService:
          except Exception as e:
              logger.error(f"❌ Error running workflow {workflow_id}: {e}")
              return {"error": str(e)}
+
+    def list_executions(self, limit: int = 100, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Fetch workflow execution history from n8n."""
+        try:
+            params: Dict[str, Any] = {"limit": limit}
+            if status:
+                params["status"] = status
+            with httpx.Client() as client:
+                response = client.get(
+                    f"{self.base_url}/executions",
+                    headers=self.headers,
+                    params=params,
+                )
+                response.raise_for_status()
+                data = response.json()
+                return [self._format_execution(e) for e in data.get("data", [])]
+        except Exception as e:
+            logger.error(f"❌ Error fetching executions: {e}")
+            return []
+
+    def _format_execution(self, e: Dict[str, Any]) -> Dict[str, Any]:
+        from datetime import datetime, timezone, timedelta
+        KST = timezone(timedelta(hours=9))
+
+        def _to_kst(raw: Optional[str]) -> Optional[str]:
+            if not raw:
+                return None
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            return dt.astimezone(KST).strftime("%Y-%m-%d %H:%M:%S")
+
+        started_raw = e.get("startedAt")
+        stopped_raw = e.get("stoppedAt")
+        started_kst = _to_kst(started_raw)
+        stopped_kst = _to_kst(stopped_raw)
+
+        duration_sec = None
+        if started_raw and stopped_raw:
+            from datetime import datetime
+            t0 = datetime.fromisoformat(started_raw.replace("Z", "+00:00"))
+            t1 = datetime.fromisoformat(stopped_raw.replace("Z", "+00:00"))
+            duration_sec = round((t1 - t0).total_seconds(), 1)
+
+        return {
+            "id": e.get("id"),
+            "workflowId": e.get("workflowId"),
+            "workflowName": e.get("workflowData", {}).get("name", "Unknown"),
+            "status": e.get("status", "unknown"),
+            "startedAt": started_kst,
+            "stoppedAt": stopped_kst,
+            "duration_sec": duration_sec,
+        }
