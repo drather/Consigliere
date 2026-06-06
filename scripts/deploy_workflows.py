@@ -24,8 +24,8 @@ def main():
         "workflows/finance/finance_mvp.json",
         "workflows/real_estate/real_estate_monitor.json",
         "workflows/real_estate/real_estate_news.json",
-        "workflows/real_estate/insight_report_workflow.json",
         "workflows/real_estate/jeonse_supply_collect.json",
+        "workflows/real_estate/daily_report_schedule.json",
     ]
     
     for relative_path in workflows_to_deploy:
@@ -62,6 +62,21 @@ def main():
                 
         except Exception as e:
             print(f"❌ Error processing {file_path.name}: {e}")
+
+    # Deactivate legacy Slack-sending workflows
+    wf_to_deactivate = [
+        "[Consigliere] 부동산 종합 인사이트 리포트",
+        "[Consigliere] 부동산 실거래가 모니터링 (Slack 알림)",
+    ]
+    for name in wf_to_deactivate:
+        existing = service.get_workflow_by_name(name)
+        if existing and existing.get("active"):
+            service.activate_workflow(existing["id"], active=False)
+            print(f"  ⏹️  Deactivated: {name}")
+        elif existing:
+            print(f"  ✅ Already inactive: {name}")
+        else:
+            print(f"  ℹ️  Not found in n8n: {name}")
 
 if __name__ == "__main__":
     main()

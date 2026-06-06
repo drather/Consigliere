@@ -1,5 +1,6 @@
 {
   "name": "[Consigliere] 부동산 종합 인사이트 리포트",
+  "active": false,
   "nodes": [
     {
       "parameters": {
