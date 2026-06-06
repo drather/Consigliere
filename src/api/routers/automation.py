@@ -9,6 +9,7 @@ from core.logger import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["Automation"])
+_KST = timezone(timedelta(hours=9))
 
 class WorkflowDeployRequest(BaseModel):
     workflow_json: Dict[str, Any] = Field(..., description="The n8n workflow JSON definition")
@@ -70,8 +71,7 @@ def list_executions(
     executions = automation_service.list_executions(limit=limit, status=status)
 
     if days and executions:
-        KST = timezone(timedelta(hours=9))
-        cutoff = (datetime.now(tz=KST) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+        cutoff = (datetime.now(tz=_KST) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
         executions = [
             e for e in executions
             if e.get("startedAt") and e["startedAt"] >= cutoff
