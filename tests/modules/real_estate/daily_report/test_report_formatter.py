@@ -358,3 +358,77 @@ class TestBuildSlack:
         result = build_slack([c1, c2])
         assert "래미안" in result
         assert "힐스테이트" in result
+
+
+class TestBuildSlackHeader:
+    """build_slack() 헤더 확장 테스트"""
+
+    def _candidate(self) -> dict:
+        return {
+            "apt_name": "래미안",
+            "composite_score": 0.85,
+            "avg_recent_price": 1_250_000_000,
+            "price_change_pct": 3.2,
+            "_recent_tx_points": [
+                {"price_eok": 11.0, "deal_date": "2026-05-01"},
+                {"price_eok": 12.5, "deal_date": "2026-05-15"},
+            ],
+            "commute_transit_minutes": 32,
+            "commute_car_minutes": 18,
+            "commute_walk_minutes": None,
+            "_commute_route_summary": "",
+            "_verdict": "매수 적기",
+            "_key_points": ["역세권"],
+            "_location_score": None,
+        }
+
+    def test_date_str_appears_in_header(self):
+        from modules.real_estate.daily_report.report_formatter import build_slack
+        result = build_slack([self._candidate()], date_str="2026-06-06")
+        assert "2026-06-06" in result
+        assert "📊" in result
+
+    def test_candidate_count_in_header(self):
+        from modules.real_estate.daily_report.report_formatter import build_slack
+        result = build_slack([self._candidate(), self._candidate()], date_str="2026-06-06")
+        assert "2개" in result
+
+    def test_market_summary_section(self):
+        from modules.real_estate.daily_report.report_formatter import build_slack
+        result = build_slack(
+            [self._candidate()],
+            date_str="2026-06-06",
+            market_summary="- 금리 동결\n- 거래량 회복",
+        )
+        assert "💡" in result
+        assert "금리 동결" in result
+
+    def test_news_lines_section(self):
+        from modules.real_estate.daily_report.report_formatter import build_slack
+        result = build_slack(
+            [self._candidate()],
+            date_str="2026-06-06",
+            news_lines=["재건축 규제 완화", "전세 안정세"],
+        )
+        assert "📰" in result
+        assert "재건축 규제 완화" in result
+        assert "•" in result
+
+    def test_separator_changed_to_unicode_line(self):
+        from modules.real_estate.daily_report.report_formatter import build_slack
+        c2 = {**self._candidate(), "apt_name": "힐스테이트"}
+        result = build_slack([self._candidate(), c2])
+        assert "━" in result
+
+    def test_no_header_when_date_str_empty(self):
+        from modules.real_estate.daily_report.report_formatter import build_slack
+        result = build_slack([self._candidate()])
+        assert "📊" not in result
+        assert "래미안" in result
+
+    def test_backward_compat_no_positional_kwargs(self):
+        """기존 build_slack([c]) 호출 방식이 그대로 동작해야 한다."""
+        from modules.real_estate.daily_report.report_formatter import build_slack
+        result = build_slack([self._candidate()])
+        assert "래미안" in result
+        assert "<svg" not in result

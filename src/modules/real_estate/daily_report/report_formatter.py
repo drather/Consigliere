@@ -521,6 +521,32 @@ def _slack_candidate_block(c: dict) -> str:
     return "\n".join(lines)
 
 
-def build_slack(candidates: List[Dict]) -> str:
-    blocks = [_slack_candidate_block(c) for c in candidates]
-    return "\n\n---\n\n".join(blocks)
+def build_slack(
+    candidates: List[Dict],
+    date_str: str = "",
+    market_summary: str = "",
+    news_lines: Optional[List[str]] = None,
+) -> str:
+    parts: List[str] = []
+
+    if date_str:
+        header: List[str] = [
+            f"📊 *데일리 부동산 브리핑 — {date_str}*",
+            f"주목 단지 {len(candidates)}개",
+        ]
+        if market_summary:
+            header.append("")
+            header.append("💡 *시장 신호*")
+            for line in market_summary.splitlines():
+                stripped = line.strip()
+                if stripped:
+                    header.append(stripped if stripped.startswith("-") else f"- {stripped}")
+        if news_lines:
+            header.append("")
+            header.append("📰 *뉴스 요약*")
+            for ln in news_lines:
+                header.append(f"• {ln}")
+        parts.append("\n".join(header))
+
+    parts.extend(_slack_candidate_block(c) for c in candidates)
+    return "\n\n━━━━━━━━━━━━━━━\n\n".join(parts)
