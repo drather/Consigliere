@@ -101,8 +101,9 @@ _commute_cfg = _re_config.get("commute", {
 })
 _commute_db_path = _re_config.get("commute_cache_db_path", "data/commute_cache.db")
 
+_commute_repo = CommuteRepository(db_path=_commute_db_path, ttl_days=int(_commute_cfg.get("cache_ttl_days", 90)))
 _commute_service = CommuteService(
-    repo=CommuteRepository(db_path=_commute_db_path, ttl_days=int(_commute_cfg.get("cache_ttl_days", 90))),
+    repo=_commute_repo,
     tmap_client=HybridCommuteClient(
         odsay=OdsayClient(api_key=os.getenv("ODSAY_API_KEY", "")),
         tmap=TmapClient(api_key=os.getenv("TMAP_API_KEY", "")),
@@ -114,6 +115,10 @@ _commute_service = CommuteService(
 
 def get_commute_service() -> CommuteService:
     return _commute_service
+
+
+def get_commute_repo() -> CommuteRepository:
+    return _commute_repo
 
 
 from modules.real_estate.school.school_info_client import SchoolInfoClient
@@ -199,7 +204,7 @@ _apt_orchestrator = AptAnalysisOrchestrator(
     supply_repo=_supply_repo,
     loc_repo=_loc_repo,
     macro_svc=_apt_macro_svc,
-    commute_repo=CommuteRepository(db_path=_commute_db_path, ttl_days=int(_commute_cfg.get("cache_ttl_days", 90))),
+    commute_repo=_commute_repo,
     llm=LLMFactory.create(),
 )
 
@@ -245,3 +250,56 @@ def get_apt_search_tx_limit() -> int:
 
 def get_apt_search_map_limit() -> int:
     return _apt_search_map_limit
+
+
+# ── Daily Report Orchestrator ─────────────────────────────────────────────────
+from core.llm_pipeline import build_llm_pipeline
+from core.prompt_loader import PromptLoader
+from core.storage import get_storage_provider
+from modules.real_estate.trend_analyzer import TrendAnalyzer
+from modules.real_estate.comparative.analyzer import ComparativeAnalyzer
+from modules.real_estate.yield_analysis.calculator import YieldCalculator
+from modules.real_estate.supply.risk_analyzer import SupplyRiskAnalyzer
+from modules.real_estate.daily_report.transaction_aggregator import TransactionAggregator
+from modules.real_estate.daily_report.daily_report_repository import DailyReportRepository
+from modules.real_estate.daily_report.daily_report_orchestrator import DailyReportOrchestrator
+
+_daily_cfg = _re_config.get("daily_report", {})
+_daily_storage_path = _daily_cfg.get("storage_path", "data/daily_reports")
+_daily_report_repo = DailyReportRepository(storage_path=_daily_storage_path)
+_daily_llm = build_llm_pipeline()
+_root_storage = get_storage_provider("local", root_path=".")
+_prompt_loader = PromptLoader(_root_storage, base_dir="src/modules/real_estate/prompts")
+_yield_cfg = _re_config.get("yield_analysis", {})
+_daily_report_orchestrator = DailyReportOrchestrator(
+    llm=_daily_llm,
+    prompt_loader=_prompt_loader,
+    aggregator=TransactionAggregator(db_path=_re_db_path),
+    report_repo=_daily_report_repo,
+    db_path=_re_db_path,
+    poi_collector=_poi_collector,
+    trend_analyzer=TrendAnalyzer(db_path=_re_db_path),
+    commute_svc=_commute_service,
+    geocoder=_geocoder_service,
+    max_new_commute_api_calls=int(_daily_cfg.get("max_new_commute_api_calls", 5)),
+    comp_analyzer=ComparativeAnalyzer(tx_repo=_tx_repo),
+    yield_calculator=YieldCalculator(
+        jeonse_repo=_jeonse_repo,
+        mortgage_rate=float(_yield_cfg.get("mortgage_rate", 0.035)),
+    ),
+    supply_analyzer=SupplyRiskAnalyzer(
+        supply_repo=_supply_repo,
+        news_service=_news_service,
+        llm=_daily_llm,
+        prompt_loader=_prompt_loader,
+    ),
+    loc_repo=_loc_repo,
+)
+
+
+def get_daily_report_repo() -> DailyReportRepository:
+    return _daily_report_repo
+
+
+def get_daily_report_orchestrator() -> DailyReportOrchestrator:
+    return _daily_report_orchestrator

@@ -27,6 +27,10 @@ from api.dependencies import (
     get_report_repo,
     get_location_service,
     get_geocoder_service,
+    get_macro_service,
+    get_slack_sender,
+    get_daily_report_repo,
+    get_daily_report_orchestrator,
 )
 from modules.real_estate.jeonse.repository import JeonseRepository
 from modules.real_estate.jeonse.client import JeonseClient
@@ -48,6 +52,12 @@ from modules.real_estate.apt_analysis.repository import AptAnalysisRepository
 from modules.real_estate.report_repository import ReportRepository
 from modules.real_estate.location.location_service import LocationService
 from modules.real_estate.geocoder import GeocoderService
+from modules.real_estate.daily_report.daily_report_repository import DailyReportRepository
+from modules.real_estate.daily_report.daily_report_orchestrator import DailyReportOrchestrator
+from modules.real_estate.persona_manager import PersonaManager
+from modules.real_estate.report_orchestrator import _calc_budget
+from modules.macro.service import MacroCollectionService
+from core.notify.slack import SlackSender
 from core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -608,119 +618,38 @@ def generate_professional_report():
 
 
 @router.post("/jobs/daily-report/generate")
-def generate_daily_report(req: DailyReportRequest = None):
+def generate_daily_report(
+    req: DailyReportRequest = None,
+    report_repo: DailyReportRepository = Depends(get_daily_report_repo),
+    orchestrator: DailyReportOrchestrator = Depends(get_daily_report_orchestrator),
+    macro_svc: MacroCollectionService = Depends(get_macro_service),
+    slack: SlackSender = Depends(get_slack_sender),
+):
     """최근 N일 실거래 기반 데일리 리포트 생성 + Slack 전송."""
-    import os
     from datetime import date as _date
-    from core.llm_pipeline import build_llm_pipeline
-    from core.prompt_loader import PromptLoader
-    from core.storage import get_storage_provider
-    from core.notify.slack import SlackSender
-    from modules.real_estate.config import RealEstateConfig
-    from modules.real_estate.persona_manager import PersonaManager
-    from modules.real_estate.geocoder import GeocoderService
-    from modules.real_estate.poi_collector import PoiCollector
-    from modules.real_estate.trend_analyzer import TrendAnalyzer
-    from modules.real_estate.commute.commute_service import CommuteService
-    from modules.real_estate.commute.commute_repository import CommuteRepository
-    from modules.real_estate.commute.odsay_client import OdsayClient
-    from modules.real_estate.commute.tmap_client import TmapClient
-    from modules.real_estate.commute.hybrid_commute_client import HybridCommuteClient
-    from modules.real_estate.report_orchestrator import _calc_budget
-    from modules.real_estate.daily_report.transaction_aggregator import TransactionAggregator
-    from modules.real_estate.daily_report.daily_report_repository import DailyReportRepository
-    from modules.real_estate.daily_report.daily_report_orchestrator import DailyReportOrchestrator
-    from modules.real_estate.transaction_repository import TransactionRepository
-    from modules.real_estate.comparative.analyzer import ComparativeAnalyzer
-    from modules.real_estate.yield_analysis.calculator import YieldCalculator
-    from modules.real_estate.supply.risk_analyzer import SupplyRiskAnalyzer
-    from modules.real_estate.jeonse.repository import JeonseRepository
-    from modules.real_estate.supply.repository import SupplyRepository
-    from modules.real_estate.news.service import NewsService
-    from modules.macro.service import MacroCollectionService
 
     if req is None:
         req = DailyReportRequest()
 
     try:
-        cfg = RealEstateConfig()
-        re_db = cfg.get("real_estate_db_path", "data/real_estate.db")
-        daily_cfg = cfg.get("daily_report", {})
-        storage_path = daily_cfg.get("storage_path", "data/daily_reports")
-        kakao_key = os.getenv("KAKAO_API_KEY", "")
-
         target_date = _date.fromisoformat(req.target_date) if req.target_date else _date.today()
         date_str = target_date.isoformat()
 
-        report_repo = DailyReportRepository(storage_path=storage_path)
         if not req.force and report_repo.exists(date_str):
             return {
                 "status": "exists",
                 "date": date_str,
                 "top_k": None,
                 "total_transactions_analyzed": None,
-                "report_path": f"{storage_path}/daily_{date_str}.md",
+                "report_path": f"{report_repo._path}/daily_{date_str}.md",
                 "slack_sent": False,
             }
 
         persona = PersonaManager().load()
-        macro_db = cfg.get("macro_db_path", "data/macro.db")
-        macro_svc = MacroCollectionService(db_path=macro_db)
         macro_latest = macro_svc.get_latest(domain="real_estate")
         macro_lines = [f"{m.get('name','')}: {m.get('value','')}{m.get('unit','')}" for m in (macro_latest or [])]
         macro_summary = " | ".join(macro_lines[:6])
-
         budget_available = _calc_budget(persona, macro_summary)
-
-        llm = build_llm_pipeline()
-        root_storage = get_storage_provider("local", root_path=".")
-        prompt_loader = PromptLoader(root_storage, base_dir="src/modules/real_estate/prompts")
-
-        geocode_cache = cfg.get("geocode_cache_path", "data/geocode_cache.db")
-        geocoder = GeocoderService(api_key=kakao_key, cache_path=geocode_cache)
-
-        commute_cfg = cfg.get("commute", {})
-        commute_db = cfg.get("commute_cache_db_path", "data/commute_cache.db")
-        tmap_key = os.getenv("TMAP_API_KEY", "")
-        commute_svc = CommuteService(
-            repo=CommuteRepository(db_path=commute_db, ttl_days=int(commute_cfg.get("cache_ttl_days", 90))),
-            tmap_client=HybridCommuteClient(
-                odsay=OdsayClient(api_key=os.getenv("ODSAY_API_KEY", "")),
-                tmap=TmapClient(api_key=tmap_key),
-            ),
-            geocoder=geocoder,
-            config=commute_cfg,
-        )
-
-        max_commute_calls = daily_cfg.get("max_new_commute_api_calls", 5)
-        tx_repo = TransactionRepository(db_path=re_db)
-        jeonse_repo = JeonseRepository(db_path=re_db)
-        supply_repo = SupplyRepository(db_path=re_db)
-        yield_cfg = cfg.get("yield_analysis", {})
-        news_svc = NewsService()
-        orchestrator = DailyReportOrchestrator(
-            llm=llm,
-            prompt_loader=prompt_loader,
-            aggregator=TransactionAggregator(db_path=re_db),
-            report_repo=report_repo,
-            db_path=re_db,
-            poi_collector=PoiCollector(api_key=kakao_key, db_path=re_db),
-            trend_analyzer=TrendAnalyzer(db_path=re_db),
-            commute_svc=commute_svc,
-            geocoder=geocoder,
-            max_new_commute_api_calls=max_commute_calls,
-            comp_analyzer=ComparativeAnalyzer(tx_repo=tx_repo),
-            yield_calculator=YieldCalculator(
-                jeonse_repo=jeonse_repo,
-                mortgage_rate=float(yield_cfg.get("mortgage_rate", 0.035)),
-            ),
-            supply_analyzer=SupplyRiskAnalyzer(
-                supply_repo=supply_repo,
-                news_service=news_svc,
-                llm=llm,
-                prompt_loader=prompt_loader,
-            ),
-        )
 
         report = orchestrator.generate(
             target_date=target_date,
@@ -733,7 +662,6 @@ def generate_daily_report(req: DailyReportRequest = None):
 
         slack_sent = False
         try:
-            slack = SlackSender()
             slack.send(report.slack_text)
             slack_sent = True
             logger.info("[API] Slack 전송 완료 — daily report %s", date_str)
@@ -745,7 +673,7 @@ def generate_daily_report(req: DailyReportRequest = None):
             "date": date_str,
             "top_k": report.top_k,
             "total_transactions_analyzed": report.total_transactions,
-            "report_path": f"{storage_path}/daily_{date_str}.md",
+            "report_path": f"{report_repo._path}/daily_{date_str}.md",
             "slack_sent": slack_sent,
         }
 
@@ -755,14 +683,11 @@ def generate_daily_report(req: DailyReportRequest = None):
 
 
 @router.get("/dashboard/real-estate/daily-report/list")
-def list_daily_reports():
+def list_daily_reports(
+    report_repo: DailyReportRepository = Depends(get_daily_report_repo),
+):
     """저장된 데일리 리포트 날짜 목록 반환."""
-    from modules.real_estate.config import RealEstateConfig
-    from modules.real_estate.daily_report.daily_report_repository import DailyReportRepository
-    cfg = RealEstateConfig()
-    storage_path = cfg.get("daily_report", {}).get("storage_path", "data/daily_reports")
-    repo = DailyReportRepository(storage_path=storage_path)
-    return {"dates": repo.list_dates()}
+    return {"dates": report_repo.list_dates()}
 
 
 @router.get("/dashboard/real-estate/daily-report/{date_str}")
