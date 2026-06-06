@@ -104,6 +104,7 @@
         },
         "options": {}
       },
+      "disabled": true,
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
