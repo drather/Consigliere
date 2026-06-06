@@ -265,7 +265,13 @@ class DailyReportOrchestrator:
             insights_map=insights_map,
         )
 
-        slack_text = build_slack(candidates)
+        news_lines = self._load_news_lines(date_str)
+        slack_text = build_slack(
+            candidates=candidates,
+            date_str=date_str,
+            market_summary=market_summary,
+            news_lines=news_lines,
+        )
 
         # Step 7. 직렬화 가능한 candidates
         serializable_candidates = [
@@ -288,6 +294,19 @@ class DailyReportOrchestrator:
 
         self._repo.save(report)
         return report
+
+    def _load_news_lines(self, date_str: str, max_lines: int = 5) -> List[str]:
+        path = f"data/real_estate/news/{date_str}_News.md"
+        if not os.path.exists(path):
+            return []
+        with open(path, encoding="utf-8") as f:
+            content = f.read()
+        lines = [
+            ln.lstrip("-•* ").strip()
+            for ln in content.splitlines()
+            if ln.strip().startswith(("-", "•", "*")) and len(ln.strip()) > 10
+        ]
+        return lines[:max_lines]
 
     def _enrich_with_commute_quota(
         self,

@@ -1,5 +1,5 @@
 from datetime import date
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 from modules.real_estate.daily_report.daily_report_orchestrator import DailyReportOrchestrator
@@ -253,3 +253,61 @@ class TestEnrichCommuteAllModes:
 
         assert result[0].get("commute_transit_minutes") is None
         assert result[0].get("commute_car_minutes") is None
+
+
+class TestLoadNewsLines:
+    """_load_news_lines() 유닛 테스트"""
+
+    def _make_orch(self):
+        orch = DailyReportOrchestrator.__new__(DailyReportOrchestrator)
+        return orch
+
+    def test_returns_bullets_from_file(self):
+        content = "# 뉴스 요약\n\n- 재건축 규제 완화 검토\n- 전세 시장 안정세 지속\n"
+        orch = self._make_orch()
+        with patch(
+            "modules.real_estate.daily_report.daily_report_orchestrator.os.path.exists",
+            return_value=True,
+        ), patch(
+            "builtins.open",
+            mock_open(read_data=content),
+        ):
+            result = orch._load_news_lines("2026-06-06")
+        assert result == ["재건축 규제 완화 검토", "전세 시장 안정세 지속"]
+
+    def test_returns_empty_when_file_missing(self):
+        orch = self._make_orch()
+        with patch(
+            "modules.real_estate.daily_report.daily_report_orchestrator.os.path.exists",
+            return_value=False,
+        ):
+            result = orch._load_news_lines("2026-06-06")
+        assert result == []
+
+    def test_strips_bullet_prefix(self):
+        content = "• 항목A는 충분히 긴 문장\n* 항목B도 충분히 긴 문장\n- 항목C도 충분히 긴 문장\n"
+        orch = self._make_orch()
+        with patch(
+            "modules.real_estate.daily_report.daily_report_orchestrator.os.path.exists",
+            return_value=True,
+        ), patch(
+            "builtins.open",
+            mock_open(read_data=content),
+        ):
+            result = orch._load_news_lines("2026-06-06")
+        assert any("항목A" in r for r in result)
+        assert any("항목B" in r for r in result)
+        assert any("항목C" in r for r in result)
+
+    def test_max_lines_respected(self):
+        content = "\n".join(f"- 항목{i}번 충분히 긴 텍스트" for i in range(10))
+        orch = self._make_orch()
+        with patch(
+            "modules.real_estate.daily_report.daily_report_orchestrator.os.path.exists",
+            return_value=True,
+        ), patch(
+            "builtins.open",
+            mock_open(read_data=content),
+        ):
+            result = orch._load_news_lines("2026-06-06", max_lines=3)
+        assert len(result) == 3
