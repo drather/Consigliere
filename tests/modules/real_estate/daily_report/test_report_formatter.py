@@ -403,6 +403,15 @@ class TestBuildSlackHeader:
         assert "💡" in result
         assert "금리 동결" in result
 
+    def test_market_summary_plain_line_gets_dash_prefix(self):
+        from modules.real_estate.daily_report.report_formatter import build_slack
+        result = build_slack(
+            [self._candidate()],
+            date_str="2026-06-06",
+            market_summary="금리 동결 지속",
+        )
+        assert "- 금리 동결 지속" in result
+
     def test_news_lines_section(self):
         from modules.real_estate.daily_report.report_formatter import build_slack
         result = build_slack(
