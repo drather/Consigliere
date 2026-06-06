@@ -363,6 +363,20 @@ class DashboardClient:
             return []
 
     @staticmethod
+    def get_executions(days: int = 7, limit: int = 100) -> dict:
+        """n8n 워크플로우 실행 내역 및 요약 반환."""
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/dashboard/automation/executions",
+                params={"days": days, "limit": limit},
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching executions: {e}")
+            return {"executions": [], "summary": {"total": 0, "success": 0, "error": 0}}
+
+    @staticmethod
     def run_workflow(workflow_id: str) -> Dict:
         """Manually triggers an n8n workflow."""
         try:
