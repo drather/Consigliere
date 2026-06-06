@@ -7,7 +7,7 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 9 * * *"
+              "expression": "30 6 * * *"
             }
           ]
         }
@@ -19,7 +19,7 @@
         0
       ],
       "id": "schedule-trigger",
-      "name": "Daily Schedule (09:00)"
+      "name": "Daily Schedule (06:30)"
     },
     {
       "parameters": {
@@ -110,7 +110,7 @@
     }
   ],
   "connections": {
-    "Daily Schedule (09:00)": {
+    "Daily Schedule (06:30)": {
       "main": [
         [
           {
