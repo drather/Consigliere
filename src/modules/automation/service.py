@@ -1,9 +1,12 @@
 import httpx
 import json
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
 from core.logger import get_logger
 
 logger = get_logger(__name__)
+
+_KST = timezone(timedelta(hours=9))
 
 
 class AutomationService:
@@ -134,14 +137,11 @@ class AutomationService:
             return []
 
     def _format_execution(self, e: Dict[str, Any]) -> Dict[str, Any]:
-        from datetime import datetime, timezone, timedelta
-        KST = timezone(timedelta(hours=9))
-
         def _to_kst(raw: Optional[str]) -> Optional[str]:
             if not raw:
                 return None
             dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-            return dt.astimezone(KST).strftime("%Y-%m-%d %H:%M:%S")
+            return dt.astimezone(_KST).strftime("%Y-%m-%d %H:%M:%S")
 
         started_raw = e.get("startedAt")
         stopped_raw = e.get("stoppedAt")
@@ -150,7 +150,6 @@ class AutomationService:
 
         duration_sec = None
         if started_raw and stopped_raw:
-            from datetime import datetime
             t0 = datetime.fromisoformat(started_raw.replace("Z", "+00:00"))
             t1 = datetime.fromisoformat(stopped_raw.replace("Z", "+00:00"))
             duration_sec = round((t1 - t0).total_seconds(), 1)
