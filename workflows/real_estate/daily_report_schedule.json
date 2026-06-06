@@ -1,0 +1,104 @@
+{
+  "name": "[Consigliere] Daily Report (08:00 KST)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "schedule-trigger",
+      "name": "Daily Schedule (08:00)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://consigliere_api:8000/jobs/daily-report/generate",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "days", "value": "3" },
+            { "name": "top_k", "value": "5" },
+            { "name": "force", "value": "false" }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, 0],
+      "id": "generate-daily-report",
+      "name": "Generate Daily Report"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "check-error",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "success",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [500, 0],
+      "id": "check-status",
+      "name": "Check Status"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://consigliere_api:8000/notify/slack",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "=❌ Daily Report 생성 실패 ({{ $now.format('YYYY-MM-DD') }}): {{ $json.detail || 'Unknown error' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, -100],
+      "id": "slack-error-alert",
+      "name": "Slack Error Alert"
+    }
+  ],
+  "connections": {
+    "Daily Schedule (08:00)": {
+      "main": [[ { "node": "Generate Daily Report", "type": "main", "index": 0 } ]]
+    },
+    "Generate Daily Report": {
+      "main": [[ { "node": "Check Status", "type": "main", "index": 0 } ]]
+    },
+    "Check Status": {
+      "main": [
+        [ { "node": "Slack Error Alert", "type": "main", "index": 0 } ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
