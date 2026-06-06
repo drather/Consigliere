@@ -1,3 +1,4 @@
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional
@@ -66,8 +67,6 @@ def list_executions(
     automation_service: AutomationService = Depends(get_automation_service),
 ):
     """n8n 워크플로우 실행 내역 조회 (KST 기준 타임라인)."""
-    from datetime import datetime, timezone, timedelta
-
     executions = automation_service.list_executions(limit=limit, status=status)
 
     if days and executions:
