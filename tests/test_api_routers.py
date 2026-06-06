@@ -29,3 +29,14 @@ def test_real_estate_news_list():
 def test_automation_list_workflows():
     response = client.get("/agent/automation/workflows")
     assert response.status_code in [200, 500] # 500 if n8n is not running locally, which is fine
+
+def test_list_executions_returns_structure():
+    """GET /dashboard/automation/executions returns correct structure."""
+    response = client.get("/dashboard/automation/executions?days=1&limit=10")
+    assert response.status_code == 200
+    body = response.json()
+    assert "executions" in body
+    assert "summary" in body
+    assert "total" in body["summary"]
+    assert "success" in body["summary"]
+    assert "error" in body["summary"]

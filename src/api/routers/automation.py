@@ -57,3 +57,31 @@ def run_workflow(workflow_id: str, payload: Optional[Dict[str, Any]] = None, aut
     except Exception as e:
         logger.error(f"Automation Run Workflow Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/dashboard/automation/executions")
+def list_executions(
+    limit: int = 100,
+    status: Optional[str] = None,
+    days: int = 7,
+    automation_service: AutomationService = Depends(get_automation_service),
+):
+    """n8n 워크플로우 실행 내역 조회 (KST 기준 타임라인)."""
+    from datetime import datetime, timezone, timedelta
+
+    executions = automation_service.list_executions(limit=limit, status=status)
+
+    if days and executions:
+        KST = timezone(timedelta(hours=9))
+        cutoff = (datetime.now(tz=KST) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+        executions = [
+            e for e in executions
+            if e.get("startedAt") and e["startedAt"] >= cutoff
+        ]
+
+    summary = {
+        "total": len(executions),
+        "success": sum(1 for e in executions if e.get("status") == "success"),
+        "error": sum(1 for e in executions if e.get("status") == "error"),
+    }
+
+    return {"executions": executions, "summary": summary}
