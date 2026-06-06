@@ -1,5 +1,5 @@
 {
-  "name": "[Consigliere] Daily Report (08:00 KST)",
+  "name": "[Consigliere] Daily Report (07:00 KST)",
   "nodes": [
     {
       "parameters": {
@@ -7,7 +7,7 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 8 * * *"
+              "expression": "0 7 * * *"
             }
           ]
         }
@@ -16,7 +16,7 @@
       "typeVersion": 1.2,
       "position": [0, 0],
       "id": "schedule-trigger",
-      "name": "Daily Schedule (08:00)"
+      "name": "Daily Schedule (07:00)"
     },
     {
       "parameters": {
@@ -85,7 +85,7 @@
     }
   ],
   "connections": {
-    "Daily Schedule (08:00)": {
+    "Daily Schedule (07:00)": {
       "main": [[ { "node": "Generate Daily Report", "type": "main", "index": 0 } ]]
     },
     "Generate Daily Report": {
