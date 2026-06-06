@@ -1,6 +1,18 @@
 # Project Consigliere: History
 **Last Updated:** 2026-05-31
 
+## 2026-06-06 — 아키텍처 DI 최종 정리 (arch-di-final-cleanup)
+
+- **목표:** 이전 리팩토링에서 "future work"로 남긴 2건 완전 제거
+- **수정 파일:**
+  - `src/api/dependencies.py` — `_commute_repo` 싱글톤 추출 + Daily Report 섹션 신규 (`_daily_report_repo`, `_daily_llm`, `_prompt_loader`, `_daily_report_orchestrator`)
+  - `src/api/routers/real_estate.py` — `generate_daily_report` 20+ 로컬 빌더 → `Depends()` 전환, `list_daily_reports` 동일
+- **커밋:** `83207b0`
+- **테스트:** 858 passed, 7 pre-existing failures (기존 미변경)
+- **문서:** `docs/features/arch-di-final-cleanup/` (spec/progress/issues/result)
+
+---
+
 ## 2026-05-31 (후속) — 아키텍처 후속 정리: Tab1 DI 전환 + collect_poi + ReportRepository
 
 - **목표:** 이전 리팩토링에서 미처리된 아키텍처 위반 3건 완전 제거

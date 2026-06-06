@@ -26,6 +26,15 @@
   - `routers/real_estate.py` apt_analyze Depends() 전환, 내부 빌더 제거
   - `dashboard/views/real_estate.py` sqlite3·LocationRepository 직접 접근 제거
 
+## 최근 완료 (2026-06-06)
+
+- **아키텍처 DI 최종 정리** (`arch-di-final-cleanup`)
+  - `CommuteRepository` 이중 인스턴스화 제거 → `_commute_repo` 싱글톤으로 `_commute_service`/`_apt_orchestrator` 공유
+  - `generate_daily_report` 20+ 로컬 빌더 → `Depends(get_daily_report_orchestrator)` 전환
+  - `list_daily_reports` 로컬 Config/Repo 생성 → `Depends(get_daily_report_repo)` 전환
+  - `dependencies.py` DailyReport 섹션 신규 (orchestrator, report_repo, llm, prompt_loader 싱글톤)
+  - 테스트: 858 passed, 신규 실패 없음
+
 ## 다음 작업 로드맵
 
 ### 1순위 — POI 입지분석 고도화
