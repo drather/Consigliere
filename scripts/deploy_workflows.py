@@ -66,6 +66,7 @@ def main():
     # Deactivate legacy Slack-sending workflows
     wf_to_deactivate = [
         "[Consigliere] 부동산 실거래가 모니터링 (Slack 알림)",
+        "[Consigliere] 부동산 종합 인사이트 리포트",
     ]
     for name in wf_to_deactivate:
         existing = service.get_workflow_by_name(name)
