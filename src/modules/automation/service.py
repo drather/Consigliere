@@ -48,9 +48,10 @@ class AutomationService:
         try:
             with httpx.Client() as client:
                 if workflow_id:
-                    # Update existing
+                    # Update existing — n8n rejects 'id' in the body (read-only, already in URL path)
                     url = f"{self.base_url}/workflows/{workflow_id}"
-                    response = client.put(url, headers=self.headers, json=workflow_json)
+                    body = {k: v for k, v in workflow_json.items() if k != "id"}
+                    response = client.put(url, headers=self.headers, json=body)
                 else:
                     # Create new
                     url = f"{self.base_url}/workflows"

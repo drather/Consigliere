@@ -97,3 +97,24 @@ def test_format_execution_handles_missing_stopped_at():
     assert result[0]["stoppedAt"] is None
     assert result[0]["duration_sec"] is None
     assert result[0]["status"] == "running"
+
+
+def test_deploy_workflow_strips_id_from_update_request_body():
+    """n8n PUT /workflows/{id} rejects a body containing 'id' (read-only field)."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": "existing-id-123", "name": "Test WF", "active": False}
+
+    with patch("httpx.Client") as MockClient:
+        mock_client = MagicMock()
+        MockClient.return_value.__enter__.return_value = mock_client
+        mock_client.put.return_value = mock_response
+
+        service = AutomationService(n8n_url="http://localhost:5678", api_key="test-key")
+        workflow_json = {"id": "existing-id-123", "name": "Test WF", "nodes": [], "connections": {}}
+        result = service.deploy_workflow(workflow_json, activate=False)
+
+    assert "error" not in result
+    sent_body = mock_client.put.call_args.kwargs["json"]
+    assert "id" not in sent_body
+    assert sent_body["name"] == "Test WF"
