@@ -593,7 +593,14 @@ def _render_apt_detail_panel(entry, tx_limit: int = 50) -> None:
 def show_real_estate():
     st.title("🏢 Real Estate Insights")
 
-    tab1, tab2, tab3, tab4 = st.tabs(["🔍 아파트 탐색", "💡 Insight", "📰 데일리 리포트", "👤 페르소나"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "🔍 아파트 탐색",
+        "📈 거시경제",
+        "📰 뉴스 리포트",
+        "📌 정책 팩트",
+        "📋 데일리 브리핑",
+        "👤 페르소나",
+    ])
 
     # ──────────────────────────────────────────────────────────
     # TAB 1: 아파트 탐색 (마스터 필터 → 목록 → 상세 + 실거래가 + 지도)
@@ -777,156 +784,156 @@ def show_real_estate():
             st.info("DB 경로 또는 API 서버 상태를 확인하세요.")
 
     # ──────────────────────────────────────────────────────────
-    # TAB 2: Insight (서브탭 3개)
+    # TAB 2: 거시경제
     # ──────────────────────────────────────────────────────────
     with tab2:
-        news_tab0, news_tab1, news_tab2 = st.tabs(["📈 거시경제", "📰 뉴스 리포트", "📌 정책 팩트"])
+        st.subheader("거시경제 지표")
 
-        # ── 거시경제 ──────────────────────────────────────────
-        with news_tab0:
-            st.subheader("거시경제 지표")
+        if "macro_latest" not in st.session_state:
+            with st.spinner("한국은행 지표 로딩 중..."):
+                st.session_state.macro_latest = DashboardClient.get_macro_latest(domain="real_estate")
 
-            if "macro_latest" not in st.session_state:
-                with st.spinner("한국은행 지표 로딩 중..."):
-                    st.session_state.macro_latest = DashboardClient.get_macro_latest(domain="real_estate")
+        items = st.session_state.macro_latest
 
-            items = st.session_state.macro_latest
+        if not items:
+            st.info("거시경제 데이터를 불러올 수 없습니다.")
+            st.caption("수집 Job을 먼저 실행하거나 '💡 Insight' 탭 내 거시경제 수집 버튼을 사용하세요.")
+        else:
+            from collections import defaultdict
+            by_category: dict = defaultdict(list)
+            for item in items:
+                by_category[item.get("category", "기타")].append(item)
 
-            if not items:
-                st.info("거시경제 데이터를 불러올 수 없습니다.")
-                st.caption("수집 Job을 먼저 실행하거나 '💡 Insight' 탭 내 거시경제 수집 버튼을 사용하세요.")
-            else:
-                from collections import defaultdict
-                by_category: dict = defaultdict(list)
-                for item in items:
-                    by_category[item.get("category", "기타")].append(item)
+            cat_tabs = st.tabs([f"📊 {cat}" for cat in by_category])
+            for cat_tab, (cat_name, cat_items) in zip(cat_tabs, by_category.items()):
+                with cat_tab:
+                    cols = st.columns(min(len(cat_items), 3))
+                    for col, item in zip(cols, cat_items):
+                        with col:
+                            unit = item["unit"]
+                            val = item["value"]
+                            if unit == "지수":
+                                disp = f"{val:,.3f}".rstrip("0").rstrip(".")
+                            elif unit == "십억원":
+                                disp = f"{val / 1_000:,.0f}조원"
+                            else:
+                                disp = f"{val}{unit}"
+                            st.metric(
+                                label=item["name"],
+                                value=disp,
+                                help=f"기준기간: {item['period']} | 수집: {item['collected_at'][:10]}",
+                            )
 
-                cat_tabs = st.tabs([f"📊 {cat}" for cat in by_category])
-                for cat_tab, (cat_name, cat_items) in zip(cat_tabs, by_category.items()):
-                    with cat_tab:
-                        cols = st.columns(min(len(cat_items), 3))
-                        for col, item in zip(cols, cat_items):
-                            with col:
-                                unit = item["unit"]
-                                val = item["value"]
-                                if unit == "지수":
-                                    disp = f"{val:,.3f}".rstrip("0").rstrip(".")
-                                elif unit == "십억원":
-                                    disp = f"{val / 1_000:,.0f}조원"
-                                else:
-                                    disp = f"{val}{unit}"
-                                st.metric(
-                                    label=item["name"],
-                                    value=disp,
-                                    help=f"기준기간: {item['period']} | 수집: {item['collected_at'][:10]}",
-                                )
-
-                        st.markdown("---")
-
-                        first = cat_items[0]
-                        chart_data = DashboardClient.get_macro_indicator_history(
-                            indicator_id=first["id"], months=24
-                        )
-                        records = chart_data.get("records", [])
-                        if records:
-                            chart_df = pd.DataFrame(records).set_index("period")
-                            st.markdown(f"**{first['name']} 추이 (최근 24개월)**")
-                            st.line_chart(chart_df["value"], height=250)
-                            st.caption(f"출처: 한국은행 ECOS | 단위: {first['unit']}")
-
-            if st.button("🔄 새로고침", key="macro_refresh"):
-                st.session_state.pop("macro_latest", None)
-                st.rerun()
-
-        # ── 뉴스 리포트 ──
-        with news_tab1:
-            st.subheader("일별 뉴스 분석 리포트")
-
-            # 수집 버튼
-            with st.expander("📥 뉴스 수집", expanded=False):
-                st.caption("오늘 날짜 기준으로 부동산 뉴스를 수집·분석해 마크다운 리포트를 저장합니다. (30초~1분 소요)")
-                if st.button("📥 뉴스 수집 실행", key="fetch_news_btn"):
-                    with st.spinner("뉴스 수집 및 LLM 분석 중..."):
-                        r = DashboardClient.trigger_fetch_news()
-                    if "error" in r:
-                        st.error(r["error"])
-                    else:
-                        st.success(f"✅ {r.get('report_date', '')} 뉴스 리포트 생성 완료")
-                        st.rerun()
-
-            st.markdown("---")
-
-            report_files = DashboardClient.list_news_reports()
-            if not report_files:
-                st.warning("생성된 뉴스 리포트가 없습니다. 위 '📥 뉴스 수집'을 먼저 실행하세요.")
-            else:
-                selected_file = st.selectbox("리포트 날짜 선택", report_files)
-                if selected_file:
-                    with st.spinner("리포트 로딩 중..."):
-                        content = DashboardClient.get_news_content(selected_file)
                     st.markdown("---")
-                    st.markdown(content)
 
-        # ── 정책 팩트 ──
-        with news_tab2:
-            st.subheader("정책·개발 팩트 검색")
+                    first = cat_items[0]
+                    chart_data = DashboardClient.get_macro_indicator_history(
+                        indicator_id=first["id"], months=24
+                    )
+                    records = chart_data.get("records", [])
+                    if records:
+                        chart_df = pd.DataFrame(records).set_index("period")
+                        st.markdown(f"**{first['name']} 추이 (최근 24개월)**")
+                        st.line_chart(chart_df["value"], height=250)
+                        st.caption(f"출처: 한국은행 ECOS | 단위: {first['unit']}")
 
-            # 수집 버튼
-            with st.expander("📥 정책 팩트 수집", expanded=False):
-                st.caption("뉴스를 크롤링해 확정된 정책·개발 사실(Hard Facts)을 LLM으로 추출하고 ChromaDB에 저장합니다. (1~2분 소요)")
-                if st.button("📥 정책 팩트 수집 실행", key="fetch_policy_btn"):
-                    with st.spinner("크롤링 및 팩트 추출 중..."):
-                        r = DashboardClient.trigger_update_policy()
-                    if "error" in r:
-                        st.error(r["error"])
-                    else:
-                        st.success(f"✅ 팩트 {r.get('indexed_facts', 0)}건 저장 완료")
-                        st.session_state.pop("policy_facts", None)
-                        st.rerun()
-
-            st.markdown("---")
-
-            col_q, col_n, col_btn = st.columns([3, 1, 1])
-            with col_q:
-                policy_query = st.text_input("검색어", value="부동산 정책 공급 개발", label_visibility="collapsed")
-            with col_n:
-                n_results = st.selectbox("건수", [5, 10, 20], label_visibility="collapsed")
-            with col_btn:
-                policy_search_btn = st.button("🔍 검색", key="policy_search", use_container_width=True)
-
-            if "policy_facts" not in st.session_state:
-                st.session_state.policy_facts = DashboardClient.search_policy_facts("부동산 정책 공급 개발", 10)
-
-            if policy_search_btn:
-                with st.spinner("ChromaDB 검색 중..."):
-                    st.session_state.policy_facts = DashboardClient.search_policy_facts(policy_query, n_results)
-
-            facts = st.session_state.policy_facts
-            if not facts:
-                st.warning("저장된 정책 팩트가 없습니다.")
-                st.info("위 '📥 정책 팩트 수집'을 먼저 실행하세요.")
-            else:
-                st.success(f"**{len(facts)}건** 검색됨")
-                for fact in facts:
-                    meta = fact.get("metadata", {})
-                    title = meta.get("short_title") or meta.get("title") or fact.get("id", "")
-                    fact_date = meta.get("date", "")
-                    category = meta.get("category", "")
-                    label = f"📌 [{fact_date}] [{category}] {title}" if fact_date else f"📌 [{category}] {title}"
-                    with st.expander(label, expanded=False):
-                        st.caption(f"출처: {meta.get('source', '-')}")
-                        st.markdown(fact.get("content", ""))
+        if st.button("🔄 새로고침", key="macro_refresh"):
+            st.session_state.pop("macro_latest", None)
+            st.rerun()
 
     # ──────────────────────────────────────────────────────────
-    # TAB 3: 데일리 리포트
+    # TAB 3: 뉴스 리포트
     # ──────────────────────────────────────────────────────────
     with tab3:
+        st.subheader("일별 뉴스 분석 리포트")
+
+        # 수집 버튼
+        with st.expander("📥 뉴스 수집", expanded=False):
+            st.caption("오늘 날짜 기준으로 부동산 뉴스를 수집·분석해 마크다운 리포트를 저장합니다. (30초~1분 소요)")
+            if st.button("📥 뉴스 수집 실행", key="fetch_news_btn"):
+                with st.spinner("뉴스 수집 및 LLM 분석 중..."):
+                    r = DashboardClient.trigger_fetch_news()
+                if "error" in r:
+                    st.error(r["error"])
+                else:
+                    st.success(f"✅ {r.get('report_date', '')} 뉴스 리포트 생성 완료")
+                    st.rerun()
+
+        st.markdown("---")
+
+        report_files = DashboardClient.list_news_reports()
+        if not report_files:
+            st.warning("생성된 뉴스 리포트가 없습니다. 위 '📥 뉴스 수집'을 먼저 실행하세요.")
+        else:
+            selected_file = st.selectbox("리포트 날짜 선택", report_files)
+            if selected_file:
+                with st.spinner("리포트 로딩 중..."):
+                    content = DashboardClient.get_news_content(selected_file)
+                st.markdown("---")
+                st.markdown(content)
+
+    # ──────────────────────────────────────────────────────────
+    # TAB 4: 정책 팩트
+    # ──────────────────────────────────────────────────────────
+    with tab4:
+        st.subheader("정책·개발 팩트 검색")
+
+        # 수집 버튼
+        with st.expander("📥 정책 팩트 수집", expanded=False):
+            st.caption("뉴스를 크롤링해 확정된 정책·개발 사실(Hard Facts)을 LLM으로 추출하고 ChromaDB에 저장합니다. (1~2분 소요)")
+            if st.button("📥 정책 팩트 수집 실행", key="fetch_policy_btn"):
+                with st.spinner("크롤링 및 팩트 추출 중..."):
+                    r = DashboardClient.trigger_update_policy()
+                if "error" in r:
+                    st.error(r["error"])
+                else:
+                    st.success(f"✅ 팩트 {r.get('indexed_facts', 0)}건 저장 완료")
+                    st.session_state.pop("policy_facts", None)
+                    st.rerun()
+
+        st.markdown("---")
+
+        col_q, col_n, col_btn = st.columns([3, 1, 1])
+        with col_q:
+            policy_query = st.text_input("검색어", value="부동산 정책 공급 개발", label_visibility="collapsed")
+        with col_n:
+            n_results = st.selectbox("건수", [5, 10, 20], label_visibility="collapsed")
+        with col_btn:
+            policy_search_btn = st.button("🔍 검색", key="policy_search", use_container_width=True)
+
+        if "policy_facts" not in st.session_state:
+            st.session_state.policy_facts = DashboardClient.search_policy_facts("부동산 정책 공급 개발", 10)
+
+        if policy_search_btn:
+            with st.spinner("ChromaDB 검색 중..."):
+                st.session_state.policy_facts = DashboardClient.search_policy_facts(policy_query, n_results)
+
+        facts = st.session_state.policy_facts
+        if not facts:
+            st.warning("저장된 정책 팩트가 없습니다.")
+            st.info("위 '📥 정책 팩트 수집'을 먼저 실행하세요.")
+        else:
+            st.success(f"**{len(facts)}건** 검색됨")
+            for fact in facts:
+                meta = fact.get("metadata", {})
+                title = meta.get("short_title") or meta.get("title") or fact.get("id", "")
+                fact_date = meta.get("date", "")
+                category = meta.get("category", "")
+                label = f"📌 [{fact_date}] [{category}] {title}" if fact_date else f"📌 [{category}] {title}"
+                with st.expander(label, expanded=False):
+                    st.caption(f"출처: {meta.get('source', '-')}")
+                    st.markdown(fact.get("content", ""))
+
+    # ──────────────────────────────────────────────────────────
+    # TAB 5: 데일리 브리핑
+    # ──────────────────────────────────────────────────────────
+    with tab5:
         _render_daily_report_tab()
 
     # ──────────────────────────────────────────────────────────
-    # TAB 4: 페르소나 편집
+    # TAB 6: 페르소나 편집
     # ──────────────────────────────────────────────────────────
-    with tab4:
+    with tab6:
         st.subheader("👤 페르소나 설정")
         st.caption("여기서 수정한 값은 다음 부동산 리포트 생성 시 즉시 반영됩니다.")
 

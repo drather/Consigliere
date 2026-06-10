@@ -61,12 +61,12 @@ def test_real_estate_no_exception_on_load(page, base_url):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.e2e
-def test_apt_four_main_tabs_exist(page, base_url):
-    """SCN-03: 4개 주 탭(아파트 탐색 / Insight / Report Archive / 페르소나)이 렌더링된다."""
+def test_real_estate_six_tabs_exist(page, base_url):
+    """SCN-03: Real Estate에 6개 탭(아파트 탐색/거시경제/뉴스 리포트/정책 팩트/데일리 브리핑/페르소나)이 렌더링된다."""
     go_to_real_estate(page, base_url)
     page.wait_for_selector("[role='tablist']", timeout=8_000)
 
-    for label in ["아파트 탐색", "Insight", "Report Archive", "페르소나"]:
+    for label in ["아파트 탐색", "거시경제", "뉴스 리포트", "정책 팩트", "데일리 브리핑", "페르소나"]:
         count = page.get_by_role("tab").filter(has_text=label).count()
         assert count > 0, f"탭 '{label}'가 없음"
 
@@ -272,28 +272,16 @@ def test_apt_map_no_exception(page, base_url):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# GROUP E: Tab2 — Insight
+# GROUP E: 거시경제 / 뉴스 리포트 / 정책 팩트 (구 Insight 서브탭 → 최상위 탭)
 # ══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.e2e
-def test_insight_three_subtabs_exist(page, base_url):
-    """SCN-13: Insight 탭에 3개 서브탭(거시경제 / 뉴스 리포트 / 정책 팩트)이 존재한다."""
+def test_macro_tab_renders(page, base_url):
+    """SCN-14: 거시경제 탭에 기준금리 metric 또는 '불러올 수 없습니다' 안내가 표시된다."""
     go_to_real_estate(page, base_url)
-    click_real_estate_tab(page, "Insight")
-
-    for label in ["거시경제", "뉴스 리포트", "정책 팩트"]:
-        assert page.get_by_role("tab").filter(has_text=label).count() > 0, \
-            f"Insight 서브탭 '{label}'가 없음"
-
-
-@pytest.mark.e2e
-def test_insight_macro_renders(page, base_url):
-    """SCN-14: 거시경제 서브탭에 기준금리 metric 또는 '불러올 수 없습니다' 안내가 표시된다."""
-    go_to_real_estate(page, base_url)
-    click_real_estate_tab(page, "Insight")
     click_real_estate_tab(page, "거시경제", wait_ms=2_500)
 
-    assert_no_streamlit_exception(page, "insight_macro_tab")
+    assert_no_streamlit_exception(page, "macro_tab")
 
     main_text = get_main_text(page)
     has_macro = (
@@ -306,13 +294,12 @@ def test_insight_macro_renders(page, base_url):
 
 
 @pytest.mark.e2e
-def test_insight_news_renders(page, base_url):
-    """SCN-15: 뉴스 리포트 서브탭에서 리포트 selectbox 또는 '생성된 뉴스 리포트가 없습니다' 경고가 표시된다."""
+def test_news_report_tab_renders(page, base_url):
+    """SCN-15: 뉴스 리포트 탭에서 리포트 selectbox 또는 '생성된 뉴스 리포트가 없습니다' 경고가 표시된다."""
     go_to_real_estate(page, base_url)
-    click_real_estate_tab(page, "Insight")
     click_real_estate_tab(page, "뉴스 리포트", wait_ms=1_500)
 
-    assert_no_streamlit_exception(page, "insight_news_tab")
+    assert_no_streamlit_exception(page, "news_report_tab")
 
     main_text = get_main_text(page)
     has_news = (
@@ -324,47 +311,44 @@ def test_insight_news_renders(page, base_url):
 
 
 @pytest.mark.e2e
-def test_insight_policy_search_button(page, base_url):
-    """SCN-16: 정책 팩트 서브탭에 '🔍 검색' 버튼이 존재한다."""
+def test_policy_fact_tab_search_button(page, base_url):
+    """SCN-16: 정책 팩트 탭에 '🔍 검색' 버튼이 존재한다."""
     go_to_real_estate(page, base_url)
-    click_real_estate_tab(page, "Insight")
     click_real_estate_tab(page, "정책 팩트", wait_ms=1_500)
 
-    assert_no_streamlit_exception(page, "insight_policy_tab")
+    assert_no_streamlit_exception(page, "policy_fact_tab")
 
-    # 정책 팩트 탭의 🔍 검색 버튼 (key='policy_search')
     policy_btn = page.get_by_role("button", name="🔍 검색")
     assert policy_btn.count() > 0, "정책 팩트 탭에 '🔍 검색' 버튼이 없음"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# GROUP F: Tab3 — Report Archive
+# GROUP F: 데일리 브리핑 (구 데일리 리포트 → 개명)
 # ══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.e2e
-def test_report_archive_renders(page, base_url):
-    """SCN-17: Report Archive 탭 클릭 시 '부동산 전략 리포트 아카이브' 서브헤더가 표시된다."""
+def test_daily_briefing_renders(page, base_url):
+    """SCN-17: 데일리 브리핑 탭 클릭 시 '데일리 부동산 브리핑' 서브헤더가 표시된다."""
     go_to_real_estate(page, base_url)
-    click_real_estate_tab(page, "Report Archive", wait_ms=1_500)
+    click_real_estate_tab(page, "데일리 브리핑", wait_ms=1_500)
 
-    assert_no_streamlit_exception(page, "report_archive_tab")
+    assert_no_streamlit_exception(page, "daily_briefing_tab")
 
     main_text = get_main_text(page)
-    assert "부동산 전략 리포트" in main_text, \
-        f"'부동산 전략 리포트' 텍스트 없음. 텍스트(앞 300자):\n{main_text[:300]}"
+    assert "데일리 부동산 브리핑" in main_text, \
+        f"'데일리 부동산 브리핑' 텍스트 없음. 텍스트(앞 300자):\n{main_text[:300]}"
 
 
 @pytest.mark.e2e
-def test_report_archive_list_or_warning(page, base_url):
-    """SCN-18: 저장된 리포트가 있으면 dataframe이, 없으면 경고 메시지가 표시된다."""
+def test_daily_briefing_list_or_empty(page, base_url):
+    """SCN-18: 저장된 리포트가 있으면 날짜 선택 UI가, 없으면 안내 메시지가 표시된다."""
     go_to_real_estate(page, base_url)
-    click_real_estate_tab(page, "Report Archive", wait_ms=1_500)
+    click_real_estate_tab(page, "데일리 브리핑", wait_ms=1_500)
 
     main_text = get_main_text(page)
     has_content = (
-        "저장된 전문 리포트가 없습니다" in main_text
+        "저장된 데일리 리포트가 없습니다" in main_text
         or "날짜" in main_text
-        or "검증 점수" in main_text
         or "리포트 생성" in main_text
     )
-    assert has_content, f"Report Archive 콘텐츠 없음. 텍스트(앞 300자):\n{main_text[:300]}"
+    assert has_content, f"데일리 브리핑 콘텐츠 없음. 텍스트(앞 300자):\n{main_text[:300]}"
