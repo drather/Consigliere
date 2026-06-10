@@ -56,10 +56,6 @@ def test_real_estate_no_exception_on_load(page, base_url):
     assert_no_streamlit_exception(page, "initial_load")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GROUP B: Tab1 — 검색 필터
-# ══════════════════════════════════════════════════════════════════════════════
-
 @pytest.mark.e2e
 def test_real_estate_six_tabs_exist(page, base_url):
     """SCN-03: Real Estate에 6개 탭(아파트 탐색/거시경제/뉴스 리포트/정책 팩트/데일리 브리핑/페르소나)이 렌더링된다."""
@@ -71,73 +67,33 @@ def test_real_estate_six_tabs_exist(page, base_url):
         assert count > 0, f"탭 '{label}'가 없음"
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# GROUP B: 검색바
+# ══════════════════════════════════════════════════════════════════════════════
+
 @pytest.mark.e2e
-def test_apt_filter_expander_expanded(page, base_url):
-    """SCN-04: 🔍 검색 필터 expander가 expanded=True 상태로 렌더링되어 내부 요소가 보인다."""
+def test_apt_search_bar_inputs_exist(page, base_url):
+    """SCN-04: 검색바에 아파트명 입력, 시도/시군구 selectbox, 검색 버튼이 존재한다."""
     go_to_real_estate(page, base_url)
     click_real_estate_tab(page, "아파트 탐색")
 
-    # expander가 열려 있으면 placeholder가 보임
-    text_input = page.get_by_placeholder("래미안, 힐스테이트 …")
-    assert text_input.is_visible(), "검색 필터 expander가 닫혀 있거나 placeholder가 없음"
-
-
-@pytest.mark.e2e
-def test_apt_filter_inputs_name_sido_sigungu(page, base_url):
-    """SCN-05: 아파트명 텍스트 입력, 시도 selectbox, 시군구 selectbox가 렌더링된다."""
-    go_to_real_estate(page, base_url)
-    click_real_estate_tab(page, "아파트 탐색")
-
-    # 아파트명 텍스트 입력
-    text_input = page.get_by_placeholder("래미안, 힐스테이트 …")
+    text_input = page.get_by_placeholder("🔍 아파트명 검색...")
     assert text_input.is_visible(), "아파트명 검색 입력란이 없음"
-
-    # 시도 selectbox — label 연결 또는 텍스트로 확인
-    has_sido = (
-        page.get_by_label("시도").count() > 0
-        or page.get_by_text("시도").count() > 0
-    )
-    assert has_sido, "시도 selectbox가 없음"
-
-    # 시군구 selectbox
-    has_sigungu = (
-        page.get_by_label("시군구").count() > 0
-        or page.get_by_text("시군구").count() > 0
-    )
-    assert has_sigungu, "시군구 selectbox가 없음"
-
-
-@pytest.mark.e2e
-def test_apt_search_button_in_expander(page, base_url):
-    """SCN-06: expander 내 '🔍 검색' 버튼이 존재하고 클릭 가능하다.
-
-    주의: Tab2 정책 팩트에도 '🔍 검색' 버튼이 있으므로 expander 범위로 스코핑한다.
-    """
-    go_to_real_estate(page, base_url)
-    click_real_estate_tab(page, "아파트 탐색")
-
-    # expander 내 버튼 스코핑
-    expander = page.locator("[data-testid='stExpander']").first
-    search_btn = expander.get_by_role("button", name="🔍 검색")
-
-    assert search_btn.count() > 0, "expander 내 '🔍 검색' 버튼이 없음"
-    assert search_btn.first.is_enabled(), "'🔍 검색' 버튼이 비활성화 상태임"
+    assert page.get_by_role("button", name="검색").count() > 0, "검색 버튼이 없음"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# GROUP C: Tab1 — 검색 결과
+# GROUP C: 단지 목록 + 카드 상세 패널
 # ══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.e2e
 def test_apt_search_shows_result_caption(page, base_url):
     """SCN-07: 페이지 진입 후 자동 검색이 실행되어 'N건 검색됨' 캡션이 나타난다.
 
-    Tab1은 세션 최초 진입 시 master_results가 없으면 자동 검색을 수행한다.
     apt_master 테이블이 비어 있으면 warning 메시지로 대체된다 — 둘 다 PASS.
     """
     go_to_real_estate(page, base_url)
     click_real_estate_tab(page, "아파트 탐색")
-
     wait_for_search_results(page, timeout=15_000)
 
     main_text = get_main_text(page)
@@ -150,91 +106,92 @@ def test_apt_search_shows_result_caption(page, base_url):
 
 
 @pytest.mark.e2e
-def test_apt_search_subtabs_exist(page, base_url):
-    """SCN-08: 검색 결과 영역에 '📋 단지 목록' / '🗺️ 지도 뷰' 서브탭이 존재한다.
-
-    초기 자동 검색 완료 후 서브탭을 확인한다.
-    apt_master가 비어 있어 st.stop()된 경우에는 서브탭이 없으므로 skip.
-    """
+def test_apt_detail_placeholder_before_selection(page, base_url):
+    """SCN-08: 단지 미선택 상태에서 카드 상세 패널에 안내 메시지가 표시된다."""
     go_to_real_estate(page, base_url)
     click_real_estate_tab(page, "아파트 탐색")
     wait_for_search_results(page, timeout=15_000)
 
     main_text = get_main_text(page)
     if "apt_master 테이블이 비어 있습니다" in main_text:
-        pytest.skip("apt_master DB 비어있음 — 서브탭 미표시 (정상 케이스)")
+        pytest.skip("apt_master DB 비어있음")
 
-    assert page.get_by_role("tab").filter(has_text="단지 목록").count() > 0, "'단지 목록' 서브탭 없음"
-    assert page.get_by_role("tab").filter(has_text="지도 뷰").count() > 0, "'지도 뷰' 서브탭 없음"
+    assert "왼쪽 목록에서 단지를 선택하세요" in main_text, \
+        f"상세 패널 안내 메시지 없음. 텍스트(앞 300자):\n{main_text[:300]}"
 
 
 @pytest.mark.e2e
-def test_apt_name_search_filters_results(page, base_url):
-    """SCN-09: 아파트명에 '래미안' 입력 후 검색 버튼 클릭 시 결과 캡션이 표시된다."""
+def test_apt_select_shows_detail_cards(page, base_url):
+    """SCN-09: 단지 목록에서 단지를 클릭하면 카드 상세 패널에 KPI 4종이 표시된다."""
     go_to_real_estate(page, base_url)
     click_real_estate_tab(page, "아파트 탐색")
-
-    # 초기 검색 완료 대기
     wait_for_search_results(page, timeout=15_000)
 
     main_text = get_main_text(page)
     if "apt_master 테이블이 비어 있습니다" in main_text:
-        pytest.skip("apt_master DB 비어있음 — 필터 테스트 불가")
+        pytest.skip("apt_master DB 비어있음")
 
-    # 검색어 입력 (Tab으로 포커스 이동하여 Streamlit state 커밋)
-    text_input = page.get_by_placeholder("래미안, 힐스테이트 …")
-    text_input.click()
-    text_input.fill("래미안")
-    text_input.press("Tab")
+    apt_buttons = page.locator("[data-testid='stMainBlockContainer']").get_by_role("button").filter(has_text="·")
+    if apt_buttons.count() == 0:
+        pytest.skip("검색 결과 없음 — 단지 버튼 없음")
 
-    # expander 내 검색 버튼 클릭
-    expander = page.locator("[data-testid='stExpander']").first
-    expander.get_by_role("button", name="🔍 검색").first.click()
+    apt_buttons.first.click()
+    page.wait_for_timeout(2_000)
 
-    # 결과 캡션 재등장 대기
-    wait_for_search_results(page, timeout=12_000)
+    assert_no_streamlit_exception(page, "apt_detail_select")
 
-    result_text = get_main_text(page)
-    has_result = (
-        "건 검색됨" in result_text
-        or "검색 결과가 없습니다" in result_text
-    )
-    assert has_result, f"'래미안' 검색 후 결과 없음. 텍스트(앞 300자):\n{result_text[:300]}"
+    detail_text = get_main_text(page)
+    for label in ["최근거래", "입지점수", "출퇴근", "전세가율"]:
+        assert label in detail_text, f"KPI '{label}' 미표시. 텍스트(앞 400자):\n{detail_text[:400]}"
 
 
 @pytest.mark.e2e
-def test_apt_dataframe_visible_with_results(page, base_url):
-    """SCN-10: 검색 결과가 있을 때 단지 목록 dataframe이 렌더링된다.
-
-    결과가 없으면 empty-state info 박스가 표시되는 것을 확인한다.
-    """
+def test_apt_detail_location_score_section(page, base_url):
+    """SCN-10: 단지 선택 시 카드 상세 패널에 '📍 입지점수' 섹션이 표시된다."""
     go_to_real_estate(page, base_url)
     click_real_estate_tab(page, "아파트 탐색")
     wait_for_search_results(page, timeout=15_000)
 
     main_text = get_main_text(page)
     if "apt_master 테이블이 비어 있습니다" in main_text:
-        pytest.skip("apt_master DB 비어있음 — dataframe 미표시 (정상 케이스)")
+        pytest.skip("apt_master DB 비어있음")
 
-    has_content = (
-        page.locator("[data-testid='stDataFrame']").count() > 0
-        or page.locator("[data-testid='stAlertInfo']").filter(has_text="검색 결과가 없습니다").count() > 0
-    )
-    assert has_content, "단지 목록 dataframe 또는 empty-state info가 없음"
+    apt_buttons = page.locator("[data-testid='stMainBlockContainer']").get_by_role("button").filter(has_text="·")
+    if apt_buttons.count() == 0:
+        pytest.skip("검색 결과 없음 — 단지 버튼 없음")
+
+    apt_buttons.first.click()
+    page.wait_for_timeout(2_000)
+
+    detail_text = get_main_text(page)
+    assert "입지점수" in detail_text, f"'입지점수' 섹션 없음. 텍스트(앞 400자):\n{detail_text[:400]}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# GROUP D: Tab1 — 지도 뷰
+# GROUP D: 지도 컬럼
 # ══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.e2e
-def test_apt_map_tab_shows_load_button(page, base_url):
-    """SCN-11: 지도 뷰 서브탭 클릭 시 '지도 로드' 버튼 또는 상태 메시지가 표시된다.
+def test_map_column_placeholder_before_selection(page, base_url):
+    """SCN-11: 단지 미선택 시 지도 컬럼에 안내 메시지가 표시된다."""
+    go_to_real_estate(page, base_url)
+    click_real_estate_tab(page, "아파트 탐색")
+    wait_for_search_results(page, timeout=15_000)
 
-    유효한 3가지 상태:
-      1. 검색 결과 있음 + KAKAO_API_KEY 설정 → "🗺️ 지도 로드" 버튼
-      2. 검색 결과 있음 + 키 없음 → KAKAO_API_KEY 경고
-      3. 검색 결과 없음 → "검색 결과가 없습니다" info
+    main_text = get_main_text(page)
+    if "apt_master 테이블이 비어 있습니다" in main_text:
+        pytest.skip("apt_master DB 비어있음")
+
+    assert "단지를 선택하면 위치가 표시됩니다" in main_text, \
+        f"지도 컬럼 안내 메시지 없음. 텍스트(앞 300자):\n{main_text[:300]}"
+
+
+@pytest.mark.e2e
+def test_map_column_renders_after_selection(page, base_url):
+    """SCN-12: 단지 선택 시 지도 컬럼에 지도(iframe), KAKAO_API_KEY 경고, 또는 레이어 토글 중 하나가 표시된다.
+
+    KAKAO_API_KEY가 정상 로드된 경우 'KAKAO_API_KEY 환경변수가 설정되지 않았습니다'
+    경고가 나타나지 않아야 한다 (load_dotenv 누락 회귀 방지).
     """
     go_to_real_estate(page, base_url)
     click_real_estate_tab(page, "아파트 탐색")
@@ -242,33 +199,23 @@ def test_apt_map_tab_shows_load_button(page, base_url):
 
     main_text = get_main_text(page)
     if "apt_master 테이블이 비어 있습니다" in main_text:
-        pytest.skip("apt_master DB 비어있음 — 지도 뷰 탭 미표시")
+        pytest.skip("apt_master DB 비어있음")
 
-    click_real_estate_tab(page, "지도 뷰", wait_ms=1_000)
+    apt_buttons = page.locator("[data-testid='stMainBlockContainer']").get_by_role("button").filter(has_text="·")
+    if apt_buttons.count() == 0:
+        pytest.skip("검색 결과 없음 — 단지 버튼 없음")
 
-    map_text = get_main_text(page)
+    apt_buttons.first.click()
+    page.wait_for_timeout(3_000)
+
+    detail_text = get_main_text(page)
     has_map_content = (
-        "지도 로드" in map_text
-        or "KAKAO_API_KEY" in map_text
-        or "검색 결과가 없습니다" in map_text
-        or "지도 로드 버튼" in map_text
+        page.locator("iframe").count() > 0
+        or "KAKAO_API_KEY" in detail_text
+        or "위치" in detail_text
+        or "POI" in detail_text
     )
-    assert has_map_content, f"지도 뷰 탭 예상 콘텐츠 없음. 텍스트(앞 300자):\n{map_text[:300]}"
-
-
-@pytest.mark.e2e
-def test_apt_map_no_exception(page, base_url):
-    """SCN-12: 지도 뷰 탭에서 Streamlit 예외가 발생하지 않는다."""
-    go_to_real_estate(page, base_url)
-    click_real_estate_tab(page, "아파트 탐색")
-    wait_for_search_results(page, timeout=15_000)
-
-    main_text = get_main_text(page)
-    if "apt_master 테이블이 비어 있습니다" in main_text:
-        pytest.skip("apt_master DB 비어있음 — 지도 뷰 탭 미표시")
-
-    click_real_estate_tab(page, "지도 뷰", wait_ms=1_000)
-    assert_no_streamlit_exception(page, "map_view_tab")
+    assert has_map_content, f"지도 컬럼 콘텐츠 없음. 텍스트(앞 400자):\n{detail_text[:400]}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════

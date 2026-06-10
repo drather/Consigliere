@@ -171,7 +171,7 @@ def wait_for_search_results(page, timeout: int = 12_000) -> None:
 
     우선순위:
     1. stCaptionContainer 내 "건 검색됨" 텍스트 대기
-    2. fallback: stAlertInfo/stAlertWarning (empty state / apt_master 비어있음 / DB 오류)
+    2. fallback: stAlertContainer (empty state / apt_master 비어있음 / DB 오류)
     """
     try:
         page.locator("[data-testid='stCaptionContainer']").filter(
@@ -179,9 +179,9 @@ def wait_for_search_results(page, timeout: int = 12_000) -> None:
         ).first.wait_for(state="visible", timeout=timeout)
     except Exception:
         # apt_master 빈 DB, API 오류, 검색 결과 없음 등 모든 alert 수용
-        page.locator(
-            "[data-testid='stAlertInfo'], [data-testid='stAlertWarning'], [data-testid='stAlertError']"
-        ).first.wait_for(state="visible", timeout=3_000)
+        page.locator("[data-testid='stAlertContainer']").first.wait_for(
+            state="visible", timeout=3_000
+        )
 
 
 def assert_no_streamlit_exception(page, context_name: str = "") -> None:

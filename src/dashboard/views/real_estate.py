@@ -14,7 +14,7 @@ except ImportError:
 
 try:
     from dashboard.api_client import DashboardClient
-    from dashboard.components.map_view import render_master_map_view
+    from dashboard.components.map_view import render_master_map_view, render_detail_map
     from dashboard.services import (
         get_location_score, get_location_score_as_dict, get_poi_cached,
         count_apt_masters, get_distinct_sidos, get_distinct_sigungus,
@@ -24,7 +24,7 @@ try:
     from modules.real_estate.geocoder import GeocoderService
 except ImportError:
     from src.dashboard.api_client import DashboardClient
-    from src.dashboard.components.map_view import render_master_map_view
+    from src.dashboard.components.map_view import render_master_map_view, render_detail_map
     from src.dashboard.services import (
         get_location_score, get_location_score_as_dict, get_poi_cached,
         count_apt_masters, get_distinct_sidos, get_distinct_sigungus,
@@ -487,306 +487,6 @@ def _render_apt_detail_cards(entry) -> None:
                 st.info("단지코드 없음 — 심층 분석 불가")
 
 
-def _render_apt_detail_panel(entry, tx_limit: int = 50) -> None:
-    """선택된 단지의 상세정보 + 실거래가 패널을 렌더링한다.
-
-    Args:
-        entry: AptMasterEntry (Transaction-First 마스터) 또는 ApartmentMaster (레거시)
-        tx_limit: 실거래가 최대 표시 건수
-    """
-    from modules.real_estate.models import AptMasterEntry
-
-    is_apt_master_entry = isinstance(entry, AptMasterEntry)
-
-    st.markdown("---")
-    st.markdown(f"### 📋 {entry.apt_name}")
-
-    # ── 상세정보 (optional) ───────────────────────────────────────────────────
-    details = None
-    if is_apt_master_entry:
-        # AptMasterEntry: complex_code 있으면 apt_details 조회
-        if entry.complex_code:
-            details = get_apt_details(entry.complex_code)
-        if details is None:
-            # 상세정보 없는 단지 — Transaction-First에서는 정상 케이스
-            st.info("상세정보 없음 (공동주택 기본정보 API 미수록 단지)")
-    else:
-        # 레거시: ApartmentMaster 객체 자체가 상세정보
-        details = entry
-
-    if details is not None:
-        addr = getattr(details, "road_address", "") or getattr(details, "legal_address", "")
-        if addr:
-            st.caption(f"📍 {addr}")
-
-        approved = getattr(details, "approved_date", "") or ""
-        year_disp = approved[:4] if len(approved) >= 4 else "-"
-
-        dc1, dc2, dc3, dc4 = st.columns(4)
-        with dc1:
-            st.metric("세대수", f"{getattr(details, 'household_count', 0):,}세대")
-        with dc2:
-            st.metric("동수", f"{getattr(details, 'building_count', 0)}개동")
-        with dc3:
-            st.metric("준공연도", f"{year_disp}년")
-        with dc4:
-            top_floor = getattr(details, "top_floor", 0)
-            st.metric("최고층수", f"{top_floor}F" if top_floor else "-")
-
-        dc5, dc6, dc7, dc8 = st.columns(4)
-        with dc5:
-            st.metric("건설사", getattr(details, "constructor", "") or "-")
-        with dc6:
-            st.metric("시행사", getattr(details, "developer", "") or "-")
-        with dc7:
-            st.metric("난방방식", getattr(details, "heat_type", "") or "-")
-        with dc8:
-            elev = getattr(details, "elevator_count", 0)
-            st.metric("승강기", f"{elev}대" if elev else "-")
-
-        units = (
-            getattr(details, "units_60", 0) + getattr(details, "units_85", 0)
-            + getattr(details, "units_135", 0) + getattr(details, "units_136_plus", 0)
-        )
-        if units > 0:
-            st.markdown("**전용면적별 세대 구성**")
-            uc1, uc2, uc3, uc4 = st.columns(4)
-            with uc1:
-                st.metric("60㎡ 이하", f"{getattr(details, 'units_60', 0):,}세대")
-            with uc2:
-                st.metric("60~85㎡", f"{getattr(details, 'units_85', 0):,}세대")
-            with uc3:
-                st.metric("85~135㎡", f"{getattr(details, 'units_135', 0):,}세대")
-            with uc4:
-                st.metric("135㎡ 초과", f"{getattr(details, 'units_136_plus', 0):,}세대")
-
-        total_area = getattr(details, "total_area", 0)
-        complex_code = getattr(entry, "complex_code", None) or getattr(details, "complex_code", None)
-        st.caption(
-            f"단지코드: {complex_code or '-'}  |  지구코드: {entry.district_code}"
-            + (f"  |  연면적: {total_area:,.0f}㎡" if total_area else "")
-        )
-
-        # ── 실거주 / 투자 점수 카드 ──────────────────────────────────────────────
-        try:
-            loc_score = get_location_score(complex_code or "")
-        except Exception:
-            loc_score = None
-
-        col_res, col_inv = st.columns(2)
-        if loc_score:
-            with col_res:
-                st.metric("🏠 실거주 점수", f"{loc_score.residential_total}점")
-                with st.expander("항목별 상세"):
-                    for dr in loc_score.residential_results:
-                        st.progress(dr.score / 100, text=f"{dr.label}  {dr.score}점")
-            with col_inv:
-                st.metric("💰 투자 점수", f"{loc_score.investment_total}점")
-                with st.expander("항목별 상세"):
-                    for dr in loc_score.investment_results:
-                        st.progress(dr.score / 100, text=f"{dr.label}  {dr.score}점")
-        else:
-            with col_res:
-                st.info("🏠 실거주 점수\n\n리포트 생성 후 표시됩니다.")
-            with col_inv:
-                st.info("💰 투자 점수\n\n리포트 생성 후 표시됩니다.")
-
-        # 출퇴근 경로 상세 카드
-        _road_address = getattr(details, "road_address", "") or ""
-        with st.expander("🗺️ 출퇴근 경로 상세", expanded=False):
-            try:
-                import requests as _req
-                commute_resp = _req.get(
-                    f"{_API_BASE}/dashboard/real-estate/commute",
-                    params={
-                        "address": _road_address,
-                        "apt_name": entry.apt_name or "",
-                        "district_code": entry.district_code or "",
-                    },
-                    timeout=30,
-                )
-                if commute_resp.status_code == 200:
-                    _render_commute_card(commute_resp.json())
-                else:
-                    st.caption("출퇴근 정보 조회 실패")
-            except Exception:
-                st.caption("서버 연결 실패 — FastAPI 서버가 실행 중인지 확인하세요")
-
-        # 학군 분석 카드
-        with st.expander("📚 학군 분석", expanded=False):
-            try:
-                import requests as _req
-                _district = getattr(entry, "district_code", "") or ""
-                _ccode = getattr(entry, "complex_code", "") or ""
-                _apt_nm = getattr(entry, "apt_name", "") or ""
-                school_resp = _req.get(
-                    f"{_API_BASE}/dashboard/real-estate/school/{_ccode}",
-                    params={"apt_name": _apt_nm, "district_code": _district},
-                    timeout=5,
-                )
-                if school_resp.status_code == 200:
-                    sd = school_resp.json()
-                    sc1, sc2, sc3, sc4 = st.columns(4)
-                    with sc1:
-                        st.metric("반경 1km 학교 수", f"{sd.get('nearby_school_count', '-')}개")
-                    with sc2:
-                        avg_cls = sd.get("avg_students_per_class") or 0
-                        st.metric("학급당 평균 학생수", f"{avg_cls:.1f}명" if avg_cls else "-")
-                    with sc3:
-                        avg_tch = sd.get("avg_students_per_teacher") or 0
-                        st.metric("교사 1인당 학생수", f"{avg_tch:.1f}명" if avg_tch else "-")
-                    with sc4:
-                        st.metric("학군 점수", f"{sd.get('score', '-')}/100")
-                    if sd.get("message"):
-                        st.caption(sd["message"])
-                else:
-                    st.caption("학군 정보 조회 실패")
-            except Exception:
-                st.caption("서버 연결 실패 — FastAPI 서버가 실행 중인지 확인하세요")
-
-    # ── 건물 정보 (용적률·건폐율 from building_master) ───────────────────────
-    _pnu = getattr(entry, "pnu", None)
-    if _pnu:
-        try:
-            _bm = get_building_master_by_pnu(_pnu)
-        except Exception:
-            _bm = None
-        if _bm is not None and (_bm.floor_area_ratio is not None or _bm.building_coverage_ratio is not None):
-            st.markdown("#### 🏗️ 건물 정보 (건축물대장)")
-            _bc1, _bc2 = st.columns(2)
-            with _bc1:
-                _far = _bm.floor_area_ratio
-                st.metric("용적률", f"{_far:.1f}%" if _far is not None else "-")
-            with _bc2:
-                _bcr = _bm.building_coverage_ratio
-                st.metric("건폐율", f"{_bcr:.1f}%" if _bcr is not None else "-")
-
-    # ── 심층 분석 버튼 ───────────────────────────────────────────────────────
-    _analysis_complex_code = getattr(entry, "complex_code", None)
-    if not _analysis_complex_code and details:
-        _analysis_complex_code = getattr(details, "complex_code", None)
-    if _analysis_complex_code:
-        st.markdown("---")
-        _btn_col1, _btn_col2 = st.columns(2)
-        with _btn_col1:
-            if st.button("🔬 심층 분석", key=f"analyze_{_analysis_complex_code}", use_container_width=True):
-                import requests as _req
-                with st.spinner("심층 분석 중... (LLM 처리 시 최대 2분 소요)"):
-                    try:
-                        _resp = _req.post(
-                            f"{_API_BASE}/jobs/apt/analyze",
-                            json={"complex_code": _analysis_complex_code, "send_slack": True},
-                            timeout=180,
-                        )
-                        if _resp.status_code == 200:
-                            _rdata = _resp.json().get("report", {})
-                            with st.expander("🔬 심층 분석 결과", expanded=True):
-                                _render_analysis_report(_rdata, _analysis_complex_code)
-                        else:
-                            st.error(f"분석 실패: {_resp.status_code}")
-                    except Exception as _e:
-                        st.error(f"서버 오류: {_e}")
-
-        with _btn_col2:
-            if st.button("📋 이전 분석 보기", key=f"prev_analysis_{_analysis_complex_code}", use_container_width=True):
-                import requests as _req
-                try:
-                    _resp = _req.get(
-                        f"{_API_BASE}/dashboard/apt/analysis/{_analysis_complex_code}/latest",
-                        timeout=10,
-                    )
-                    if _resp.status_code == 200:
-                        _rdata = _resp.json()
-                        with st.expander(f"📋 이전 분석 ({_rdata.get('generated_at', '')[:10]})", expanded=True):
-                            _render_analysis_report(_rdata, _analysis_complex_code)
-                    elif _resp.status_code == 404:
-                        st.info("이전 분석 결과가 없습니다. 먼저 심층 분석을 실행하세요.")
-                    else:
-                        st.error(f"조회 실패: {_resp.status_code}")
-                except Exception as _e:
-                    st.error(f"서버 오류: {_e}")
-
-    # ── 실거래가 ──────────────────────────────────────────────────────────────
-    st.markdown("### 📈 최근 실거래가")
-
-    # 캐시 키: AptMasterEntry이면 id, 아니면 complex_code/district_code 기반
-    if is_apt_master_entry and getattr(entry, "id", None) is not None:
-        _tx_cache_key = f"tx__master__{entry.id}"
-    else:
-        complex_code = getattr(entry, "complex_code", None)
-        _tx_cache_key = f"tx__{complex_code or entry.district_code}__{entry.apt_name}"
-
-    if _tx_cache_key not in st.session_state:
-        with st.spinner("실거래가 조회 중..."):
-            raw_df = pd.DataFrame()
-
-            if is_apt_master_entry and getattr(entry, "id", None) is not None:
-                # Transaction-First: apt_master_id로 정확 조회 (항상 성공)
-                raw_df = DashboardClient.get_real_estate_transactions(
-                    apt_master_id=entry.id,
-                    limit=tx_limit,
-                )
-            elif getattr(entry, "complex_code", None):
-                # 레거시: complex_code 조회
-                raw_df = DashboardClient.get_real_estate_transactions(
-                    complex_code=entry.complex_code,
-                    limit=tx_limit,
-                )
-
-            # fallback: district + fuzzy 이름 매칭 (레거시 호환 / apt_master 미구축 단지)
-            if raw_df.empty:
-                district_df = DashboardClient.get_real_estate_transactions(
-                    district_code=entry.district_code,
-                    limit=min(tx_limit * 10, 500),
-                )
-                if not district_df.empty:
-                    master_nm = entry.apt_name.strip().lower()
-
-                    def _fuzzy(tx_name: str) -> bool:
-                        tx = tx_name.strip().lower()
-                        if tx in master_nm or master_nm in tx:
-                            return True
-                        shorter = tx if len(tx) <= len(master_nm) else master_nm
-                        longer = master_nm if shorter is tx else tx
-                        if len(shorter) >= 4:
-                            for n in range(4, len(shorter) + 1):
-                                if shorter[-n:] in longer:
-                                    return True
-                        return False
-
-                    raw_df = district_df[district_df["apt_name"].apply(_fuzzy)]
-
-            st.session_state[_tx_cache_key] = raw_df
-
-    tx_df = st.session_state.get(_tx_cache_key, pd.DataFrame())
-
-    col_tx_hd, col_tx_btn = st.columns([3, 1])
-    with col_tx_hd:
-        if not tx_df.empty:
-            st.caption(f"최근 {len(tx_df)}건 (최대 {tx_limit}건, 최신순)")
-    with col_tx_btn:
-        sigungu = getattr(entry, "sigungu", "") or entry.district_code
-        if st.button("📥 실거래가 수집", key="collect_tx_for_apt", use_container_width=True):
-            with st.spinner(f"{sigungu} 수집 중..."):
-                r = DashboardClient.trigger_fetch_transactions(district_code=entry.district_code)
-            if "error" in r:
-                st.error(r["error"])
-            else:
-                st.success(
-                    f"✅ {r.get('fetched_count', 0)}건 수집 "
-                    f"/ {r.get('saved_count', 0)}건 저장"
-                )
-                st.session_state.pop(_tx_cache_key, None)
-                st.rerun()
-
-    if tx_df.empty:
-        st.info("저장된 실거래가가 없습니다. '📥 실거래가 수집' 버튼으로 데이터를 수집하세요.")
-    else:
-        _render_tx_dataframe(
-            tx_df.sort_values("deal_date", ascending=False).head(tx_limit).copy()
-        )
-
-
 def show_real_estate():
     st.title("🏢 Real Estate Insights")
 
@@ -806,175 +506,142 @@ def show_real_estate():
         try:
             _tx_limit, _map_limit = get_apt_search_limits()
 
-            # apt_master 테이블이 비어 있으면 안내
-            if count_apt_masters() == 0:
+            _apt_master_empty = count_apt_masters() == 0
+            if _apt_master_empty:
                 st.warning(
-                    "⚠️ apt_master 테이블이 비어 있습니다. "
-                    "먼저 마이그레이션 스크립트를 실행하세요:\n\n"
-                    "```bash\n"
-                    "arch -arm64 .venv/bin/python3.12 scripts/migrate_to_transaction_first.py\n"
-                    "```"
-                )
-                st.stop()
-
-            # ── 필터 섹션 (AptMasterEntry 기준: apt_name / sido / sigungu) ──
-            with st.expander("🔍 검색 필터", expanded=True):
-                col_f1, col_f2, col_f3 = st.columns(3)
-                with col_f1:
-                    search_name = st.text_input(
-                        "아파트명 (부분검색)", placeholder="래미안, 힐스테이트 …",
-                        key="master_search_name"
-                    )
-                with col_f2:
-                    sido_opts = ["전체"] + get_distinct_sidos()
-                    selected_sido = st.selectbox("시도", sido_opts, key="master_sido")
-                    sido_filter = "" if selected_sido == "전체" else selected_sido
-                with col_f3:
-                    sigungu_opts = ["전체"] + get_distinct_sigungus(sido_filter)
-                    selected_sigungu = st.selectbox("시군구", sigungu_opts, key="master_sigungu")
-                    sigungu_filter = "" if selected_sigungu == "전체" else selected_sigungu
-
-                col_btn, col_note = st.columns([1, 3])
-                with col_btn:
-                    search_btn = st.button("🔍 검색", key="master_search_btn", use_container_width=True)
-                with col_note:
-                    st.caption("💡 세대수·건설사·준공연도 필터는 단지 선택 후 상세정보 패널에서 확인")
-
-            # ── 검색 실행 ────────────────────────────────────────────────
-            if search_btn or "master_results" not in st.session_state:
-                with st.spinner("검색 중..."):
-                    st.session_state.master_results = search_apt_masters(
-                        apt_name=search_name,
-                        sido=sido_filter,
-                        sigungu=sigungu_filter,
-                    )
-                st.session_state.pop("selected_apt_idx", None)  # 새 검색 시 선택 초기화
-
-            results = st.session_state.get("master_results", [])
-
-            list_tab, map_tab = st.tabs(["📋 단지 목록", "🗺️ 지도 뷰"])
-
-            # ── 📋 단지 목록 탭 ──────────────────────────────────────────
-            with list_tab:
-                st.caption(
-                    f"**{len(results)}건** 검색됨 (최대 500건) "
-                    "— 아파트명을 클릭하면 실거래가를 확인할 수 있습니다."
+                    "⚠️ apt_master 테이블이 비어 있습니다. 마이그레이션 스크립트를 먼저 실행하세요.\n\n"
+                    "```bash\narch -arm64 .venv/bin/python3.12 scripts/migrate_to_transaction_first.py\n```"
                 )
 
-                if not results:
-                    st.info("검색 결과가 없습니다. 필터를 조정해 보세요.")
-                else:
-                    _code_to_name = {
-                        d["code"]: d["name"]
-                        for d in st.session_state.get("districts", [])
-                    }
+            # ── 상단 검색바 ──────────────────────────────────────────────
+            sb1, sb2, sb3, sb4 = st.columns([3, 1.5, 1.5, 1])
+            with sb1:
+                search_name = st.text_input(
+                    "검색", placeholder="🔍 아파트명 검색...",
+                    label_visibility="collapsed", key="master_search_name"
+                )
+            with sb2:
+                sido_opts = ["전체"] + get_distinct_sidos()
+                selected_sido = st.selectbox("시도", sido_opts,
+                    label_visibility="collapsed", key="master_sido")
+                sido_filter = "" if selected_sido == "전체" else selected_sido
+            with sb3:
+                sigungu_opts = ["전체"] + get_distinct_sigungus(sido_filter)
+                selected_sigungu = st.selectbox("시군구", sigungu_opts,
+                    label_visibility="collapsed", key="master_sigungu")
+                sigungu_filter = "" if selected_sigungu == "전체" else selected_sigungu
+            with sb4:
+                search_btn = st.button("검색", key="master_search_btn", use_container_width=True)
 
-                    # ── 테이블 헤더 ────────────────────────────────────────
-                    _hc = st.columns([4, 2, 1, 2, 2, 1])
-                    for _col, _lbl in zip(_hc, ["아파트명", "시군구", "거래건수", "최근거래", "첫거래", "상세"]):
-                        _col.markdown(f"**{_lbl}**")
-                    st.divider()
+            if not _apt_master_empty:
+                # ── 검색 실행 ────────────────────────────────────────────────
+                if search_btn or "master_results" not in st.session_state:
+                    with st.spinner("검색 중..."):
+                        st.session_state.master_results = search_apt_masters(
+                            apt_name=search_name, sido=sido_filter, sigungu=sigungu_filter,
+                        )
+                    st.session_state.pop("selected_apt_idx", None)
 
-                    # ── 행 목록 (아파트명 버튼 클릭으로 선택) ──────────────
+                results = st.session_state.get("master_results", [])
+
+                # ── 3단 분할 ─────────────────────────────────────────────────
+                col_list, col_detail, col_map = st.columns([1.2, 1.6, 1.8])
+
+                # ── 왼쪽: 단지 목록 ──────────────────────────────────────────
+                with col_list:
+                    st.caption(f"**{len(results)}건** 검색됨")
                     _row_limit = 100
                     for _i, _m in enumerate(results[:_row_limit]):
                         _is_sel = st.session_state.get("selected_apt_idx") == _i
-                        _rc = st.columns([4, 2, 1, 2, 2, 1])
-                        with _rc[0]:
-                            if st.button(
-                                _m.apt_name,
-                                key=f"apt_row_{_i}",
-                                use_container_width=True,
-                                type="primary" if _is_sel else "secondary",
-                            ):
-                                st.session_state.selected_apt_idx = _i
-                        _sigungu = _m.sigungu or _code_to_name.get(_m.district_code, _m.district_code)
-                        _rc[1].caption(_sigungu)
-                        _rc[2].caption(str(_m.tx_count))
-                        _rc[3].caption(_m.last_traded or "-")
-                        _rc[4].caption(_m.first_traded or "-")
-                        _rc[5].caption("✅" if _m.complex_code else "—")
+                        last_tx = _m.last_traded[:10] if _m.last_traded else "-"
+                        btn_label = (
+                            f"{'▶ ' if _is_sel else ''}{_m.apt_name}\n"
+                            f"{_m.sigungu or _m.district_code} · {last_tx}"
+                        )
+                        if st.button(
+                            btn_label,
+                            key=f"apt_row_{_i}",
+                            use_container_width=True,
+                            type="primary" if _is_sel else "secondary",
+                        ):
+                            st.session_state.selected_apt_idx = _i
+                            st.rerun()
 
                     if len(results) > _row_limit:
-                        st.caption(f"상위 {_row_limit}건 표시 중 — 더 보려면 필터를 좁혀 검색하세요.")
+                        st.caption(f"상위 {_row_limit}건 표시 — 필터를 좁혀 검색하세요.")
 
-                    # ── 단지 선택 시: 상세 정보 + 실거래가 ────────────────
+                # ── 가운데: 상세 카드 ─────────────────────────────────────────
+                with col_detail:
                     _sel_idx = st.session_state.get("selected_apt_idx")
                     if _sel_idx is not None and _sel_idx < len(results):
-                        _render_apt_detail_panel(
-                            results[_sel_idx],
-                            tx_limit=_tx_limit,
-                        )
-
-            # ── 🗺️ 지도 뷰 탭 ───────────────────────────────────────────
-            with map_tab:
-                if not results:
-                    st.info("검색 결과가 없습니다. 필터를 조정 후 검색하세요.")
-                else:
-                    _kakao_key = os.environ.get("KAKAO_API_KEY", "")
-                    if not _kakao_key:
-                        st.warning("KAKAO_API_KEY 환경변수가 설정되지 않았습니다.")
-                    elif st_folium is None:
-                        st.warning("streamlit-folium 패키지가 설치되지 않았습니다.")
+                        _render_apt_detail_cards(results[_sel_idx])
                     else:
-                        _map_cache_key = str(hash(tuple(sorted(
-                            f"{m.district_code}__{m.apt_name}" for m in results
-                        ))))
+                        st.info("왼쪽 목록에서 단지를 선택하세요.")
 
-                        col_load, col_clear = st.columns([2, 1])
-                        with col_load:
-                            load_map_btn = st.button(
-                                "🗺️ 지도 로드", key="master_map_load_btn",
-                                use_container_width=True
-                            )
-                        with col_clear:
-                            if st.button("🔄 초기화", key="master_map_clear_btn",
-                                         use_container_width=True):
-                                for _k in ("master_cached_fmap", "master_tx_df",
-                                           "master_map_cache_key"):
-                                    st.session_state.pop(_k, None)
-                                st.rerun()
+                # ── 오른쪽: 지도 ─────────────────────────────────────────────
+                with col_map:
+                    _sel_idx = st.session_state.get("selected_apt_idx")
+                    if _sel_idx is not None and _sel_idx < len(results):
+                        _entry = results[_sel_idx]
+                        _kakao_key = os.environ.get("KAKAO_API_KEY", "")
 
-                        _cache_hit = (
-                            st.session_state.get("master_map_cache_key") == _map_cache_key
-                            and "master_cached_fmap" in st.session_state
-                        )
-
-                        if load_map_btn or _cache_hit:
-                            if not _cache_hit:
-                                _district_codes = list({m.district_code for m in results})
-                                _apt_names = {m.apt_name for m in results}
-                                with st.spinner("실거래가 이력 조회 중..."):
-                                    _map_tx_df = DashboardClient.get_transactions_by_district_codes(
-                                        _district_codes, apt_names=_apt_names
-                                    )
-                                with st.spinner(
-                                    "지도 렌더링 중... (첫 로드 시 시간이 걸릴 수 있습니다)"
-                                ):
-                                    _geocoder = GeocoderService(api_key=_kakao_key)
-                                    _fmap = render_master_map_view(
-                                        results[:_map_limit], _map_tx_df, _geocoder
-                                    )
-                                st.session_state.master_cached_fmap = _fmap
-                                st.session_state.master_tx_df = _map_tx_df
-                                st.session_state.master_map_cache_key = _map_cache_key
-
-                            _fmap = st.session_state.master_cached_fmap
-                            _map_tx_df = st.session_state.get("master_tx_df", pd.DataFrame())
-                            _tx_count = len(_map_tx_df) if not _map_tx_df.empty else 0
-                            st.caption(
-                                f"전체 검색: {len(results)}개  |  "
-                                f"지도 표시: {min(len(results), _map_limit)}개 (성능 최적화)  |  "
-                                f"거래 이력: {_tx_count}건  |  "
-                                "파란 마커=거래있음, 회색 마커=거래없음"
-                            )
-                            st_folium(_fmap, use_container_width=True, height=620,
-                                      key="master_map", returned_objects=[])
+                        if not _kakao_key:
+                            st.warning("KAKAO_API_KEY 환경변수가 설정되지 않았습니다.")
+                        elif st_folium is None:
+                            st.warning("streamlit-folium 패키지가 설치되지 않았습니다.")
                         else:
-                            st.info(
-                                "'🗺️ 지도 로드' 버튼을 눌러 단지 위치와 "
-                                "실거래가 이력을 확인하세요."
+                            # 지도 모드 선택
+                            map_mode = st.radio(
+                                "지도 레이어",
+                                ["📍 위치", "🏙 POI"],
+                                horizontal=True,
+                                key="detail_map_mode",
+                                label_visibility="collapsed",
                             )
+
+                            _details = get_apt_details(_entry.complex_code) if _entry.complex_code else None
+                            _addr = ""
+                            if _details:
+                                _addr = getattr(_details, "road_address", "") or getattr(_details, "legal_address", "") or ""
+
+                            _poi = None
+                            if map_mode == "🏙 POI" and _entry.complex_code:
+                                try:
+                                    _poi = get_poi_cached(_entry.complex_code)
+                                except Exception:
+                                    pass
+
+                            # 페르소나 직장 위치 (역명 또는 주소)
+                            _persona = st.session_state.get("persona") or {}
+                            _workplace = (_persona.get("commute") or {}).get("workplace_station") or None
+
+                            # 출퇴근 요약
+                            _commute_sum = st.session_state.get(f"commute_{_entry.district_code}_{_entry.apt_name}")
+
+                            _geocoder = GeocoderService(api_key=_kakao_key)
+                            _cache_key = f"detail_map_{_entry.district_code}_{_entry.apt_name}_{map_mode}"
+
+                            if _cache_key not in st.session_state:
+                                with st.spinner("지도 로딩 중..."):
+                                    st.session_state[_cache_key] = render_detail_map(
+                                        address=_addr,
+                                        apt_name=_entry.apt_name,
+                                        district_code=_entry.district_code,
+                                        geocoder=_geocoder,
+                                        workplace_address=_workplace,
+                                        poi_cached=_poi if map_mode == "🏙 POI" else None,
+                                        commute_summary=_commute_sum,
+                                    )
+
+                            st_folium(
+                                st.session_state[_cache_key],
+                                use_container_width=True,
+                                height=500,
+                                key=f"detail_folium_{_entry.district_code}_{_entry.apt_name}_{map_mode}",
+                                returned_objects=[],
+                            )
+                    else:
+                        st.info("단지를 선택하면 위치가 표시됩니다.")
 
         except Exception as _e:
             st.error(f"마스터 DB 조회 오류: {_e}")
