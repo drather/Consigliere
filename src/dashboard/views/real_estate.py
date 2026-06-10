@@ -797,7 +797,7 @@ def show_real_estate():
 
         if not items:
             st.info("거시경제 데이터를 불러올 수 없습니다.")
-            st.caption("수집 Job을 먼저 실행하거나 '💡 Insight' 탭 내 거시경제 수집 버튼을 사용하세요.")
+            st.caption("수집 Job을 먼저 실행하거나 '📈 거시경제' 탭의 새로고침 버튼을 사용하세요.")
         else:
             from collections import defaultdict
             by_category: dict = defaultdict(list)
