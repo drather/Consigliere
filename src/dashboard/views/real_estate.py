@@ -290,6 +290,203 @@ def _render_commute_card(commute_data: dict):
             st.caption("조회 실패")
 
 
+def _render_apt_detail_cards(entry) -> None:
+    """3단 레이아웃의 가운데 패널 — KPI + 카드 그리드 expander."""
+    from modules.real_estate.models import AptMasterEntry
+    import requests as _req
+
+    is_master = isinstance(entry, AptMasterEntry)
+    complex_code = getattr(entry, "complex_code", None) or ""
+
+    # ── 단지 헤더 ──────────────────────────────────────────────────────────
+    details = None
+    if is_master and complex_code:
+        details = get_apt_details(complex_code)
+
+    addr = ""
+    if details:
+        addr = getattr(details, "road_address", "") or getattr(details, "legal_address", "") or ""
+        constructor = getattr(details, "constructor", "") or ""
+        approved = getattr(details, "approved_date", "") or ""
+        year = approved[:4] if len(approved) >= 4 else "-"
+        household = getattr(details, "household_count", 0)
+        sub_text = f"{entry.sigungu or entry.district_code} · {year}년 준공 · {household:,}세대"
+        if constructor:
+            sub_text += f" · {constructor}"
+    else:
+        sub_text = entry.sigungu or entry.district_code
+
+    st.markdown(f"### {entry.apt_name}")
+    st.caption(sub_text)
+    if addr:
+        st.caption(f"📍 {addr}")
+
+    # ── KPI 4개 ────────────────────────────────────────────────────────────
+    # 실거래가 최근값
+    tx_df = DashboardClient.get_real_estate_transactions(
+        apt_master_id=getattr(entry, "id", None),
+        complex_code=complex_code or None,
+        district_code=entry.district_code,
+        limit=1,
+    )
+    recent_price = "-"
+    recent_detail = ""
+    if not tx_df.empty:
+        row = tx_df.iloc[0]
+        price_awk = row.get("price", 0) / 100_000_000
+        recent_price = f"{price_awk:.1f}억"
+        area = row.get("exclusive_area", 0)
+        floor = row.get("floor", 0)
+        recent_detail = f"{area:.0f}㎡ · {floor}층"
+
+    # 입지점수
+    loc_score = None
+    try:
+        loc_score = get_location_score(complex_code)
+    except Exception:
+        pass
+
+    # 출퇴근 (API 호출)
+    commute_data = None
+    commute_min = "-"
+    if addr:
+        try:
+            resp = _req.get(
+                f"{_API_BASE}/dashboard/real-estate/commute",
+                params={"address": addr, "apt_name": entry.apt_name, "district_code": entry.district_code},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                commute_data = resp.json()
+                transit = commute_data.get("transit_minutes") or commute_data.get("transit")
+                if transit:
+                    commute_min = f"{transit}분"
+        except Exception:
+            pass
+
+    kc1, kc2, kc3, kc4 = st.columns(4)
+    kc1.metric("최근거래", recent_price, help=recent_detail)
+    kc2.metric("입지점수", f"{loc_score.residential_total}점" if loc_score else "-")
+    kc3.metric("출퇴근", commute_min)
+    kc4.metric("전세가율", "-")  # 전세가율은 별도 API 없으면 "-" 유지
+
+    st.divider()
+
+    # ── 📍 입지점수 (카드 그리드) ───────────────────────────────────────────
+    if loc_score:
+        label = (f"📍 입지점수 — 실거주 **{loc_score.residential_total}점** "
+                 f"/ 투자 **{loc_score.investment_total}점**")
+        with st.expander(label, expanded=True):
+            results = loc_score.residential_results or []
+            for i in range(0, len(results), 2):
+                c1, c2 = st.columns(2)
+                for col, dr in zip([c1, c2], results[i:i+2]):
+                    with col:
+                        with st.container(border=True):
+                            st.markdown(f"**{dr.label}**")
+                            col_score, col_bar = st.columns([1, 3])
+                            col_score.metric("", f"{dr.score}점")
+                            col_bar.progress(min(dr.score / 100, 1.0))
+                            if getattr(dr, "evidence", None):
+                                st.caption(dr.evidence)
+    else:
+        with st.expander("📍 입지점수", expanded=False):
+            st.info("입지 분석 데이터가 없습니다. 심층 분석을 실행하세요.")
+
+    # ── 📈 실거래가 (카드 그리드) ──────────────────────────────────────────
+    tx_df_full = DashboardClient.get_real_estate_transactions(
+        apt_master_id=getattr(entry, "id", None),
+        complex_code=complex_code or None,
+        district_code=entry.district_code,
+        limit=20,
+    )
+    tx_label = f"📈 실거래가 — {recent_price}" + (f" · {recent_detail}" if recent_detail else "")
+    with st.expander(tx_label, expanded=False):
+        if tx_df_full.empty:
+            st.info("거래 이력이 없습니다.")
+        else:
+            rows_data = []
+            for _, row in tx_df_full.head(8).iterrows():
+                rows_data.append({
+                    "date": str(row.get("deal_date", "-"))[:10],
+                    "price": f"{row.get('price', 0) / 100_000_000:.1f}억",
+                    "area": f"{row.get('exclusive_area', 0):.0f}㎡ · {int(row.get('floor', 0))}층",
+                })
+            for i in range(0, len(rows_data), 2):
+                c1, c2 = st.columns(2)
+                for col, r in zip([c1, c2], rows_data[i:i+2]):
+                    with col:
+                        with st.container(border=True):
+                            st.caption(r["date"])
+                            st.markdown(f"**{r['price']}**")
+                            st.caption(r["area"])
+
+    # ── 🚇 출퇴근 (카드 그리드) ────────────────────────────────────────────
+    with st.expander(f"🚇 출퇴근 — {commute_min}", expanded=False):
+        if commute_data:
+            transit = commute_data.get("transit_minutes") or commute_data.get("transit")
+            bus = commute_data.get("bus_minutes") or commute_data.get("bus")
+            c1, c2 = st.columns(2)
+            with c1:
+                with st.container(border=True):
+                    st.markdown("**🚇 지하철**")
+                    st.metric("", f"{transit}분" if transit else "-")
+                    route = commute_data.get("transit_route") or commute_data.get("route", "")
+                    if route:
+                        st.caption(route)
+            with c2:
+                with st.container(border=True):
+                    st.markdown("**🚌 버스**")
+                    st.metric("", f"{bus}분" if bus else "-")
+        else:
+            st.info("출퇴근 정보를 불러올 수 없습니다.")
+
+    # ── 🤖 AI 인사이트 ────────────────────────────────────────────────────
+    # NOTE: list_insight_reports()/get_insight_report()는 날짜 기반 데일리
+    # 브리핑(Tab5)용이며 complex_code 필드가 없다. 단지별 심층 분석 결과는
+    # GET /dashboard/apt/analysis/{complex_code}/latest 로 조회한다
+    # (기존 _render_apt_detail_panel의 "이전 분석 보기" 버튼과 동일 엔드포인트).
+    _analysis_complex_code = complex_code or (getattr(details, "complex_code", None) if details else None)
+    latest_report = None
+    if _analysis_complex_code:
+        try:
+            resp = _req.get(
+                f"{_API_BASE}/dashboard/apt/analysis/{_analysis_complex_code}/latest",
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                latest_report = resp.json()
+        except Exception:
+            pass
+
+    if latest_report:
+        insight = latest_report.get("llm_insight", "")
+        preview = insight[:80] + "..." if len(insight) > 80 else insight
+        with st.expander(f"🤖 AI 인사이트 — {preview}", expanded=False):
+            _render_analysis_report(latest_report, _analysis_complex_code)
+    else:
+        with st.expander("🤖 AI 인사이트", expanded=False):
+            if _analysis_complex_code:
+                if st.button("🔬 심층 분석 실행", key=f"analyze_card_{_analysis_complex_code}",
+                             use_container_width=True):
+                    with st.spinner("LLM 분석 중... (최대 2분)"):
+                        try:
+                            resp = _req.post(
+                                f"{_API_BASE}/jobs/apt/analyze",
+                                json={"complex_code": _analysis_complex_code, "send_slack": False},
+                                timeout=180,
+                            )
+                            if resp.status_code == 200:
+                                rdata = resp.json().get("report", {})
+                                _render_analysis_report(rdata, _analysis_complex_code)
+                            else:
+                                st.error(f"분석 실패: {resp.status_code}")
+                        except Exception as e:
+                            st.error(f"오류: {e}")
+            else:
+                st.info("단지코드 없음 — 심층 분석 불가")
+
+
 def _render_apt_detail_panel(entry, tx_limit: int = 50) -> None:
     """선택된 단지의 상세정보 + 실거래가 패널을 렌더링한다.
 
