@@ -1,70 +1,73 @@
 # UI Structure Snapshot
 
 **Status:** Active
-**Last Updated:** 2026-02-18
+**Last Updated:** 2026-06-11
 
 ## 1. Dashboard Structure (Navigation)
-The dashboard follows a simple **Sidebar Navigation** pattern. It uses Streamlit's `st.radio` for menu selection.
 
-### 1.1 Sitemap Diagram (Mermaid)
+사이드바가 "도메인"과 "시스템 운영" 두 그룹으로 분리된다.
 
-```mermaid
-graph LR
-    Root((Consigliere Dashboard))
-    
-    subgraph Sidebar["Left Sidebar"]
-        Nav["Navigation (Radio Button)"]
-        Nav -->|Select| Home["🏠 Home"]
-        Nav -->|Select| Finance["💰 Finance"]
-        Nav -->|Select| RealEstate["🏢 Real Estate"]
-        Nav -->|Select| Automation["⚙️ Automation"]
-    end
-    
-    subgraph MainContent["Main View"]
-        Home --> HomeWidgets["Widgets: Recent Status"]
-        Finance --> FinDate["Date Picker"]
-        Finance --> FinGrid["Data Editor (Grid)"]
-        RealEstate --> RE_Tabs[Tabs]
-        
-        RE_Tabs --> RE_Tab1["Monitor Tab"]
-        RE_Tabs --> RE_Tab2["News Tab"]
-        Automation --> AutoList["Workflow List"]
-        Automation --> AutoEditor["Open in n8n Editor"]
-    end
+### 1.1 Sitemap
+
+```
+사이드바
+├─ 도메인
+│   ├─ 🏠 Home          — 이번달 지출 / 최근 브리핑 / 오늘 Job 실행 현황
+│   ├─ 🚀 Career        — 리포트(일별/주간/월간) / 스킬갭 / 페르소나 / 파이프라인
+│   ├─ 💰 Finance       — 가계부 CRUD (월별)
+│   └─ 🏢 Real Estate   — 6탭 (아래 참조)
+└─ 시스템 운영
+    └─ ⚙️ Automation    — 워크플로우 목록 / 실행 내역
 ```
 
-## 2. Screen Definitions
+## 2. Real Estate 탭 구조 (6탭)
 
-### 2.1 🏠 Home
-- **Purpose:** Provide a quick overview of the agent's status.
-- **Components:**
-    - `st.subheader("💰 Finance Status")`: Displays summary of recent expenses.
-    - `st.subheader("🏢 Real Estate Status")`: Displays recent transaction alerts.
+| 탭 | 내용 |
+|----|------|
+| 🔍 아파트 탐색 | 3단: 목록 + 카드 상세(KPI+확장 섹션) + 지도 |
+| 📈 거시경제 | BOK 지표 카테고리별 최신값 + 추이 차트 |
+| 📰 뉴스 리포트 | 일별 뉴스 분석 리포트 뷰어 |
+| 📌 정책 팩트 | ChromaDB 정책 팩트 검색 |
+| 📋 데일리 브리핑 | 실거래가+거시경제+LLM 인사이트 통합 브리핑 |
+| 👤 페르소나 | 자산/소득/출퇴근/가중치/관심지역 설정 |
 
-### 2.2 💰 Finance (`src/dashboard/views/finance.py`)
-- **Purpose:** Manage and visualize personal finance ledger.
-- **Layout:**
-    - **Header:** Title "💰 Finance Management"
-    - **Control Panel:** Date Picker (`YYYY-MM`)
-    - **Metrics:** `st.metric("Total Expense")`
-    - **Data Grid (`st.data_editor`):**
-        - Columns: `Date` (Date), `Category` (Selectbox), `Item` (Text), `Amount` (Number/KRW)
-        - Behavior: Editable, dynamic row addition.
-    - **Actions:** "Save Changes" Button (Pending API Implementation).
+## 3. 아파트 탐색 탭 — 3단 레이아웃
 
-### 2.3 🏢 Real Estate (`src/dashboard/views/real_estate.py`)
-- **Purpose:** Monitor real estate market and analyze news.
-- **Layout (Tabs):**
-    - **Tab 1: 📊 Market Monitor**
-        - Input: `District Code` (Text), `Limit` (Slider)
-        - Action: "Fetch Transactions" Button
-        - Output: Transactions Table (`st.dataframe`)
-    - **Tab 2: 📰 News Insights**
-        - Input: `Select Report Date` (Selectbox from API list)
-        - Output: Markdown Report Viewer (`st.markdown`)
-### 2.4 ⚙️ Automation (`src/dashboard/views/automation.py`)
-- **Purpose:** Manage and jump into n8n workflows.
-- **Layout:**
-    - **Header:** Title "⚙️ Operations: Automation Workflows"
-    - **Workflow Cards:** List of deployed workflows with ID and Status.
-    - **Action:** "🛠️ Open in n8n Editor" button for direct navigation to n8n.
+```
+[검색바: 아파트명 | 시도 ▾ | 시군구 ▾ | 검색]
+
+┌──────────────┬───────────────────────┬──────────────────────┐
+│  단지 목록   │    카드 상세 패널      │       지도           │
+│  (260px)     │    (340px)            │    (나머지)          │
+│              │                       │                      │
+│ ▶ 래미안원베일│ ### 래미안원베일리    │  [📍 위치] [🏙 POI] │
+│  반포자이    │ [89.5억][82점][38분]  │                      │
+│  잠실주공5   │ ──────────────────    │  🏢 단지 핀          │
+│  ...         │ 📍 입지점수 ▲         │  🏢 직장 핀          │
+│              │   [교통27] [편의22]   │  ---- 출퇴근 경로    │
+│              │   [학군19] [공원14]   │   🚇 38분 배지       │
+│              │ 📈 실거래가 ▼         │                      │
+│              │ 🚇 출퇴근 ▼           │                      │
+│              │ 🤖 AI 인사이트 ▼      │                      │
+└──────────────┴───────────────────────┴──────────────────────┘
+```
+
+## 4. Automation 탭 (Jobs 통합)
+
+| 탭 | 내용 |
+|----|------|
+| 📋 워크플로우 | n8n 워크플로우 목록 + n8n 에디터 링크 |
+| 🕐 실행 내역 | 기간별 실행 타임라인 + 성공/실패 요약 |
+
+## 5. 구현 파일 현황
+
+| 파일 | 역할 |
+|------|------|
+| `src/dashboard/main.py` | 사이드바 2그룹, 라우팅, Home 위젯 |
+| `src/dashboard/views/real_estate.py` | Real Estate 6탭 전체 |
+| `src/dashboard/views/career.py` | Career 4탭 |
+| `src/dashboard/views/finance.py` | Finance 단일 화면 |
+| `src/dashboard/views/automation.py` | Automation 2탭 (Jobs 통합) |
+| `src/dashboard/components/map_view.py` | render_master_map_view(), render_detail_map() |
+| `src/dashboard/api_client.py` | DashboardClient — 모든 API 호출 |
+| `src/dashboard/services.py` | DB 직접 접근 서비스 진입점 |
