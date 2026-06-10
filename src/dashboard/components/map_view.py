@@ -239,7 +239,12 @@ def render_detail_map(
 
     # ── 직장 마커 + 경로 ──
     if workplace_address:
-        work_coords = geocoder.geocode("직장", "_workplace", address=workplace_address)
+        # district_code에 workplace_address 자체를 포함시켜 직장별로 캐시 키를 분리한다.
+        # (고정 문자열을 쓰면 persona의 workplace_station이 바뀌어도
+        #  이전 직장의 캐시된 좌표가 그대로 반환되는 문제가 있다.)
+        work_coords = geocoder.geocode(
+            "직장", f"_workplace_{workplace_address}", address=workplace_address
+        )
         if work_coords:
             folium.Marker(
                 location=work_coords,
