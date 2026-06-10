@@ -14,7 +14,7 @@ except ImportError:
 
 try:
     from dashboard.api_client import DashboardClient
-    from dashboard.components.map_view import render_master_map_view, render_detail_map
+    from dashboard.components.map_view import render_detail_map
     from dashboard.services import (
         get_location_score, get_location_score_as_dict, get_poi_cached,
         count_apt_masters, get_distinct_sidos, get_distinct_sigungus,
@@ -24,7 +24,7 @@ try:
     from modules.real_estate.geocoder import GeocoderService
 except ImportError:
     from src.dashboard.api_client import DashboardClient
-    from src.dashboard.components.map_view import render_master_map_view, render_detail_map
+    from src.dashboard.components.map_view import render_detail_map
     from src.dashboard.services import (
         get_location_score, get_location_score_as_dict, get_poi_cached,
         count_apt_masters, get_distinct_sidos, get_distinct_sigungus,
