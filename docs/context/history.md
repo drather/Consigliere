@@ -1,5 +1,26 @@
 # Project Consigliere: History
-**Last Updated:** 2026-05-31
+**Last Updated:** 2026-06-10
+
+## 2026-06-10 — LLM 호출 전면 로컬화 (llm-local-gemini-cli)
+
+- **목표:** 유료 LLM API 호출 전면 금지, 로컬 `gemini` CLI(`gemini-3-flash-preview`)로 전면 교체
+- **수정 파일:**
+  - `~/.gemini/GEMINI.md` — Consigliere 전용 글로벌 메모리 제거 (워크스페이스 스캔 81s → ~10s)
+  - `src/core/llm.py` — `GeminiCliClient` 재작성 (`--model`/`--extensions ""`/`cwd=/tmp`, `GEMINI_CLI_MODEL` env)
+  - `Dockerfile` — Node.js 20 + `@google/gemini-cli@0.24.0` 직접 설치 (호스트 macOS 바이너리 마운트는 실행 불가로 폐기)
+  - `docker-compose.yml` — `LLM_PROVIDER=gemini-cli`, `GEMINI_CLI_MODEL=gemini-3-flash-preview`, `~/.gemini` rw 마운트
+- **테스트:** 893 tests, 883 passed (신규 9개 포함, 기존 flaky 10개 외 신규 회귀 없음)
+- **문서:** `docs/features/llm-local-gemini-cli/` (spec/progress/issues/result)
+
+## 2026-06-08 — POI→입지점수 파이프라인 연결 (apt-location-enrichment)
+
+- **목표:** `LocationService.enrich_and_save()`를 `AptAnalysisOrchestrator` 리포트 생성 플로우에 연결
+- **수정 파일:**
+  - `src/modules/real_estate/apt_analysis/orchestrator.py` — `loc_repo` → `location_service` DI 전환,
+    `_get_location_score()`/`_build_location_candidate()` 신규
+  - `src/api/dependencies.py` — `_apt_orchestrator`에 `_location_service` 싱글톤 주입
+- **테스트:** 11개 신규/수정, 588 passed
+- **문서:** `docs/features/apt-location-enrichment/` (spec/progress/result)
 
 ## 2026-06-06 — 아키텍처 DI 최종 정리 (arch-di-final-cleanup)
 
