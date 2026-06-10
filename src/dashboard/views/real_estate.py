@@ -387,8 +387,8 @@ def _render_apt_detail_cards(entry) -> None:
                             col_score, col_bar = st.columns([1, 3])
                             col_score.metric("", f"{dr.score}점")
                             col_bar.progress(min(dr.score / 100, 1.0))
-                            if getattr(dr, "evidence", None):
-                                st.caption(dr.evidence)
+                            for ev in (getattr(dr, "evidence", None) or []):
+                                st.caption(f"　　· {ev}")
     else:
         with st.expander("📍 입지점수", expanded=False):
             st.info("입지 분석 데이터가 없습니다. 심층 분석을 실행하세요.")
