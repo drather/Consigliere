@@ -25,27 +25,26 @@ def show_automation():
 
         if not workflows:
             st.info("연결된 n8n 인스턴스에 워크플로우가 없습니다.")
-            return
+        else:
+            st.subheader("Active Agents & Triggers")
+            for wf in workflows:
+                name = wf.get("name", "Unnamed Workflow")
+                active = wf.get("active", False)
+                wf_id = wf.get("id")
+                created_at = wf.get("createdAt", "Unknown")
+                updated_at = wf.get("updatedAt", "Unknown")
+                status_icon = "🟢" if active else "⚫"
 
-        st.subheader("Active Agents & Triggers")
-        for wf in workflows:
-            name = wf.get("name", "Unnamed Workflow")
-            active = wf.get("active", False)
-            wf_id = wf.get("id")
-            created_at = wf.get("createdAt", "Unknown")
-            updated_at = wf.get("updatedAt", "Unknown")
-            status_icon = "🟢" if active else "⚫"
-
-            with st.expander(f"{status_icon} **{name}** (ID: `{wf_id}`)", expanded=False):
-                st.markdown(f"""
-                - **Status:** {'Active' if active else 'Inactive'}
-                - **Created:** {created_at}
-                - **Last Updated:** {updated_at}
-                """)
-                col1, col2 = st.columns([1, 4])
-                with col1:
-                    n8n_url = f"http://localhost:5678/workflow/{wf_id}"
-                    st.link_button("🛠️ Open in n8n Editor", n8n_url)
+                with st.expander(f"{status_icon} **{name}** (ID: `{wf_id}`)", expanded=False):
+                    st.markdown(f"""
+                    - **Status:** {'Active' if active else 'Inactive'}
+                    - **Created:** {created_at}
+                    - **Last Updated:** {updated_at}
+                    """)
+                    col1, col2 = st.columns([1, 4])
+                    with col1:
+                        n8n_url = f"http://localhost:5678/workflow/{wf_id}"
+                        st.link_button("🛠️ Open in n8n Editor", n8n_url)
 
     # ── 탭 2: 실행 내역 (기존 jobs.py 내용) ───────────────────────────
     with tab_jobs:
@@ -69,16 +68,15 @@ def show_automation():
 
         if not executions:
             st.info("해당 기간에 실행 내역이 없습니다.")
-            return
-
-        rows = [
-            {
-                "상태": _STATUS_ICON.get(e.get("status", ""), "❓"),
-                "워크플로우": e.get("workflow_name", "-"),
-                "시작": e.get("started_at", "-"),
-                "종료": e.get("finished_at", "-"),
-                "소요(초)": e.get("duration_seconds", "-"),
-            }
-            for e in executions
-        ]
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        else:
+            rows = [
+                {
+                    "상태": _STATUS_ICON.get(e.get("status", ""), "❓"),
+                    "워크플로우": e.get("workflow_name", "-"),
+                    "시작": e.get("started_at", "-"),
+                    "종료": e.get("finished_at", "-"),
+                    "소요(초)": e.get("duration_seconds", "-"),
+                }
+                for e in executions
+            ]
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
