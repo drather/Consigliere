@@ -22,7 +22,7 @@ class AptAnalysisOrchestrator:
         tx_repo,
         jeonse_repo,
         supply_repo,
-        loc_repo,
+        location_service,
         macro_svc,
         commute_repo,
         llm,
@@ -33,7 +33,7 @@ class AptAnalysisOrchestrator:
         self._tx_repo = tx_repo
         self._jeonse_repo = jeonse_repo
         self._supply_repo = supply_repo
-        self._loc_repo = loc_repo
+        self._location_service = location_service
         self._macro_svc = macro_svc
         self._commute_repo = commute_repo
         self._llm = llm
@@ -50,8 +50,8 @@ class AptAnalysisOrchestrator:
         price_history = self._collect_price_history(complex_code)
         jeonse_ratio = self._calc_jeonse_ratio(complex_code, price_history)
         supply_risk_summary = self._get_supply_risk(apt_entry)
-        location_score = self._get_location_score(complex_code)
         commute_summary = self._get_commute_summary(district_code, apt_name)
+        location_score = self._get_location_score(complex_code, apt_entry, commute_summary)
         macro_snapshot = self._macro_svc.fetch_latest_macro_data()
 
         prompt = self._build_prompt(
@@ -149,10 +149,15 @@ class AptAnalysisOrchestrator:
             return "주의"
         return "안전"
 
-    def _get_location_score(self, complex_code: str):
-        score = self._loc_repo.get_score(complex_code)
+    def _get_location_score(self, complex_code: str, apt_entry, commute_summary: Optional[dict]):
+        score = self._location_service.get_score(complex_code)
         if score is None:
-            return None
+            candidate = self._build_location_candidate(complex_code, apt_entry, commute_summary)
+            try:
+                score = self._location_service.enrich_and_save(complex_code, candidate)
+            except Exception as e:
+                logger.warning("[AptAnalysis] 입지 점수 계산 실패 %s: %s", complex_code, e)
+                return None
         return {
             "residential_total": score.residential_total,
             "investment_total": score.investment_total,
@@ -161,6 +166,32 @@ class AptAnalysisOrchestrator:
                 "investment": [{"label": dr.label, "score": dr.score} for dr in score.investment_results],
             },
         }
+
+    def _build_location_candidate(self, complex_code: str, apt_entry, commute_summary: Optional[dict]) -> dict:
+        """POI 캐시 + 통근 데이터 + 단지 정보로 LocationScorer 입력 candidate를 구성한다."""
+        candidate: dict = {"complex_code": complex_code}
+        if apt_entry.household_count is not None:
+            candidate["household_count"] = apt_entry.household_count
+
+        poi = self._location_service.get_poi_cached(complex_code)
+        if poi is not None:
+            candidate.update({
+                "poi_stations": poi.subway_stations,
+                "poi_schools_count": poi.schools_count,
+                "poi_academies_count": poi.academies_count,
+                "poi_marts_count": poi.marts_count,
+                "poi_convenience_count": poi.convenience_count,
+                "poi_pharmacy_count": poi.pharmacy_count,
+                "poi_medical_count": poi.medical_count,
+                "poi_park_nearest_m": poi.park_nearest_m,
+                "poi_restaurant_count": poi.restaurant_count,
+                "poi_cafe_count": poi.cafe_count,
+            })
+
+        if commute_summary and commute_summary.get("transit") is not None:
+            candidate["commute_transit_minutes"] = commute_summary["transit"]
+
+        return candidate
 
     def _get_commute_summary(self, district_code: str, apt_name: str) -> Optional[dict]:
         origin_key = f"{district_code}__{apt_name}"

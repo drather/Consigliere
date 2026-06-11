@@ -72,6 +72,54 @@ class TestGeminiCliClient:
         call_args = mock_run.call_args
         assert call_args[0][0][0] == "gemini"
 
+    def test_generate_uses_model_flag(self):
+        from core.llm import GeminiCliClient
+        with patch.dict(os.environ, {"GEMINI_CLI_MODEL": "gemini-3-flash-preview"}):
+            client = GeminiCliClient()
+        mock_result = MagicMock()
+        mock_result.stdout = "ok"
+        mock_result.returncode = 0
+        with patch("subprocess.run", return_value=mock_result) as mock_run:
+            client.generate("테스트")
+        cmd = mock_run.call_args[0][0]
+        assert "--model" in cmd
+        assert "gemini-3-flash-preview" in cmd
+
+    def test_generate_uses_extensions_empty_flag(self):
+        from core.llm import GeminiCliClient
+        client = GeminiCliClient()
+        mock_result = MagicMock()
+        mock_result.stdout = "ok"
+        mock_result.returncode = 0
+        with patch("subprocess.run", return_value=mock_result) as mock_run:
+            client.generate("테스트")
+        cmd = mock_run.call_args[0][0]
+        assert "--extensions" in cmd
+
+    def test_generate_uses_tmp_cwd(self):
+        from core.llm import GeminiCliClient
+        client = GeminiCliClient()
+        mock_result = MagicMock()
+        mock_result.stdout = "ok"
+        mock_result.returncode = 0
+        with patch("subprocess.run", return_value=mock_result) as mock_run:
+            client.generate("테스트")
+        kwargs = mock_run.call_args[1]
+        assert kwargs.get("cwd") == "/tmp"
+
+    def test_model_defaults_to_gemini_3_flash_preview(self):
+        from core.llm import GeminiCliClient
+        env = {k: v for k, v in os.environ.items() if k != "GEMINI_CLI_MODEL"}
+        with patch.dict(os.environ, env, clear=True):
+            client = GeminiCliClient()
+        assert client._model == "gemini-3-flash-preview"
+
+    def test_model_from_env_var(self):
+        from core.llm import GeminiCliClient
+        with patch.dict(os.environ, {"GEMINI_CLI_MODEL": "gemini-2.5-flash"}):
+            client = GeminiCliClient()
+        assert client._model == "gemini-2.5-flash"
+
     def test_generate_timeout_returns_error_string(self):
         from core.llm import GeminiCliClient
         client = GeminiCliClient()

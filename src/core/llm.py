@@ -397,16 +397,23 @@ class ClaudeCodeClient(BaseLLMClient):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class GeminiCliClient(BaseLLMClient):
-    """로컬에 설치된 `gemini` CLI를 subprocess로 호출한다."""
+    """로컬에 설치된 `gemini` CLI를 subprocess로 호출한다.
+
+    cwd=/tmp + --extensions "" 로 실행하여 프로젝트 워크스페이스 스캔을 방지한다.
+    인증은 ~/.gemini (컨테이너에 볼륨 마운트)를 통해 처리된다.
+    """
+
+    def __init__(self):
+        self._model = os.getenv("GEMINI_CLI_MODEL", "gemini-3-flash-preview")
 
     def generate(self, prompt: str) -> str:
         try:
             result = subprocess.run(
-                ["gemini", prompt],
-                capture_output=True, text=True, timeout=120
+                ["gemini", "--model", self._model, "--extensions", "", prompt],
+                capture_output=True, text=True, timeout=120, cwd="/tmp"
             )
             if result.returncode != 0:
-                logger.warning("[%s] returncode=%d, stderr=%s", self.__class__.__name__, result.returncode, result.stderr[:200])
+                logger.warning("[GeminiCliClient] returncode=%d, stderr=%s", result.returncode, result.stderr[:200])
             return result.stdout.strip()
         except subprocess.TimeoutExpired:
             logger.warning("[GeminiCliClient] subprocess timeout (120s)")
