@@ -27,6 +27,8 @@ class AptAnalysisOrchestrator:
         commute_repo,
         llm,
         geocoder=None,
+        news_service=None,
+        prompt_loader=None,
     ):
         self._apt_master_repo = apt_master_repo
         self._apt_details_repo = apt_details_repo
@@ -38,6 +40,8 @@ class AptAnalysisOrchestrator:
         self._commute_repo = commute_repo
         self._llm = llm
         self._geocoder = geocoder
+        self._news_service = news_service
+        self._prompt_loader = prompt_loader
 
     def analyze(self, complex_code: str) -> AptAnalysisReport:
         apt_entry = self._apt_master_repo.get_by_complex_code(complex_code)
@@ -48,7 +52,7 @@ class AptAnalysisOrchestrator:
         district_code = apt_entry.district_code
 
         price_history = self._collect_price_history(complex_code)
-        jeonse_ratio = self._calc_jeonse_ratio(complex_code, price_history)
+        jeonse_ratio = self._calc_jeonse_ratio(apt_name, district_code, price_history)
         supply_risk_summary = self._get_supply_risk(apt_entry)
         commute_summary = self._get_commute_summary(district_code, apt_name)
         location_score = self._get_location_score(complex_code, apt_entry, commute_summary)
@@ -92,18 +96,19 @@ class AptAnalysisOrchestrator:
             for t in txs
         ]
 
-    def _calc_jeonse_ratio(self, complex_code: str, price_history: list) -> Optional[float]:
+    def _calc_jeonse_ratio(self, apt_name: str, district_code: str, price_history: list) -> Optional[float]:
         if not price_history:
             return None
-        jeonse_txs = self._jeonse_repo.get_by_complex(complex_code)
+        # jeonse_transactions.complex_code는 항상 NULL (JeonseClient 미설정) → apt_name+district_code로 매칭
+        jeonse_txs = self._jeonse_repo.get_by_apt_name(apt_name, district_code)
         jeonse_only = [t for t in jeonse_txs if getattr(t, "contract_type", "jeonse") == "jeonse"]
         if not jeonse_only:
             return None
-        avg_sale = sum(p["price"] for p in price_history) / len(price_history)
-        avg_jeonse = sum(t.deposit for t in jeonse_only) / len(jeonse_only)
-        if avg_sale == 0:
+        avg_sale_man = sum(p["price"] for p in price_history) / len(price_history) / 10000  # 원 → 만원
+        avg_jeonse_man = sum(t.deposit for t in jeonse_only) / len(jeonse_only)
+        if avg_sale_man == 0:
             return None
-        return round(avg_jeonse / avg_sale * 100, 1)
+        return round(avg_jeonse_man / avg_sale_man * 100, 1)
 
     def _get_supply_risk(self, apt_entry) -> Optional[str]:
         try:
@@ -134,7 +139,12 @@ class AptAnalysisOrchestrator:
             if coords is None:
                 return None
             lat, lng = coords
-            analyzer = SupplyRiskAnalyzer(supply_repo=self._supply_repo)
+            analyzer = SupplyRiskAnalyzer(
+                supply_repo=self._supply_repo,
+                news_service=self._news_service,
+                llm=self._llm,
+                prompt_loader=self._prompt_loader,
+            )
             result = analyzer.analyze(lat=lat, lng=lng, apt_name=apt_name, sigungu=sigungu)
             return f"반경 3km 공급 {result.nearby_units:,}세대 ({result.supply_period}) — {self._risk_level(result.nearby_units)}"
         except Exception as e:

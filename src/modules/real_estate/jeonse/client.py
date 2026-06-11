@@ -55,14 +55,14 @@ class JeonseClient:
 
         results = []
         for item in root.iter("item"):
-            apt_name = _text(item, "아파트")
-            deposit_raw = _text(item, "보증금액").replace(",", "")
-            monthly_raw = _text(item, "월세금액").replace(",", "")
-            area_raw = _text(item, "전용면적")
-            year = _text(item, "년")
-            month = _text(item, "월")
-            day = _text(item, "일")
-            floor_raw = _text(item, "층")
+            apt_name = _text(item, "aptNm")
+            deposit_raw = _text(item, "deposit").replace(",", "")
+            monthly_raw = _text(item, "monthlyRent").replace(",", "")
+            area_raw = _text(item, "excluUseAr")
+            year = _text(item, "dealYear")
+            month = _text(item, "dealMonth")
+            day = _text(item, "dealDay")
+            floor_raw = _text(item, "floor")
 
             try:
                 deposit = int(deposit_raw) if deposit_raw else 0

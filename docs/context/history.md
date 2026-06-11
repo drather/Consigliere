@@ -1,5 +1,24 @@
 # Project Consigliere: History
-**Last Updated:** 2026-06-10
+**Last Updated:** 2026-06-11
+
+## 2026-06-11 — 전세가율/공급리스크 None 버그 수정 (apt-analysis-jeonse-supply-fix)
+
+- **목표:** `POST /jobs/apt/analyze`에서 `jeonse_ratio`/`supply_risk_summary`가 항상 `None`인 문제의
+  근본 원인 조사 및 수정 (systematic-debugging + TDD)
+- **근본 원인 3가지:**
+  1. `_get_supply_risk()` — `SupplyRiskAnalyzer` 생성자에 `news_service`/`llm`/`prompt_loader` 미전달 → `TypeError`
+  2. `_calc_jeonse_ratio()` — 항상 NULL인 `jeonse_transactions.complex_code`로 조회 + 원/만원 단위 불일치
+  3. `JeonseClient._parse()` — 한글 XML 태그 조회, 실제 국토부 API는 영문 태그(`aptNm` 등) 응답 → 운영 데이터 0건 (1차 원인)
+- **수정 파일:**
+  - `src/modules/real_estate/jeonse/repository.py` — `get_by_apt_name()` 신규
+  - `src/modules/real_estate/jeonse/client.py` — `_parse()` XML 태그 한글→영문 수정
+  - `src/modules/real_estate/apt_analysis/orchestrator.py` — `_calc_jeonse_ratio` 조회방식+단위 변환,
+    `__init__`에 `news_service`/`prompt_loader` 추가, `_get_supply_risk` 의존성 전체 전달
+  - `src/api/dependencies.py` — `_apt_orchestrator` 정의 위치 이동 + `geocoder`/`news_service`/`prompt_loader` 주입
+- **데이터:** `POST /jobs/jeonse/collect` 실행 → `jeonse_transactions` 0 → 8,180건, `docker restart consigliere_api`
+- **E2E 검증:** A10025850(헬리오시티) — `jeonse_ratio` null→37.9, `supply_risk_summary` null→정상 문자열
+- **테스트:** 889 passed (신규 13개), pre-existing 7 failed는 무관 (career/dashboard/insight/tab5)
+- **문서:** `docs/features/apt-analysis-jeonse-supply-fix/` (spec/progress/issues/result)
 
 ## 2026-06-10 — LLM 호출 전면 로컬화 (llm-local-gemini-cli)
 

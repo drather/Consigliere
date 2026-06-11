@@ -127,3 +127,28 @@ class JeonseRepository:
             monthly_rent=r["monthly_rent"], contract_type=r["contract_type"],
             floor=r["floor"]
         ) for r in rows]
+
+    def get_by_apt_name(self, apt_name: str, district_code: str, months: int = 12) -> List[JeonseTransaction]:
+        """apt_name + district_code 기준으로 최근 N개월 전세 거래 전체 반환.
+
+        JeonseClient가 수집하는 레코드는 complex_code를 채우지 않으므로
+        get_by_complex() 대신 이 메서드로 매칭한다 (area 필터 없음)."""
+        today = date.today()
+        year = today.year - (months // 12)
+        month = today.month - (months % 12)
+        if month <= 0:
+            month += 12
+            year -= 1
+        cutoff = today.replace(year=year, month=month).isoformat()
+        rows = self._conn.execute(
+            "SELECT * FROM jeonse_transactions "
+            "WHERE apt_name = ? AND district_code = ? AND deal_date >= ? ORDER BY deal_date DESC",
+            (apt_name, district_code, cutoff)
+        ).fetchall()
+        return [JeonseTransaction(
+            id=r["id"], complex_code=r["complex_code"], apt_name=r["apt_name"],
+            district_code=r["district_code"], deal_date=r["deal_date"],
+            exclusive_area=r["exclusive_area"], deposit=r["deposit"],
+            monthly_rent=r["monthly_rent"], contract_type=r["contract_type"],
+            floor=r["floor"]
+        ) for r in rows]

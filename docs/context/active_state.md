@@ -1,9 +1,22 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-06-10
+**Last Updated:** 2026-06-11
 
 ## 현재 포커스
 - **Branch:** `master`
-- **Status:** ✅ LLM 전면 로컬화 (Gemini CLI) 완료 (2026-06-10)
+- **Status:** ✅ 전세가율/공급리스크 None 버그 수정 완료 (2026-06-11)
+
+## 최근 완료 (2026-06-11)
+
+- **전세가율(jeonse_ratio)/공급리스크(supply_risk_summary) None 버그 수정** (`docs/features/apt-analysis-jeonse-supply-fix/`)
+  - 근본 원인 3가지:
+    1. `_get_supply_risk()`가 `SupplyRiskAnalyzer`에 `news_service`/`llm`/`prompt_loader` 누락 → `TypeError` → `None`
+    2. `_calc_jeonse_ratio()`가 항상 NULL인 `jeonse_transactions.complex_code`로 조회 + 원/만원 단위 불일치
+    3. **`JeonseClient._parse()`가 한글 XML 태그(`아파트`/`년`/`보증금액` 등)를 조회하지만 실제 국토부 API 응답은 영문 태그(`aptNm`/`dealYear`/`deposit` 등)** → `jeonse_transactions` 0건 (1차 원인)
+  - `JeonseRepository.get_by_apt_name()` 신규, `AptAnalysisOrchestrator` DI 확장(`news_service`/`prompt_loader`),
+    `dependencies.py`에서 `_apt_orchestrator`를 `_geocoder_service`/`_prompt_loader` 정의 이후로 이동
+  - `POST /jobs/jeonse/collect` 실행 → `jeonse_transactions` 0 → 8,180건, `docker restart consigliere_api`
+  - E2E 검증(A10025850 헬리오시티): `jeonse_ratio` null→37.9, `supply_risk_summary` null→정상 문자열
+  - 테스트: 889 passed (신규 13개 포함), pre-existing 7 failed는 무관 (stash 비교 확인)
 
 ## 최근 완료 (2026-06-10)
 
@@ -66,6 +79,24 @@
   - `list_daily_reports` 로컬 Config/Repo 생성 → `Depends(get_daily_report_repo)` 전환
   - `dependencies.py` DailyReport 섹션 신규 (orchestrator, report_repo, llm, prompt_loader 싱글톤)
   - 테스트: 858 passed, 신규 실패 없음
+
+## 발견된 이슈: apt_master complex_code 매핑 오류 (2026-06-11 조사완료, 수정대기)
+
+- **증상**: "목련마을2단지대우선경"(apt_master id=2902) → complex_code=`A43106007`로 매핑되어 있으나, `A43106007`은 실제로 "동편마을2단지"(LH, 관양동, 2012)의 코드. `/jobs/apt/analyze` 호출 시 200 OK로 "성공"하지만 전혀 다른 건물의 입지/통근/POI 데이터로 분석됨 (조용한 오답).
+- **근본원인**: `TransactionRepository._name_fuzzy_match()` (`src/modules/real_estate/transaction_repository.py:246-261`)의 2차 suffix 매칭 규칙("짧은 쪽 끝 4글자 이상이 긴 쪽에 포함되면 매칭")이 "OO마을N단지" 같은 흔한 작명 패턴에서 거짓 양성 발생.
+  - 재현: `_name_fuzzy_match("목련마을2단지대우선경", "동편마을2단지")` → `True` ("을2단지" 4글자 공통)
+  - 반면 실제 의도 단지로 추정되는 "평촌목련2단지아파트"(`A43177507`, 994세대, 대우+선경건설 1992 — 이름의 "대우선경"과 일치)는 현재 규칙으로 **전혀 매칭 안 됨**
+- **영향범위**: `apt_master.complex_code` 매핑 5,066건 중 **1,027건(~20%)**이 1차 substring이 아닌 2차 suffix 규칙으로만 매칭됨. 일부는 정상(단어순서 차이, 예: "길음뉴타운9단지래미안"↔"래미안길음뉴타운9단지")이나, 다음과 같은 명백한 오매핑도 다수 확인:
+  - `신내대림아파트` → `면목풍림아파트`
+  - `신내두산아파트` → `면목1차두산아파트`
+  - `현대아이파크` → `사가정센트럴아이파크아파트`
+  - `샹그레빌아파트`(2건, district 다름) → `정은스카이빌아파트` / `종암sh빌아파트`
+  - `자양강변I-Park` → `광진We'vePark`
+- **TODO**:
+  1. 1,027건 분류(정상 vs 오매핑) — 자동 검증 기준 마련 (주소/세대수/시공사 등 보조 정보 활용)
+  2. `_name_fuzzy_match` 2차 suffix 규칙 수정 또는 제거 (단순 이름 매칭만으로는 한계 — alias 테이블/주소 기반 매칭 검토)
+  3. 오매핑 confirm 건은 `apt_master.complex_code` / `transactions.complex_code` 재계산
+  4. SOP 4단계(spec/progress/issues/result) + Phase 2.5 SOLID Review 적용 — 영향범위가 커서 별도 작업으로 진행
 
 ## 다음 작업 로드맵
 

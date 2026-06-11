@@ -188,35 +188,6 @@ def get_location_service() -> LocationService:
     return _location_service
 
 
-# ── Apt Analysis ──────────────────────────────────────────────────────────────
-from modules.real_estate.apt_analysis.orchestrator import AptAnalysisOrchestrator
-from modules.real_estate.apt_analysis.repository import AptAnalysisRepository
-from modules.real_estate.macro.service import MacroService as _MacroSvc
-from core.llm import LLMFactory
-
-_apt_macro_svc = _MacroSvc()
-_apt_analysis_repo = AptAnalysisRepository(db_path=_re_db_path)
-_apt_orchestrator = AptAnalysisOrchestrator(
-    apt_master_repo=_apt_master_repo,
-    apt_details_repo=_apt_repo,
-    tx_repo=_tx_repo,
-    jeonse_repo=_jeonse_repo,
-    supply_repo=_supply_repo,
-    location_service=_location_service,
-    macro_svc=_apt_macro_svc,
-    commute_repo=_commute_repo,
-    llm=LLMFactory.create(),
-)
-
-
-def get_apt_analysis_repo() -> AptAnalysisRepository:
-    return _apt_analysis_repo
-
-
-def get_apt_orchestrator() -> AptAnalysisOrchestrator:
-    return _apt_orchestrator
-
-
 # ── Report Repository ─────────────────────────────────────────────────────────
 from modules.real_estate.report_repository import ReportRepository as _ReportRepo
 
@@ -303,3 +274,35 @@ def get_daily_report_repo() -> DailyReportRepository:
 
 def get_daily_report_orchestrator() -> DailyReportOrchestrator:
     return _daily_report_orchestrator
+
+
+# ── Apt Analysis ──────────────────────────────────────────────────────────────
+from modules.real_estate.apt_analysis.orchestrator import AptAnalysisOrchestrator
+from modules.real_estate.apt_analysis.repository import AptAnalysisRepository
+from modules.real_estate.macro.service import MacroService as _MacroSvc
+from core.llm import LLMFactory
+
+_apt_macro_svc = _MacroSvc()
+_apt_analysis_repo = AptAnalysisRepository(db_path=_re_db_path)
+_apt_orchestrator = AptAnalysisOrchestrator(
+    apt_master_repo=_apt_master_repo,
+    apt_details_repo=_apt_repo,
+    tx_repo=_tx_repo,
+    jeonse_repo=_jeonse_repo,
+    supply_repo=_supply_repo,
+    location_service=_location_service,
+    macro_svc=_apt_macro_svc,
+    commute_repo=_commute_repo,
+    llm=LLMFactory.create(),
+    geocoder=_geocoder_service,
+    news_service=_news_service,
+    prompt_loader=_prompt_loader,
+)
+
+
+def get_apt_analysis_repo() -> AptAnalysisRepository:
+    return _apt_analysis_repo
+
+
+def get_apt_orchestrator() -> AptAnalysisOrchestrator:
+    return _apt_orchestrator

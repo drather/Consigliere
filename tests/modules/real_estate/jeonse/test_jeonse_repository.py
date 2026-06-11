@@ -97,3 +97,27 @@ def test_get_by_complex_returns_all_for_complex_code(jeonse_repo):
 
 def test_get_by_complex_returns_empty_when_no_data(jeonse_repo):
     assert jeonse_repo.get_by_complex("NONEXISTENT") == []
+
+
+def test_get_by_apt_name_matches_without_complex_code(jeonse_repo):
+    """JeonseClient는 complex_code를 채우지 않으므로 apt_name+district_code로 매칭해야 한다."""
+    tx1 = JeonseTransaction(
+        complex_code=None, apt_name="래미안블레스티지", district_code="11680",
+        deal_date="2026-01-15", exclusive_area=84.0, deposit=90000,
+        monthly_rent=0, contract_type="jeonse", floor=5
+    )
+    tx_other = JeonseTransaction(
+        complex_code=None, apt_name="다른아파트", district_code="11680",
+        deal_date="2026-02-01", exclusive_area=84.0, deposit=60000,
+        monthly_rent=0, contract_type="jeonse", floor=7
+    )
+    jeonse_repo.save(tx1)
+    jeonse_repo.save(tx_other)
+
+    results = jeonse_repo.get_by_apt_name("래미안블레스티지", "11680")
+    assert len(results) == 1
+    assert results[0].deposit == 90000
+
+
+def test_get_by_apt_name_returns_empty_when_no_data(jeonse_repo):
+    assert jeonse_repo.get_by_apt_name("없는아파트", "11680") == []

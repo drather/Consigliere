@@ -35,7 +35,7 @@ def _make_mock_transaction():
 
 def _make_mock_jeonse():
     m = MagicMock()
-    m.deposit = 900_000_000
+    m.deposit = 90_000  # 만원 단위 (9억원)
     m.contract_type = "jeonse"
     return m
 
@@ -53,7 +53,7 @@ def _build_orchestrator():
     tx_repo.get_by_complex.return_value = [_make_mock_transaction()]
 
     jeonse_repo = MagicMock()
-    jeonse_repo.get_by_complex.return_value = [_make_mock_jeonse()]
+    jeonse_repo.get_by_apt_name.return_value = [_make_mock_jeonse()]
 
     supply_repo = MagicMock()
     supply_repo.get_within_radius.return_value = []
@@ -71,6 +71,14 @@ def _build_orchestrator():
     llm = MagicMock()
     llm.generate.return_value = "이 단지는 강남 핵심 입지로 실거주·투자 모두 우수합니다."
 
+    news_service = MagicMock()
+    news_service.get_categorized_news.return_value = []
+
+    prompt_loader = MagicMock()
+
+    geocoder = MagicMock()
+    geocoder.geocode.return_value = (37.4979, 127.0276)
+
     orch = AptAnalysisOrchestrator(
         apt_master_repo=apt_master_repo,
         apt_details_repo=apt_details_repo,
@@ -81,6 +89,9 @@ def _build_orchestrator():
         macro_svc=macro_svc,
         commute_repo=commute_repo,
         llm=llm,
+        news_service=news_service,
+        prompt_loader=prompt_loader,
+        geocoder=geocoder,
     )
     return orch, apt_master_repo, apt_details_repo, tx_repo, jeonse_repo, location_service, macro_svc, commute_repo, llm
 
@@ -98,7 +109,7 @@ class TestAptAnalysisOrchestrator:
         orch.analyze("CC001")
         apt_master_repo.get_by_complex_code.assert_called_once_with("CC001")
         tx_repo.get_by_complex.assert_called_once_with("CC001")
-        jeonse_repo.get_by_complex.assert_called_once_with("CC001")
+        jeonse_repo.get_by_apt_name.assert_called_once_with("래미안블레스티지", "11680")
         location_service.get_score.assert_called_once_with("CC001")
         macro_svc.fetch_latest_macro_data.assert_called_once()
         commute_repo.get_all_by_origin.assert_called_once_with("11680__래미안블레스티지")
@@ -124,9 +135,32 @@ class TestAptAnalysisOrchestrator:
 
     def test_analyze_handles_missing_jeonse_gracefully(self):
         orch, _, _, _, jeonse_repo, *_ = _build_orchestrator()
-        jeonse_repo.get_by_complex.return_value = []
+        jeonse_repo.get_by_apt_name.return_value = []
         report = orch.analyze("CC001")
         assert report.jeonse_ratio is None
+
+    def test_analyze_calculates_supply_risk_summary(self):
+        orch, *_ = _build_orchestrator()
+        mock_supply = MagicMock()
+        mock_supply.household_count = 3000
+        mock_supply.expected_date = "2027-08"
+        orch._supply_repo.get_within_radius.return_value = [mock_supply]
+
+        report = orch.analyze("CC001")
+
+        assert report.supply_risk_summary is not None
+        assert "3,000세대" in report.supply_risk_summary
+        assert "2027H2" in report.supply_risk_summary
+
+    def test_analyze_handles_no_nearby_supply_gracefully(self):
+        orch, *_ = _build_orchestrator()
+        orch._supply_repo.get_within_radius.return_value = []
+
+        report = orch.analyze("CC001")
+
+        assert report.supply_risk_summary is not None
+        assert "0세대" in report.supply_risk_summary
+        assert "안전" in report.supply_risk_summary
 
     def test_analyze_builds_commute_summary_from_cache(self):
         orch, _, _, _, _, _, _, commute_repo, _ = _build_orchestrator()
