@@ -1,5 +1,21 @@
 # Project Consigliere: History
-**Last Updated:** 2026-06-11
+**Last Updated:** 2026-06-12
+
+## 2026-06-12 — 아파트 상세 카드 UI/UX 5건 개선 (apt-detail-card-redesign)
+
+- **배경:** 사용자가 Playwright MCP로 `localhost:8501` 아파트 탐색 탭을 직접 점검하며 발견한 5가지 UX 문제 수정
+- **수정 파일:** `src/dashboard/views/real_estate.py` (`_render_apt_detail_cards`, `_render_analysis_report`, `_render_score_dimension_grid` 신규, `_render_school_detail` 신규)
+- **변경 사항:**
+  1. `🚇 출퇴근` — `transit_legs` 기반 경로 상세 nested expander 추가
+  2. AI 인사이트의 입지점수/출퇴근/학군 중복 섹션 제거
+  3. 입지점수를 2열 카드 그리드 + 클릭형 `근거 보기` expander로 전환
+  4. 실거래가 차트 — 코드 정상(8502 검증), 본 머지로 8501에도 반영
+  5. `🎒 학군프리미엄` 카드에 학군 상세(`_render_school_detail`, 라이브 API) 통합
+- **검증:** Playwright MCP로 port 8502(로컬 streamlit)에서 5건 모두 확인 (한국 A40381801, 2차한양아파트)
+- **테스트:** E2E SCN-21~25 추가 (10 passed/12 skipped/0 failed), 회귀 10 failed/887 passed/1 error (기존 baseline 동일)
+- **SOP:** `docs/guidelines/sop.md` Phase 2 step 6에 재기동 의무화 + worktree 마운트 예외 명문화
+- **문서:** `docs/features/apt-detail-card-redesign/result.md`
+- **후속:** 학군 데이터 불일치(evidence vs 라이브 API) 별도 검토 필요
 
 ## 2026-06-11 — 전세가율/공급리스크 None 버그 수정 (apt-analysis-jeonse-supply-fix)
 
