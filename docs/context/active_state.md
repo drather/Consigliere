@@ -1,9 +1,21 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-06-10
+**Last Updated:** 2026-06-12
 
 ## 현재 포커스
-- **Branch:** `master`
-- **Status:** ✅ LLM 전면 로컬화 (Gemini CLI) 완료 (2026-06-10)
+- **Branch:** `worktree-dashboard-redesign` (worktree, master 미머지)
+- **Status:** ✅ 아파트 상세 카드 UI/UX 5건 개선 완료, 머지 대기 (2026-06-12)
+
+## 최근 완료 (2026-06-12)
+
+- **아파트 상세 카드 UI/UX 5건 개선** (`docs/features/apt-detail-card-redesign/result.md`)
+  - 출퇴근 경로(legs) 상세 expander 추가, 입지점수/교육환경 AI 인사이트 중복 제거
+  - 입지점수 카드를 2열 그리드 + 클릭형 `근거 보기` expander로 전환
+  - `🎒 학군프리미엄` 카드에 학군 상세(`_render_school_detail`, 라이브 API) 통합, AI 인사이트의 `📚 학군 분석` 제거
+  - 실거래가 차트(line_chart)는 코드상 정상 — 8501 컨테이너는 master 마운트라 worktree 미커밋 변경 미반영(재기동으로도 해결 불가)
+  - E2E 시나리오 5건(SCN-21~25) 추가, 회귀 10 failed/887 passed/1 error (기존 baseline과 동일, 신규 실패 없음)
+  - `docs/guidelines/sop.md` Phase 2 step 6에 "재기동 필요 시 진단만 하지 말고 직접 재기동" + worktree 마운트 예외 조항 명문화
+  - 미해결 관찰: `🎒 학군프리미엄` evidence("학교: 8개")와 `_render_school_detail` 라이브 API("반경 1km 학교 수: 0개") 값 불일치 (별도 이슈, 범위 외)
+  - **다음 단계:** worktree → master 머지/커밋 필요 (사용자 명시 요청 시 진행)
 
 ## 최근 완료 (2026-06-10)
 

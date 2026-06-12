@@ -1,5 +1,5 @@
 """
-E2E: Real Estate — 부동산 탭 전체 시나리오 검증 (18개).
+E2E: Real Estate — 부동산 탭 전체 시나리오 검증 (25개).
 
 대상 탭:
   Tab1: 🔍 아파트 탐색 (필터 / 단지 목록 / 지도 뷰)
@@ -10,7 +10,7 @@ E2E: Real Estate — 부동산 탭 전체 시나리오 검증 (18개).
 검증 범위 (Transaction-First 기준):
   Group A: 페이지 기본 (SCN-01 ~ 02)
   Group B: Tab1 검색 필터 (SCN-03 ~ 06)
-  Group C: Tab1 검색 결과 (SCN-07 ~ 10)
+  Group C: Tab1 검색 결과 (SCN-07 ~ 10, 19 ~ 25)
   Group D: Tab1 지도 뷰 (SCN-11 ~ 12)
   Group E: Tab2 Insight (SCN-13 ~ 16)
   Group F: Tab3 Report Archive (SCN-17 ~ 18)
@@ -165,6 +165,284 @@ def test_apt_detail_location_score_section(page, base_url):
 
     detail_text = get_main_text(page)
     assert "입지점수" in detail_text, f"'입지점수' 섹션 없음. 텍스트(앞 400자):\n{detail_text[:400]}"
+
+
+@pytest.mark.e2e
+def test_apt_detail_transaction_chart_section(page, base_url):
+    """SCN-19: '📈 실거래가' 섹션을 펼치면 시계열 라인 차트가 표시된다 (카드 그리드 아님)."""
+    go_to_real_estate(page, base_url)
+    click_real_estate_tab(page, "아파트 탐색")
+    wait_for_search_results(page, timeout=15_000)
+
+    main_text = get_main_text(page)
+    if "apt_master 테이블이 비어 있습니다" in main_text:
+        pytest.skip("apt_master DB 비어있음")
+
+    apt_buttons = page.locator("[data-testid='stMainBlockContainer']").get_by_role("button").filter(has_text="·")
+    if apt_buttons.count() == 0:
+        pytest.skip("검색 결과 없음 — 단지 버튼 없음")
+
+    apt_buttons.first.click()
+    page.wait_for_timeout(2_000)
+
+    tx_summary = page.locator("summary").filter(has_text="실거래가")
+    if tx_summary.count() == 0:
+        pytest.skip("'실거래가' 섹션 없음")
+    tx_summary.first.click()
+    page.wait_for_timeout(1_500)
+
+    assert_no_streamlit_exception(page, "apt_detail_transaction_chart")
+
+    detail_text = get_main_text(page)
+    if "거래 이력이 없습니다" in detail_text:
+        pytest.skip("거래 이력 없음")
+
+    assert page.locator("[data-testid='stVegaLiteChart']").count() > 0, \
+        "실거래가 시계열 라인 차트(stVegaLiteChart)가 없음"
+    assert page.locator("[data-testid='stDataFrame']").count() > 0, \
+        "실거래가 내역 테이블(stDataFrame)이 없음"
+
+
+@pytest.mark.e2e
+def test_apt_detail_commute_kpi_section(page, base_url):
+    """SCN-20: '🚇 출퇴근' 섹션을 펼치면 대중교통/자가용/도보 소요시간 KPI가 표시된다."""
+    go_to_real_estate(page, base_url)
+    click_real_estate_tab(page, "아파트 탐색")
+    wait_for_search_results(page, timeout=15_000)
+
+    main_text = get_main_text(page)
+    if "apt_master 테이블이 비어 있습니다" in main_text:
+        pytest.skip("apt_master DB 비어있음")
+
+    apt_buttons = page.locator("[data-testid='stMainBlockContainer']").get_by_role("button").filter(has_text="·")
+    if apt_buttons.count() == 0:
+        pytest.skip("검색 결과 없음 — 단지 버튼 없음")
+
+    apt_buttons.first.click()
+    page.wait_for_timeout(2_000)
+
+    commute_summary = page.locator("summary").filter(has_text="출퇴근")
+    if commute_summary.count() == 0:
+        pytest.skip("'출퇴근' 섹션 없음")
+    commute_summary.first.click()
+    page.wait_for_timeout(1_500)
+
+    assert_no_streamlit_exception(page, "apt_detail_commute_kpi")
+
+    detail_text = get_main_text(page)
+    if "출퇴근 정보를 불러올 수 없습니다" in detail_text:
+        pytest.skip("출퇴근 정보 없음")
+
+    for label in ["🚇 대중교통", "🚗 자가용", "🚶 도보"]:
+        assert label in detail_text, f"출퇴근 KPI '{label}' 미표시. 텍스트(앞 400자):\n{detail_text[:400]}"
+
+
+@pytest.mark.e2e
+def test_apt_detail_commute_transit_route_detail(page, base_url):
+    """SCN-21: '🚇 출퇴근' 섹션에 대중교통 경로 상세(legs)가 별도 expander로 표시된다."""
+    go_to_real_estate(page, base_url)
+    click_real_estate_tab(page, "아파트 탐색")
+    wait_for_search_results(page, timeout=15_000)
+
+    main_text = get_main_text(page)
+    if "apt_master 테이블이 비어 있습니다" in main_text:
+        pytest.skip("apt_master DB 비어있음")
+
+    apt_buttons = page.locator("[data-testid='stMainBlockContainer']").get_by_role("button").filter(has_text="·")
+    if apt_buttons.count() == 0:
+        pytest.skip("검색 결과 없음 — 단지 버튼 없음")
+
+    apt_buttons.first.click()
+    page.wait_for_timeout(2_000)
+
+    commute_summary = page.locator("summary").filter(has_text="출퇴근")
+    if commute_summary.count() == 0:
+        pytest.skip("'출퇴근' 섹션 없음")
+    commute_summary.first.click()
+    page.wait_for_timeout(1_500)
+
+    detail_text = get_main_text(page)
+    if "출퇴근 정보를 불러올 수 없습니다" in detail_text:
+        pytest.skip("출퇴근 정보 없음")
+
+    route_summary = page.locator("summary").filter(has_text="대중교통 경로 상세")
+    if route_summary.count() == 0:
+        pytest.skip("대중교통 경로 상세 없음 (transit_legs 데이터 없음)")
+
+    route_summary.first.click()
+    page.wait_for_timeout(1_000)
+
+    assert_no_streamlit_exception(page, "apt_detail_commute_route_detail")
+
+    detail_text = get_main_text(page)
+    has_leg = any(marker in detail_text for marker in ["🚶 도보", "🚌", "🚇"])
+    assert has_leg, f"대중교통 경로 상세에 이동 구간(leg) 정보가 없음. 텍스트(앞 400자):\n{detail_text[:400]}"
+
+
+@pytest.mark.e2e
+def test_apt_detail_location_score_card_grid(page, base_url):
+    """SCN-22: '📍 입지점수' 섹션은 실거주/투자 점수를 2열 카드 그리드로 표시한다.
+
+    location_score 데이터가 없으면 '입지 분석 데이터가 없습니다' 안내로 대체된다.
+    """
+    go_to_real_estate(page, base_url)
+    click_real_estate_tab(page, "아파트 탐색")
+    wait_for_search_results(page, timeout=15_000)
+
+    main_text = get_main_text(page)
+    if "apt_master 테이블이 비어 있습니다" in main_text:
+        pytest.skip("apt_master DB 비어있음")
+
+    apt_buttons = page.locator("[data-testid='stMainBlockContainer']").get_by_role("button").filter(has_text="·")
+    if apt_buttons.count() == 0:
+        pytest.skip("검색 결과 없음 — 단지 버튼 없음")
+
+    apt_buttons.first.click()
+    page.wait_for_timeout(2_000)
+
+    loc_summary = page.locator("summary").filter(has_text="입지점수")
+    if loc_summary.count() == 0:
+        pytest.skip("'입지점수' 섹션 없음")
+    loc_summary.first.click()
+    page.wait_for_timeout(1_000)
+
+    assert_no_streamlit_exception(page, "apt_detail_location_score_grid")
+
+    detail_text = get_main_text(page)
+    if "입지 분석 데이터가 없습니다" in detail_text:
+        pytest.skip("location_score 데이터 없음")
+
+    for heading in ["🏠 실거주 점수", "💰 투자 점수"]:
+        assert heading in detail_text, f"'{heading}' 섹션 없음. 텍스트(앞 600자):\n{detail_text[:600]}"
+
+    assert page.locator("summary").filter(has_text="근거 보기").count() > 0, \
+        "점수 카드에 '근거 보기' expander가 없음"
+
+
+@pytest.mark.e2e
+def test_apt_detail_location_score_evidence_click_to_reveal(page, base_url):
+    """SCN-23: 점수 카드의 근거(evidence)는 '근거 보기'를 클릭해야만 표시된다 (카드형 클릭 UX)."""
+    go_to_real_estate(page, base_url)
+    click_real_estate_tab(page, "아파트 탐색")
+    wait_for_search_results(page, timeout=15_000)
+
+    main_text = get_main_text(page)
+    if "apt_master 테이블이 비어 있습니다" in main_text:
+        pytest.skip("apt_master DB 비어있음")
+
+    apt_buttons = page.locator("[data-testid='stMainBlockContainer']").get_by_role("button").filter(has_text="·")
+    if apt_buttons.count() == 0:
+        pytest.skip("검색 결과 없음 — 단지 버튼 없음")
+
+    apt_buttons.first.click()
+    page.wait_for_timeout(2_000)
+
+    loc_summary = page.locator("summary").filter(has_text="입지점수")
+    if loc_summary.count() == 0:
+        pytest.skip("'입지점수' 섹션 없음")
+    loc_summary.first.click()
+    page.wait_for_timeout(1_000)
+
+    detail_text = get_main_text(page)
+    if "입지 분석 데이터가 없습니다" in detail_text:
+        pytest.skip("location_score 데이터 없음")
+
+    evidence_toggle = page.locator("summary").filter(has_text="근거 보기")
+    if evidence_toggle.count() == 0:
+        pytest.skip("'근거 보기' expander 없음")
+
+    before_text = get_main_text(page)
+    assert "· " not in before_text.split("근거 보기")[-1][:5], \
+        "클릭 전인데 근거(evidence) 텍스트가 이미 노출됨"
+
+    evidence_toggle.first.click()
+    page.wait_for_timeout(1_000)
+
+    assert_no_streamlit_exception(page, "apt_detail_location_score_evidence")
+
+    after_text = get_main_text(page)
+    assert "·" in after_text, f"'근거 보기' 클릭 후 근거 텍스트가 표시되지 않음. 텍스트(앞 600자):\n{after_text[:600]}"
+
+
+@pytest.mark.e2e
+def test_apt_detail_school_premium_card_shows_school_detail(page, base_url):
+    """SCN-24: '🎒 학군프리미엄' 카드의 근거를 펼치면 학군 상세 데이터(학군 점수 등)가 표시된다.
+
+    학군분석은 더 이상 AI 인사이트 안이 아니라 투자점수의 학군프리미엄 카드로 이동되었다.
+    """
+    go_to_real_estate(page, base_url)
+    click_real_estate_tab(page, "아파트 탐색")
+    wait_for_search_results(page, timeout=15_000)
+
+    main_text = get_main_text(page)
+    if "apt_master 테이블이 비어 있습니다" in main_text:
+        pytest.skip("apt_master DB 비어있음")
+
+    apt_buttons = page.locator("[data-testid='stMainBlockContainer']").get_by_role("button").filter(has_text="·")
+    if apt_buttons.count() == 0:
+        pytest.skip("검색 결과 없음 — 단지 버튼 없음")
+
+    apt_buttons.first.click()
+    page.wait_for_timeout(2_000)
+
+    loc_summary = page.locator("summary").filter(has_text="입지점수")
+    if loc_summary.count() == 0:
+        pytest.skip("'입지점수' 섹션 없음")
+    loc_summary.first.click()
+    page.wait_for_timeout(1_000)
+
+    detail_text = get_main_text(page)
+    if "입지 분석 데이터가 없습니다" in detail_text:
+        pytest.skip("location_score 데이터 없음")
+
+    if "🎒 학군프리미엄" not in detail_text:
+        pytest.skip("'🎒 학군프리미엄' 카드 없음")
+
+    # 🎒 학군프리미엄 카드 바로 다음의 '근거 보기' expander를 펼친다.
+    school_card = page.locator("[data-testid='stMainBlockContainer']").get_by_text("🎒 학군프리미엄").first
+    evidence_toggle = school_card.locator(
+        "xpath=ancestor::div[contains(@data-testid,'stVerticalBlock')][1]//summary[contains(., '근거 보기')]"
+    ).first
+    evidence_toggle.click()
+    page.wait_for_timeout(1_500)
+
+    assert_no_streamlit_exception(page, "apt_detail_school_premium_detail")
+
+    after_text = get_main_text(page)
+    assert "학군 점수" in after_text, \
+        f"'🎒 학군프리미엄' 근거에 학군 상세(학군 점수)가 없음. 텍스트(앞 600자):\n{after_text[:600]}"
+
+
+@pytest.mark.e2e
+def test_apt_detail_ai_insight_no_duplicate_sections(page, base_url):
+    """SCN-25: '🤖 AI 인사이트'는 카드 상세 패널과 중복되는 입지점수/출퇴근/학군 섹션을 다시 표시하지 않는다."""
+    go_to_real_estate(page, base_url)
+    click_real_estate_tab(page, "아파트 탐색")
+    wait_for_search_results(page, timeout=15_000)
+
+    main_text = get_main_text(page)
+    if "apt_master 테이블이 비어 있습니다" in main_text:
+        pytest.skip("apt_master DB 비어있음")
+
+    apt_buttons = page.locator("[data-testid='stMainBlockContainer']").get_by_role("button").filter(has_text="·")
+    if apt_buttons.count() == 0:
+        pytest.skip("검색 결과 없음 — 단지 버튼 없음")
+
+    apt_buttons.first.click()
+    page.wait_for_timeout(2_000)
+
+    insight_summary = page.locator("summary").filter(has_text="AI 인사이트")
+    if insight_summary.count() == 0:
+        pytest.skip("'AI 인사이트' 섹션 없음")
+    insight_summary.first.click()
+    page.wait_for_timeout(1_500)
+
+    assert_no_streamlit_exception(page, "apt_detail_ai_insight_dedup")
+
+    detail_text = get_main_text(page)
+    for duplicated in ["📍 입지 점수", "🚗 출퇴근 요약", "📚 학군 분석"]:
+        assert duplicated not in detail_text, \
+            f"AI 인사이트에 중복 섹션 '{duplicated}'이 다시 표시됨. 텍스트(앞 600자):\n{detail_text[:600]}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════

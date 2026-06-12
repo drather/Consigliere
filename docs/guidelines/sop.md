@@ -37,6 +37,11 @@
    - 신규 탭/페이지: 해당 탭 전체 시나리오 작성
    - 기존 화면 수정: 변경된 컴포넌트를 검증하는 시나리오 추가 또는 기존 시나리오 업데이트
    - 헬퍼 함수(`conftest.py`) 활용: `go_to_real_estate`, `click_real_estate_tab`, `wait_for_search_results` 등
+6. **Playwright MCP 라이브 확인 (MANDATORY ⭐):** 화면단 작업은 코드만 보고 수정하지 않는다.
+   - 수정 전: `mcp__playwright__browser_navigate`로 `localhost:8501` 접속 → `mcp__playwright__browser_snapshot`으로 현재 브라우저가 실제로 표시 중인 화면을 확인
+   - 코드 수정 후: 동일한 방식으로 재접속/재확인하여 변경사항이 실제 화면에 반영됐는지 검증
+   - **반영 안 됨 = stale, 진단만으로 끝내지 말 것:** 코드는 맞는데 화면이 안 바뀌었다면 모듈 캐싱으로 인한 stale 프로세스/컨테이너일 가능성이 높다. `ps -p <pid> -o lstart` / `docker ps`의 `Up X days`와 `git log -1 --format="%ci"`를 비교해 stale 여부를 확인하고, stale이면 **그 자리에서 직접 재기동까지 수행**한다 (`docker restart consigliere_dashboard` 또는 streamlit 프로세스 `kill` 후 재실행). "재기동이 필요해 보입니다"라고 보고만 하고 멈추지 않는다.
+   - **단, worktree 작업은 예외:** `consigliere_dashboard` 컨테이너의 `./src` 마운트는 메인 레포(`/Users/kks/Desktop/Laboratory/Consigliere/src`, master 브랜치) 경로에 고정되어 있어, worktree에서의 수정은 이 컨테이너를 재기동해도 절대 반영되지 않는다 (아키텍처상 마운트 불일치 — 모듈 캐싱과는 다른 원인). worktree 화면단 검증은 [[feedback_worktree_live_preview]]에 따라 별도 로컬 streamlit(`PYTHONPATH=<worktree>/src`, cwd=메인 레포, 다른 포트)으로 수행하고, 8501 컨테이너 재기동은 시도하지 않는다 — 이 경우 사용자에게 "worktree 변경이라 8501 재기동으로는 반영되지 않으며, 별도 포트로 검증했다"고 명시한다.
 
 ---
 

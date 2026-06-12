@@ -16,7 +16,7 @@ try:
     from dashboard.api_client import DashboardClient
     from dashboard.components.map_view import render_detail_map
     from dashboard.services import (
-        get_location_score, get_location_score_as_dict, get_poi_cached,
+        get_location_score, get_poi_cached,
         count_apt_masters, get_distinct_sidos, get_distinct_sigungus,
         search_apt_masters, get_apt_search_limits, get_apt_details,
         get_building_master_by_pnu,
@@ -26,7 +26,7 @@ except ImportError:
     from src.dashboard.api_client import DashboardClient
     from src.dashboard.components.map_view import render_detail_map
     from src.dashboard.services import (
-        get_location_score, get_location_score_as_dict, get_poi_cached,
+        get_location_score, get_poi_cached,
         count_apt_masters, get_distinct_sidos, get_distinct_sigungus,
         search_apt_masters, get_apt_search_limits, get_apt_details,
         get_building_master_by_pnu,
@@ -87,8 +87,12 @@ def _render_tx_dataframe(df: pd.DataFrame, code_to_name: Dict[str, str] = None):
 
 
 def _render_analysis_report(rdata: dict, complex_code: str = "") -> None:
-    """AptAnalysisReport dict를 구조화된 형태로 렌더링."""
-    import requests as _req
+    """AptAnalysisReport dict를 구조화된 형태로 렌더링.
+
+    입지점수(실거주/투자)·출퇴근·학군 분석은 카드 상세 패널
+    (_render_apt_detail_cards)에서 이미 더 상세히 표시되므로
+    여기서는 중복 렌더링하지 않는다.
+    """
 
     # ── 지표 요약 ────────────────────────────────────────────────────────────
     macro = rdata.get("macro_snapshot") or {}
@@ -106,39 +110,6 @@ def _render_analysis_report(rdata: dict, complex_code: str = "") -> None:
 
     if rdata.get("supply_risk_summary"):
         st.caption(f"🏗️ 공급리스크: {rdata['supply_risk_summary']}")
-
-    # ── 입지 점수 (저장된 스냅샷 → live fallback) ────────────────────────────
-    try:
-        loc = rdata.get("location_score") or (get_location_score_as_dict(complex_code) if complex_code else None)
-    except Exception:
-        loc = rdata.get("location_score")
-    if loc:
-        st.markdown("#### 📍 입지 점수")
-        lc1, lc2 = st.columns(2)
-        with lc1:
-            st.metric("🏠 실거주 점수", f"{loc.get('residential_total', '-')}점")
-            res_items = (loc.get("results") or {}).get("residential") or []
-            if res_items:
-                with st.expander("항목별 상세"):
-                    for item in res_items:
-                        st.progress(item["score"] / 100, text=f"{item['label']}  {item['score']}점")
-                        for ev in (item.get("evidence") or []):
-                            st.caption(f"　　· {ev}")
-        with lc2:
-            st.metric("💰 투자 점수", f"{loc.get('investment_total', '-')}점")
-            inv_items = (loc.get("results") or {}).get("investment") or []
-            if inv_items:
-                with st.expander("항목별 상세"):
-                    for item in inv_items:
-                        st.progress(item["score"] / 100, text=f"{item['label']}  {item['score']}점")
-                        for ev in (item.get("evidence") or []):
-                            st.caption(f"　　· {ev}")
-    else:
-        lc1, lc2 = st.columns(2)
-        with lc1:
-            st.info("🏠 실거주 점수\n\n리포트 생성 후 표시됩니다.")
-        with lc2:
-            st.info("💰 투자 점수\n\n리포트 생성 후 표시됩니다.")
 
     # ── POI 분석 (실시간 조회) ────────────────────────────────────────────────
     try:
@@ -171,46 +142,6 @@ def _render_analysis_report(rdata: dict, complex_code: str = "") -> None:
         with p8:
             st.metric("🍽️ 음식점", f"{poi['restaurant_count']}개")
 
-    # ── 출퇴근 ───────────────────────────────────────────────────────────────
-    commute = rdata.get("commute_summary")
-    if commute:
-        st.markdown("#### 🚗 출퇴근 요약")
-        mode_labels = {"transit": "🚌 대중교통", "car": "🚗 자가용", "walking": "🚶 도보"}
-        cols = st.columns(len(commute))
-        for i, (mode, mins) in enumerate(commute.items()):
-            with cols[i]:
-                st.metric(mode_labels.get(mode, mode), f"{mins}분")
-    else:
-        st.caption("출퇴근: 캐시 데이터 없음 (기존 단지 상세 패널에서 조회 가능)")
-
-    # ── 학군 분석 (실시간 조회) ──────────────────────────────────────────────
-    if complex_code:
-        with st.expander("📚 학군 분석", expanded=False):
-            try:
-                school_resp = _req.get(
-                    f"{_API_BASE}/dashboard/real-estate/school/{complex_code}",
-                    timeout=5,
-                )
-                if school_resp.status_code == 200:
-                    sd = school_resp.json()
-                    sc1, sc2, sc3, sc4 = st.columns(4)
-                    with sc1:
-                        st.metric("반경 1km 학교 수", f"{sd.get('nearby_school_count', '-')}개")
-                    with sc2:
-                        avg_cls = sd.get("avg_students_per_class") or 0
-                        st.metric("학급당 평균 학생수", f"{avg_cls:.1f}명" if avg_cls else "-")
-                    with sc3:
-                        avg_tch = sd.get("avg_students_per_teacher") or 0
-                        st.metric("교사 1인당 학생수", f"{avg_tch:.1f}명" if avg_tch else "-")
-                    with sc4:
-                        st.metric("학군 점수", f"{sd.get('score', '-')}/100")
-                    if sd.get("message"):
-                        st.caption(sd["message"])
-                else:
-                    st.caption("학군 정보 없음")
-            except Exception:
-                st.caption("학군 조회 실패")
-
     # ── 실거래가 이력 ────────────────────────────────────────────────────────
     price_history = rdata.get("price_history") or []
     if price_history:
@@ -233,61 +164,52 @@ def _render_analysis_report(rdata: dict, complex_code: str = "") -> None:
     st.caption(f"분석일시: {rdata.get('generated_at', '')[:19]}")
 
 
-def _render_commute_card(commute_data: dict):
-    """출퇴근 경로 3단 카드 렌더링."""
-    transit_min = commute_data.get("transit")
-    car_min = commute_data.get("car")
-    walking_min = commute_data.get("walking")
-    transit_legs = commute_data.get("transit_legs", [])
-    car_legs = commute_data.get("car_legs", [])
-    walking_legs = commute_data.get("walking_legs", [])
-    transit_summary = commute_data.get("transit_summary", "")
-    car_summary = commute_data.get("car_summary", "")
-    walking_summary = commute_data.get("walking_summary", "")
+def _render_school_detail(complex_code: str) -> None:
+    """학군프리미엄 카드 근거에 덧붙일 학군 상세 데이터 (실시간 조회)."""
+    import requests as _req
 
-    col1, col2, col3 = st.columns(3)
+    try:
+        resp = _req.get(f"{_API_BASE}/dashboard/real-estate/school/{complex_code}", timeout=5)
+    except Exception:
+        st.caption("학군 조회 실패")
+        return
 
-    with col1:
-        st.markdown("#### 🚌 대중교통")
-        if transit_min is not None:
-            st.metric("소요시간", f"{transit_min}분")
-            if transit_legs:
-                for leg in transit_legs:
-                    mode = leg.get("mode", "")
-                    if mode == "WALK":
-                        st.caption(f"🚶 도보 {leg.get('duration_minutes', 0)}분")
-                    elif mode == "BUS":
-                        st.caption(f"🚌 {leg.get('route', '')}번 버스 ({leg.get('stop_count', 0)}정거장)")
-                    elif mode in ("SUBWAY", "RAIL"):
-                        st.caption(f"🚇 {leg.get('route', '')} ({leg.get('stop_count', 0)}정거장)")
-            elif transit_summary:
-                st.caption(transit_summary)
-        else:
-            st.caption("조회 실패")
+    if resp.status_code != 200:
+        st.caption("학군 정보 없음")
+        return
 
-    with col2:
-        st.markdown("#### 🚗 자가용")
-        if car_min is not None:
-            st.metric("소요시간", f"{car_min}분")
-            if car_legs:
-                for leg in car_legs:
-                    st.caption(f"🛣️ {leg.get('road_name', '')}")
-            elif car_summary:
-                st.caption(car_summary)
-        else:
-            st.caption("조회 실패")
+    sd = resp.json()
+    sc1, sc2, sc3, sc4 = st.columns(4)
+    sc1.metric("반경 1km 학교 수", f"{sd.get('nearby_school_count', '-')}개")
+    avg_cls = sd.get("avg_students_per_class") or 0
+    sc2.metric("학급당 평균 학생수", f"{avg_cls:.1f}명" if avg_cls else "-")
+    avg_tch = sd.get("avg_students_per_teacher") or 0
+    sc3.metric("교사 1인당 학생수", f"{avg_tch:.1f}명" if avg_tch else "-")
+    sc4.metric("학군 점수", f"{sd.get('score', '-')}/100")
+    if sd.get("message"):
+        st.caption(sd["message"])
 
-    with col3:
-        st.markdown("#### 🚶 도보")
-        if walking_min is not None:
-            st.metric("소요시간", f"{walking_min}분")
-            if walking_legs:
-                for leg in walking_legs:
-                    st.caption(f"🛤️ {leg.get('road_name', '')}")
-            elif walking_summary:
-                st.caption(walking_summary)
-        else:
-            st.caption("조회 실패")
+
+def _render_score_dimension_grid(results: list, complex_code: str = "") -> None:
+    """입지/투자 점수 항목을 2열 카드 그리드로 렌더링.
+
+    각 카드는 라벨·점수·진행률 막대를 항상 보여주고, 근거(evidence)는
+    "근거 보기" expander를 펼쳐야 표시된다 (중복 노출 방지 + 클릭형 UX).
+    """
+    for i in range(0, len(results), 2):
+        c1, c2 = st.columns(2)
+        for col, dr in zip([c1, c2], results[i:i + 2]):
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"**{dr.label}**")
+                    col_score, col_bar = st.columns([1, 3])
+                    col_score.metric("", f"{dr.score}점")
+                    col_bar.progress(min(dr.score / 100, 1.0))
+                    with st.expander("근거 보기", expanded=False):
+                        for ev in (getattr(dr, "evidence", None) or []):
+                            st.caption(f"· {ev}")
+                        if complex_code and "학군" in dr.label:
+                            _render_school_detail(complex_code)
 
 
 def _render_apt_detail_cards(entry) -> None:
@@ -372,72 +294,70 @@ def _render_apt_detail_cards(entry) -> None:
 
     st.divider()
 
-    # ── 📍 입지점수 (카드 그리드) ───────────────────────────────────────────
+    # ── 📍 입지점수 (실거주/투자 카드 그리드, 근거는 클릭하여 확인) ─────────────
     if loc_score:
         label = (f"📍 입지점수 — 실거주 **{loc_score.residential_total}점** "
                  f"/ 투자 **{loc_score.investment_total}점**")
         with st.expander(label, expanded=True):
-            results = loc_score.residential_results or []
-            for i in range(0, len(results), 2):
-                c1, c2 = st.columns(2)
-                for col, dr in zip([c1, c2], results[i:i+2]):
-                    with col:
-                        with st.container(border=True):
-                            st.markdown(f"**{dr.label}**")
-                            col_score, col_bar = st.columns([1, 3])
-                            col_score.metric("", f"{dr.score}점")
-                            col_bar.progress(min(dr.score / 100, 1.0))
-                            for ev in (getattr(dr, "evidence", None) or []):
-                                st.caption(f"　　· {ev}")
+            st.markdown("##### 🏠 실거주 점수")
+            _render_score_dimension_grid(loc_score.residential_results or [])
+
+            st.markdown("##### 💰 투자 점수")
+            _render_score_dimension_grid(loc_score.investment_results or [], complex_code=complex_code)
     else:
         with st.expander("📍 입지점수", expanded=False):
             st.info("입지 분석 데이터가 없습니다. 심층 분석을 실행하세요.")
 
-    # ── 📈 실거래가 (카드 그리드) ──────────────────────────────────────────
+    # ── 📈 실거래가 (시계열 추이) ────────────────────────────────────────────
     tx_df_full = DashboardClient.get_real_estate_transactions(
         apt_master_id=getattr(entry, "id", None),
         complex_code=complex_code or None,
         district_code=entry.district_code,
-        limit=20,
+        limit=30,
     )
     tx_label = f"📈 실거래가 — {recent_price}" + (f" · {recent_detail}" if recent_detail else "")
     with st.expander(tx_label, expanded=False):
         if tx_df_full.empty:
             st.info("거래 이력이 없습니다.")
         else:
-            rows_data = []
-            for _, row in tx_df_full.head(8).iterrows():
-                rows_data.append({
-                    "date": str(row.get("deal_date", "-"))[:10],
-                    "price": f"{row.get('price', 0) / 100_000_000:.1f}억",
-                    "area": f"{row.get('exclusive_area', 0):.0f}㎡ · {int(row.get('floor', 0))}층",
-                })
-            for i in range(0, len(rows_data), 2):
-                c1, c2 = st.columns(2)
-                for col, r in zip([c1, c2], rows_data[i:i+2]):
-                    with col:
-                        with st.container(border=True):
-                            st.caption(r["date"])
-                            st.markdown(f"**{r['price']}**")
-                            st.caption(r["area"])
+            chart_df = tx_df_full.copy()
+            chart_df["거래일"] = pd.to_datetime(chart_df["deal_date"], errors="coerce")
+            chart_df["가격(억)"] = chart_df["price"] / 100_000_000
+            chart_df = chart_df.dropna(subset=["거래일"]).sort_values("거래일").set_index("거래일")
+            st.line_chart(chart_df["가격(억)"], height=250)
 
-    # ── 🚇 출퇴근 (카드 그리드) ────────────────────────────────────────────
+            table_df = tx_df_full.head(8)[["deal_date", "price", "exclusive_area", "floor"]].copy()
+            table_df["price"] = table_df["price"] / 100_000_000
+            table_df = table_df.rename(columns={
+                "deal_date": "거래일", "price": "가격(억)",
+                "exclusive_area": "전용면적(㎡)", "floor": "층",
+            })
+            st.dataframe(table_df, use_container_width=True, hide_index=True)
+
+    # ── 🚇 출퇴근 (이동수단별 소요시간 + 대중교통 경로 상세) ──────────────────
     with st.expander(f"🚇 출퇴근 — {commute_min}", expanded=False):
         if commute_data:
-            transit = commute_data.get("transit_minutes") or commute_data.get("transit")
-            bus = commute_data.get("bus_minutes") or commute_data.get("bus")
-            c1, c2 = st.columns(2)
-            with c1:
-                with st.container(border=True):
-                    st.markdown("**🚇 지하철**")
-                    st.metric("", f"{transit}분" if transit else "-")
-                    route = commute_data.get("transit_route") or commute_data.get("route", "")
-                    if route:
-                        st.caption(route)
-            with c2:
-                with st.container(border=True):
-                    st.markdown("**🚌 버스**")
-                    st.metric("", f"{bus}분" if bus else "-")
+            transit = commute_data.get("transit")
+            car = commute_data.get("car")
+            walking = commute_data.get("walking")
+            cc1, cc2, cc3 = st.columns(3)
+            cc1.metric("🚇 대중교통", f"{transit}분" if transit is not None else "-")
+            cc2.metric("🚗 자가용", f"{car}분" if car is not None else "-")
+            cc3.metric("🚶 도보", f"{walking}분" if walking is not None else "-")
+
+            transit_legs = commute_data.get("transit_legs") or []
+            if transit_legs:
+                with st.expander("🚇 대중교통 경로 상세", expanded=False):
+                    for leg in transit_legs:
+                        mode = leg.get("mode", "")
+                        if mode == "WALK":
+                            st.caption(f"🚶 도보 {leg.get('duration_minutes', 0)}분")
+                        elif mode == "BUS":
+                            st.caption(f"🚌 {leg.get('route', '')}번 버스 ({leg.get('stop_count', 0)}정거장)")
+                        elif mode in ("SUBWAY", "RAIL"):
+                            st.caption(f"🚇 {leg.get('route', '')} ({leg.get('stop_count', 0)}정거장)")
+            elif commute_data.get("transit_summary"):
+                st.caption(commute_data["transit_summary"])
         else:
             st.info("출퇴근 정보를 불러올 수 없습니다.")
 
