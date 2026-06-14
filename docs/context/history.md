@@ -1,5 +1,24 @@
 # Project Consigliere: History
-**Last Updated:** 2026-06-12
+**Last Updated:** 2026-06-14
+
+## 2026-06-14 — 입지점수 카드 "근거 보기" 빈 항목 표시 수정 (apt-detail-card-evidence-fallback)
+
+- **배경:** `apt-detail-card-redesign`(2026-06-12) 머지 후, 사용자가 일부 단지에서 "근거 보기"
+  expander를 펼치면 아무 항목도 표시되지 않는 문제 발견 → Playwright MCP로 원인 파악 요청
+- **원인:** `DimensionResult.evidence`는 `LocationScorer.score()`(`enrich_and_save()`) 시점에
+  1회 계산되어 `location_scores` 테이블에 JSON으로 동결됨. POI 캐시(`_poi`)에 의존하는
+  `education`/`living_infra`/`medical`/`nature`/`school_premium`/`transportation`의
+  `evidence()`는 POI 캐시 미수집 시 `[]`를 반환 → 영구 빈 evidence.
+- **영향:** 87개 단지 중 4개(`A13820007` 문정시영, `A43106007` 목련마을2단지대우선경,
+  `A13811206` 거여1단지, `A43177507` 평촌목련2단지아파트)
+- **수정 파일:** `src/dashboard/views/real_estate.py` (`_render_score_dimension_grid`) — View 계층 한정,
+  evidence 빈 카드에 "데이터 없음 (POI 캐시 미수집)" fallback 캡션 추가, 학군프리미엄은 변경 없음
+- **TDD:** `tests/test_real_estate_evidence_fallback.py` 신규 (Red `1 failed, 1 passed` → Green `2 passed`)
+- **검증:** Playwright MCP — "문정시영" 5개 카드 fallback 표시 확인 / "한국"(A40381801) 11개 카드 회귀 없음,
+  `docker restart consigliere_dashboard`로 8501 반영 확인
+- **테스트:** 8 failed/897 passed/1 error (baseline 8 failed/895 passed/1 error와 동일 실패 집합, 신규 실패 없음)
+- **문서:** `docs/features/apt-detail-card-evidence-fallback/` (spec/progress/issues/result)
+- **후속:** POI 캐시 재수집 + location_score 재계산은 `active_state.md` "알려진 후속 과제"에서 별도 추적
 
 ## 2026-06-12 — 아파트 상세 카드 UI/UX 5건 개선 (apt-detail-card-redesign)
 

@@ -1,9 +1,26 @@
 # Project Consigliere: Active State
-**Last Updated:** 2026-06-12
+**Last Updated:** 2026-06-14
 
 ## 현재 포커스
 - **Branch:** `master`
-- **Status:** ✅ 아파트 상세 카드 UI/UX 5건 개선 완료 (2026-06-12)
+- **Status:** ✅ 입지점수 카드 "근거 보기" 빈 항목 표시 수정 완료 (2026-06-14)
+
+## 최근 완료 (2026-06-14)
+
+- **입지점수 카드 "근거 보기" 빈 항목 표시 수정** (`docs/features/apt-detail-card-evidence-fallback/result.md`)
+  - 배경: `apt-detail-card-redesign`(2026-06-12) 머지 후, 일부 단지에서 "근거 보기" expander가
+    완전히 빈 박스로 렌더링되는 문제 발견 (Playwright MCP로 재현)
+  - 원인: `evidence`는 `enrich_and_save()` 시점에 1회 계산·DB 동결되며,
+    POI 캐시 의존 dimension(`education`/`living_infra`/`medical`/`nature`/`school_premium`/`transportation`)은
+    POI 캐시 미수집 단지에서 영구히 `evidence=[]`
+  - 영향: 87개 단지 중 4개(`A13820007` 문정시영, `A43106007` 목련마을2단지대우선경,
+    `A13811206` 거여1단지, `A43177507` 평촌목련2단지아파트)
+  - 수정(View 계층 한정): `_render_score_dimension_grid()`에 evidence 빈 카드 →
+    "데이터 없음 (POI 캐시 미수집)" fallback 캡션 추가, 학군프리미엄은 기존과 동일하게
+    `_render_school_detail()` 항상 호출
+  - Playwright MCP 검증: "문정시영" 5개 카드 fallback 표시 확인 + "한국"(A40381801) 11개 카드 회귀 없음
+  - 회귀 테스트: 8 failed/897 passed/1 error (baseline 8 failed/895 passed/1 error 대비 신규 실패 없음, +2는 신규 테스트)
+  - 데이터 재수집(POI 캐시 → location_score 재계산)은 아래 "알려진 후속 과제"에서 별도 추적
 
 ## 최근 완료 (2026-06-12)
 

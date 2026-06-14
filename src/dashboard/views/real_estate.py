@@ -206,10 +206,14 @@ def _render_score_dimension_grid(results: list, complex_code: str = "") -> None:
                     col_score.metric("", f"{dr.score}점")
                     col_bar.progress(min(dr.score / 100, 1.0))
                     with st.expander("근거 보기", expanded=False):
-                        for ev in (getattr(dr, "evidence", None) or []):
+                        evidence = getattr(dr, "evidence", None) or []
+                        for ev in evidence:
                             st.caption(f"· {ev}")
-                        if complex_code and "학군" in dr.label:
+                        is_school = complex_code and "학군" in dr.label
+                        if is_school:
                             _render_school_detail(complex_code)
+                        elif not evidence:
+                            st.caption("데이터 없음 (POI 캐시 미수집)")
 
 
 def _render_apt_detail_cards(entry) -> None:
